@@ -5,11 +5,8 @@
 [![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
 
-
-* Total Matrix Intercomparison codes \
+* Total Matrix Intercomparison codes for Julia\
 G Jake Gebbie, WHOI, ggebbie@whoi.edu \
-MATLAB codes, 2009-2021, see https://github.com/ggebbie/TMI \ 
-Julia codes, 2021 \ 
 
 # References 
 
@@ -21,8 +18,66 @@ Gebbie, G., and P. Huybers, "The mean age of ocean waters inferred from radiocar
 
 Gebbie, G., "How much did Glacial North Atlantic Water shoal?", 2014, Paleoceanography.
 
-# History of MATLAB codes
 
+# SETTING UP PROJECT ENVIRONMENT
+
+* from Emacs editor (one possible method)
+
+Install julia-mode, julia-repl, and magit \
+Skip the next 5 steps if you have already cloned the repository \
+`M-x magit-clone` \
+Select `u` to clone from url\
+Enter ` https://github.com/ggebbie/TMI.jl` as url to clone \
+Select `y` in response to `remote.pushDefault' to "origin"?` \
+Clone to your favorite location and rename project if necessary \
+Go to any directory in the project: `C-x C-f TMI.jl`\
+Then activate the project and initialize a julia session: `C-c C-a`
+
+* from the Julia REPL
+
+`;`\
+`git clone https://github.com/ggebbie/TMI.jl # only do this the first time on each machine`\
+`cd TMI.jl`\
+`]`\
+`activate .`\
+`instantiate # only do this the first time on each machine`\
+To verify you are in the project environment, `]` should return `(TMI) pkg>`\
+Type backspace to return to command mode.
+
+* Using an editor like Atom/Juno or Visual Studio Code, activate the environment on one of the frame panels. The default environment is @v1.x and should be changed.
+
+# Running a script (not interactively)
+
+An example:
+`cd TMI.jl`\
+`julia --project=@. src/ex1.trackpathways.jl`
+
+# DATA FILES
+
+The Julia code is designed to download input files from Google Drive. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive` at a bash shell prompt. 
+
+`/bin/sh readTMIfromGoogleDrive.sh`
+
+Or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing .
+
+TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
+                  resolution and 33 levels  (G & H 2010) \
+				  Includes TMI climatology of ocean properties \
+
+# FUNCTIONS 
+
+Source code in  `src/TMI.jl`. \ 
+See the list of `export`ed functions in the header of that file.
+
+# EXAMPLES
+
+See examples in `src/ex*`, where `ex1:trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
+
+# MATLAB version of code
+
+MATLAB codes, 2009-2021, see https://github.com/ggebbie/TMI \ 
+
+History:\
 Version 1, 07 May 2009.\
 Version 2, 06 Aug 2010.\
 Version 3, 21 Apr 2011 -- minor changes.\
@@ -37,26 +92,3 @@ Version 6.2, July 2015, added sq.m function,
                         fixed d_all to properly divide Atlantic/Pacific and put White Sea into Arctic.\
 Version 7, Sept. 2016, major improvements to transient run: 2 types of initial conditions and boundary conditions.\
 Version 8, Jan. 2021, bug fixes, especially those found by Elaine McDonagh
-
-# MAIN DIAGNOSTIC ROUTINES:
-
-Directory `scripts`: \ 
-`steadystate_diagnostics.m`  : examples of analysis for the TMI pathways matrix.\
-`transient_driver.m` : run a TMI transient tracer simulation model.
-
-# DATA FILES
-
-Extract data from Google Drive using your favorite method. Try the script `read_TMI_from_google_drive` either in MATLAB or at a bash shell prompt. 
-
-`/bin/sh read_TMI_from_google_drive.sh`
-
-Or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing .
-
-TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
-                  resolution and 33 levels  (G & H 2010) \
-				  Includes TMI climatology of ocean properties \
-
-# FUNCTIONS 
-
-Source code in  `src/TMI.jl`. \ 
-See the list of `export`ed functions in the header of that file.

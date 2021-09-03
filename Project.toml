@@ -3,6 +3,14 @@ uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 authors = ["G Jake Gebbie"]
 version = "0.1.0"
 
+[deps]
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+GoogleDrive = "91feb7a0-3508-11ea-1e8e-afea2c1c9a19"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+NetCDF = "30363a11-5582-574a-97bb-aa9a979735b9"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
 [compat]
 julia = "1.5"
 
