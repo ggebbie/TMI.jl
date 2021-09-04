@@ -15,7 +15,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 GoogleDrive = "0.1"
 Revise = "3"
 NetCDF = "0.11"
-julia = "1.5"
+julia = "1.5, 1.6"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
