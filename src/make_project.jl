@@ -19,9 +19,9 @@ using Revise, PkgTemplates
 
 t = Template(; 
     user="ggebbie",
-    dir="~/.julia/dev",
+    dir="~/projects",
     authors="G Jake Gebbie",
-    julia=v"1.5",
+    julia=v"1.6",
     plugins=[
         License(; name="MIT"),
         Git(; manifest=true, ssh=true),

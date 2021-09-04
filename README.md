@@ -6,7 +6,7 @@
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
 
 * Total Matrix Intercomparison codes for Julia\
-G Jake Gebbie, WHOI, ggebbie@whoi.edu \
+G Jake Gebbie, WHOI, ggebbie@whoi.edu 
 
 # References 
 
@@ -48,25 +48,25 @@ Type backspace to return to command mode.
 
 # Running a script (not interactively)
 
-An example:
+An example:\
 `cd TMI.jl`\
 `julia --project=@. src/ex1.trackpathways.jl`
 
 # DATA FILES
 
-The Julia code is designed to download input files from Google Drive. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive` at a bash shell prompt. 
+The Julia code is designed to download input files from Google Drive. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive.sh` at a bash shell prompt. 
 
 `/bin/sh readTMIfromGoogleDrive.sh`
 
 Or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing .
 
 TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
-                  resolution and 33 levels  (G & H 2010) \
-				  Includes TMI climatology of ocean properties \
+                  resolution and 33 levels  (G & H 2010), \
+				  Includes TMI climatology of ocean properties 
 
 # FUNCTIONS 
 
-Source code in  `src/TMI.jl`. \ 
+Source code in  `src/TMI.jl`.\ 
 See the list of `export`ed functions in the header of that file.
 
 # EXAMPLES
@@ -75,11 +75,11 @@ See examples in `src/ex*`, where `ex1:trackpathways.jl` gives Example 1 of track
 
 # MATLAB version of code
 
-MATLAB codes, 2009-2021, see https://github.com/ggebbie/TMI \ 
+MATLAB codes, 2009-2021, see also https://github.com/ggebbie/TMI .
 
 History:\
-Version 1, 07 May 2009.\
-Version 2, 06 Aug 2010.\
+Version 1, 7 May 2009.\
+Version 2, 6 Aug 2010.\
 Version 3, 21 Apr 2011 -- minor changes.\
 Version 4, 13 July 2011, makes names consistent with papers.\
 Version 5, 28 July 2011, add TMI transient tracer simulation model.\

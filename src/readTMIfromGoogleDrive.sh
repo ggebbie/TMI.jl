@@ -8,4 +8,5 @@ wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download
 
 # 3) download manually at:
 #   https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7
+#   or
 #   https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing

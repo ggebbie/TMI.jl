@@ -6,13 +6,16 @@ using SparseArrays
 using NetCDF, Downloads
 using GoogleDrive
 
-export configTMI, downloadTMI, vec2fld
+export configTMI, downloadTMI, vec2fld, surfacepatch
 
-struct TMIgrid
+struct grid
     lon::Vector{Real}
     lat::Vector{Real}
     depth::Vector{Real}
-    coords::Vector{CartesianIndex{3}}                 
+    I::Vector{CartesianIndex{3}} # index
+    #nx::Int
+    #ny::Int
+    #nz::Int
 end
 
 """
@@ -36,12 +39,12 @@ function configTMI(url,inputdir)
     Alu = lu(A)
 
     # Do bookkeeping for TMI grid coordinates
-    coords = gridcoords(TMIfile)
+    I = gridindex(TMIfile)
 
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
 
-    γ = TMIgrid(lon,lat,depth,coords)
+    γ = grid(lon,lat,depth,I)
 
     return A, Alu, γ
 end
@@ -54,13 +57,13 @@ end
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridcoords(file) 
+function gridindex(file) 
     # make the Cartesian tracer grid
     it = convert(Array{Int,1},ncread(file,"xgrid"))
     jt = convert(Array{Int,1},ncread(file,"ygrid"))
     kt = convert(Array{Int,1},ncread(file,"zgrid"))
-    coords = CartesianIndex.(it,jt,kt) # formerly Itmi
-    return coords
+    I = CartesianIndex.(it,jt,kt) 
+    return I
 end
 
 """
@@ -116,6 +119,10 @@ function downloadTMI(url,inputdir)
     google_download(url,inputdir)
 end
 
+"""
+    function vec2fld
+    Transfer a vector to a 3D field
+"""
 function vec2fld(vector::Array{Float64,1},coords::Array{CartesianIndex{3},1})
 
     nfield = length(vector)
@@ -147,5 +154,28 @@ end
 #     [vector[n] = field[indextmi[n]] for n ∈ 1:nv];
 #     return vector
 # end
+
+"""
+    function surfacepatch
+    Make a surface boundary condition
+    with a rectangular patch
+# Arguments
+- `lonbox`: longitudes of box edges
+- `latbox`: latitudes of box edges
+- `γ`: TMI.grid
+# Output
+- `d`: vector that describes surface patch
+"""
+function surfacepatch(lonbox,latbox,γ)
+    
+    # define the surface boundary condition
+    nfield = length(γ.I) # number of ocean points
+    println(nfield)
+    d = zeros(Int,nfield) # preallocate
+    println(size(d))
+    [d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
+         && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
+    return d
+end
 
 end

@@ -17,37 +17,23 @@ inputdir = "../input"
 A, Alu, γ = configTMI(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
-lat_lo = 50; # 50 N, for example.
-lat_hi = 60;
- 
-lon_lo = -50;
-lon_hi = 0;
+latbox = (50,60); # 50 N -> 60 N, for example.
+
+# mutable due to wraparound: don't use an immutable tuple
+lonbox = [-50,0]; # 50 W -> prime meridian
 
 # ternary operator to handle longitudinal wraparound
-lon_lo ≤ 0 ? lon_lo += 360 : nothing
-lon_hi ≤ 0 ? lon_hi += 360 : nothing
+lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
+lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
 
-# define the surface boundary condition
-nfield = size(A,1)
-d = zeros(Int64,nfield) # preallocate 
-
-# Extract i, j, and k indices (must be a better way to do this)
-i = zeros(Int,nfield)
-j = zeros(Int,nfield)
-k = zeros(Int,nfield)
-d = zeros(Real,nfield)
-
-[i[n] = γ.coords[n][1] for n ∈ 1:nfield]
-[j[n] = γ.coords[n][2] for n ∈ 1:nfield]
-[k[n] = γ.coords[n][3] for n ∈ 1:nfield]
-    
-[d[n]=1 for n ∈ 1:nfield if k[n]==1 && lat_lo ≤ γ.lat[j[n]] ≤ lat_hi && lon_lo ≤ γ.lon[i[n]] ≤ lon_hi ]
+d = surfacepatch(lonbox,latbox,γ)
 
 # do matrix inversion to get quantity of dyed water throughout ocean:
 c = Alu\d
 
 # after doing calculations with vectors, translate to a 3D geometric field
-cfld = vec2fld(c,γ.coords)
+# must be easier way to do this with cartesianindex type
+cfld = vec2fld(c,γ.I)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
