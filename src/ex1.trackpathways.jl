@@ -32,12 +32,12 @@ d = surfacepatch(lonbox,latbox,γ)
 c = Alu\d
 
 # after doing calculations with vectors, translate to a 3D geometric field
-# must be easier way to do this with cartesianindex type
+# Is this step even necessary? Instead just construct section below?
 cfld = vec2fld(c,γ.I)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
-isec = findall(==(lon_section),γ.lon)
+isec = findall(==(lon_section),γ.lon) # findall known to be slow
 csection = dropdims(cfld[isec,:,:],dims=1)
 
 # make a plot of dye in the ocean

@@ -123,26 +123,17 @@ end
     function vec2fld
     Transfer a vector to a 3D field
 """
-function vec2fld(vector::Array{Float64,1},coords::Array{CartesianIndex{3},1})
+function vec2fld(vector::Array{Float64,1},I::Array{CartesianIndex{3},1})
 
     nfield = length(vector)
-    
-    i = zeros(Int,nfield)
-    j = zeros(Int,nfield)
-    k = zeros(Int,nfield)
 
-    # fix this: no need to repeat this calculation
-    [i[n] = coords[n][1] for n ∈ 1:nfield]
-    [j[n] = coords[n][2] for n ∈ 1:nfield]
-    [k[n] = coords[n][3] for n ∈ 1:nfield]
-
-    nx = maximum(i)
-    ny = maximum(j)
-    nz = maximum(k)
+    nx = maximum(I)[1]
+    ny = maximum(I)[2]
+    nz = maximum(I)[3]
     field = zeros(nx,ny,nz)
 
     #- a comprehension
-    [field[coords[n]]=vector[n] for n ∈ 1:nfield]
+    [field[I[n]]=vector[n] for n ∈ 1:nfield]
     return field
 end
 
@@ -170,9 +161,7 @@ function surfacepatch(lonbox,latbox,γ)
     
     # define the surface boundary condition
     nfield = length(γ.I) # number of ocean points
-    println(nfield)
     d = zeros(Int,nfield) # preallocate
-    println(size(d))
     [d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
          && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
     return d
