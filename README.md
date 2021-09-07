@@ -2,7 +2,7 @@
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://ggebbie.github.io/TMI.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ggebbie.github.io/TMI.jl/dev)
-[![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
+n[![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
 
 * Total Matrix Intercomparison codes for Julia\
@@ -54,7 +54,7 @@ An example:\
 
 # DATA FILES
 
-The Julia code is designed to download input files from Google Drive. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive.sh` at a bash shell prompt. 
+The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive.sh` at a bash shell prompt. 
 
 `/bin/sh readTMIfromGoogleDrive.sh`
 
@@ -66,12 +66,12 @@ TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
 
 # FUNCTIONS 
 
-Source code in  `src/TMI.jl`.\ 
+Source code in  `src/TMI.jl`. \ 
 See the list of `export`ed functions in the header of that file.
 
-# EXAMPLES
+# SCRIPTS
 
-See examples in `src/ex*`, where `ex1:trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
+See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
 
 # MATLAB version of code
 

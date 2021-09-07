@@ -1,5 +1,6 @@
-using Revise, TMI
-using Plots
+using Revise
+using TMI, Plots
+
 #= 
  Example 1: Track the pathways of a user-defined water mass.         
  Steps: (a) define the water mass 1). by a rectangular surface patch 
@@ -12,7 +13,7 @@ using Plots
 =#
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../input"
+inputdir = "../data"
 
 A, Alu, γ = configTMI(url,inputdir)
 
