@@ -6,7 +6,7 @@ using SparseArrays
 using NetCDF, Downloads
 using GoogleDrive
 
-export configTMI, downloadTMI, vec2fld, surfacepatch
+export configTMI, downloadTMI, vec2fld, surfacepatch, section
 
 struct grid
     lon::Vector{Real}
@@ -132,7 +132,7 @@ function vec2fld(vector::Array{Float64,1},I::Array{CartesianIndex{3},1})
     nz = maximum(I)[3]
     field = zeros(nx,ny,nz)
 
-    #- a comprehension
+    # a comprehension
     [field[I[n]]=vector[n] for n ∈ 1:nfield]
     return field
 end
@@ -158,13 +158,37 @@ end
 - `d`: vector that describes surface patch
 """
 function surfacepatch(lonbox,latbox,γ)
-    
+
+    # ternary operator to handle longitudinal wraparound
+    lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
+    lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
+
     # define the surface boundary condition
     nfield = length(γ.I) # number of ocean points
     d = zeros(Int,nfield) # preallocate
     [d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
          && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
     return d
+end
+
+"""
+    function section
+    View latitude-depth slice of field
+# Arguments
+- `cfld`: 3d tracer field
+- `lon`: longitude of section
+- `γ`: TMI.grid
+# Output
+- `csection`: 2d slice of field
+"""
+function section(cfld,lon,γ)
+
+    isec = findall(==(lon),γ.lon) 
+
+    # use view so that a new array is not allocated
+    # note: if cfld changes, so does csection (automatically)
+    csection= dropdims(view(cfld,isec,:,:),dims=1)
+    return csection
 end
 
 end
