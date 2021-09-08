@@ -23,14 +23,10 @@ latbox = (50,60); # 50 N -> 60 N, for example.
 # mutable due to wraparound: don't use an immutable tuple
 lonbox = [-50,0]; # 50 W -> prime meridian
 
-# ternary operator to handle longitudinal wraparound
-lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
-lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
-
 d = surfacepatch(lonbox,latbox,γ)
 
 # do matrix inversion to get quantity of dyed water throughout ocean:
-c = Alu\d
+c = Alu\d # presumably equivalent but faster than `c = A\d`
 
 # after doing calculations with vectors, translate to a 3D geometric field
 # Is this step even necessary? Instead just construct section below?
@@ -38,8 +34,7 @@ cfld = vec2fld(c,γ.I)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
-isec = findall(==(lon_section),γ.lon) # findall known to be slow
-csection = dropdims(cfld[isec,:,:],dims=1)
+csection = section(cfld,lon_section,γ)
 
 # make a plot of dye in the ocean
 Plots.contourf(γ.lat,-γ.depth[33:-1:1],csection[:,33:-1:1]') # a sample plot at 22 W.
