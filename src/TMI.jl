@@ -6,7 +6,7 @@ using SparseArrays
 using NetCDF, Downloads
 using GoogleDrive
 
-export configTMI, downloadTMI, vec2fld, surfacepatch, section
+export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
 
 struct grid
     lon::Vector{Real}
@@ -121,30 +121,40 @@ end
 
 """
     function vec2fld
-    Transfer a vector to a 3D field
+    Transfer a vector to a 3D field with accounting for ocean bathymetry
+# Arguments
+- `vector`: field in vector form (no land points)
+- `I`: cartesian indices of ocean points
+# Output
+- `field`: field in 3d form including land points (NaN)
 """
-function vec2fld(vector::Array{Float64,1},I::Array{CartesianIndex{3},1})
-
-    nfield = length(vector)
+function vec2fld(vector::Vector{Float64},I::Vector{CartesianIndex{3}})
 
     nx = maximum(I)[1]
     ny = maximum(I)[2]
     nz = maximum(I)[3]
-    field = zeros(nx,ny,nz)
+    field = NaN .* zeros(nx,ny,nz)
 
     # a comprehension
     [field[I[n]]=vector[n] for n ∈ eachindex(I)]
     return field
 end
 
-# function tmifld2vec!(vector::Array{Real,1},field::Array{Real,3},index::Array{CartesianIndex{3},1})
-
-#     nv = length(index)
-    
-#     #- a comprehension
-#     [vector[n] = field[indextmi[n]] for n ∈ 1:nv];
-#     return vector
-# end
+"""
+    function fld2vec
+    Transfer 3D field with accounting for ocean bathymetry to a vector without land points
+# Arguments
+- `field`: field in 3d form including land points (NaN)
+- `I`: cartesian indices of ocean points
+# Output
+- `vector`: field in vector form (no land points)
+"""
+function fld2vec(field::Array{Float64,3},I::Vector{CartesianIndex{3}})
+    vector = Vector{Real}(undef,length(I))
+    #- a comprehension
+     [vector[n] = field[I[n]] for n ∈ eachindex(I)];
+     return vector
+ end
 
 """
     function surfacepatch

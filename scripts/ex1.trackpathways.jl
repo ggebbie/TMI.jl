@@ -1,6 +1,6 @@
 using Revise
 using TMI, Plots
-
+using BenchmarkTools
 #= 
  Example 1: Track the pathways of a user-defined water mass.         
  Steps: (a) define the water mass 1). by a rectangular surface patch 
@@ -30,7 +30,8 @@ c = Alu\d # presumably equivalent but faster than `c = A\d`
 
 # after doing calculations with vectors, translate to a 3D geometric field
 # Is this step even necessary? Instead just construct section below?
-cfld = vec2fld(c,γ.I)
+@btime cfld = vec2fld(c,γ.I);
+@btime ctest = fld2vec(cfld,γ.I);
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
