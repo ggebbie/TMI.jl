@@ -5,7 +5,9 @@ version = "0.1.0"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+GibbsSeaWater = "9a22fb26-0b63-4589-b28e-8f9d0b5c3d05"
 GoogleDrive = "91feb7a0-3508-11ea-1e8e-afea2c1c9a19"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NetCDF = "30363a11-5582-574a-97bb-aa9a979735b9"

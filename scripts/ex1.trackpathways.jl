@@ -1,6 +1,3 @@
-using Revise
-using TMI, Plots
-using BenchmarkTools
 #= 
  Example 1: Track the pathways of a user-defined water mass.         
  Steps: (a) define the water mass 1). by a rectangular surface patch 
@@ -11,6 +8,10 @@ using BenchmarkTools
             surface region.                                          
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).       
 =#
+using Revise
+using TMI
+using PyPlot
+using BenchmarkTools
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
@@ -30,12 +31,19 @@ c = Alu\d # presumably equivalent but faster than `c = A\d`
 
 # after doing calculations with vectors, translate to a 3D geometric field
 # Is this step even necessary? Instead just construct section below?
-@btime cfld = vec2fld(c,γ.I);
-@btime ctest = fld2vec(cfld,γ.I);
+benchmark = false
+if benchmark
+    #@btime cfld = vec2fld(c,γ.I); # for benchmarking
+    # @btime ctest = fld2vec(cfld,γ.I);cfld = vec2fld(c,γ.I);
+else
+    cfld = vec2fld(c,γ.I); # for benchmarking
+    ctest = fld2vec(cfld,γ.I);
+end
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
 csection = section(cfld,lon_section,γ)
+lims = 0:5:100
 
 # make a plot of dye in the ocean
-Plots.contourf(γ.lat,-γ.depth[33:-1:1],csection[:,33:-1:1]') # a sample plot at 22 W.
+contourf(γ.lat,-γ.depth[33:-1:1],100 * csection[:,33:-1:1]',lims) # a sample plot at 22 W.

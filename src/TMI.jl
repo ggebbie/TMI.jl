@@ -4,9 +4,10 @@ using Revise
 using LinearAlgebra
 using SparseArrays
 using NetCDF, Downloads
-using GoogleDrive
+using GoogleDrive, Distances
 
 export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
+export layerthickness, cellarea, cellvolume, planview
 
 struct grid
     lon::Vector{Real}
@@ -96,6 +97,42 @@ function watermassmatrix(file)
     A = sparse(i,j,m)
     return A
 end
+
+function cellarea(γ)
+    dx = zonalgriddist(γ)
+    dy = haversine((γ.lon[1],γ.lat[1])
+                  ,(γ.lon[1],γ.lat[2]))
+
+    area = Vector{Float64}(undef,length(γ.I))
+    [area[v] = dx[γ.I[v][2]] for v ∈ eachindex(γ.I)]
+    area *= dy
+    return area
+end
+
+function cellvolume(γ)
+    dz = layerthickness(γ)
+    area = cellarea(γ)
+    volume = similar(area)
+    [volume[v] = dz[γ.I[v][3]] for v ∈ eachindex(γ.I)]
+    volume .*= area
+    return volume
+end
+
+function layerthickness(γ::grid)
+    zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
+    dz = ([zface[1] ; diff(zface); 500]);
+    return dz
+end
+
+function zonalgriddist(γ::grid)
+    dx = similar(γ.lat)
+    for j in eachindex(γ.lat)
+        dx[j] = haversine((γ.lon[1],γ.lat[j])
+                         ,(γ.lon[2],γ.lat[j]))
+    end
+    return dx
+end
+
 
 """
     function downloadTMI(url,inputdir)
@@ -199,6 +236,16 @@ function section(cfld,lon,γ)
     # note: if cfld changes, so does csection (automatically)
     csection= dropdims(view(cfld,isec,:,:),dims=1)
     return csection
+end
+
+function planview(cfld,depth,γ)
+
+    isec = findall(==(depth),γ.depth) 
+
+    # use view so that a new array is not allocated
+    # note: if cfld changes, so does csection (automatically)
+    cplan = dropdims(view(cfld,:,:,isec),dims=3)
+    return cplan
 end
 
 end
