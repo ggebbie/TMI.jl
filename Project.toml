@@ -15,6 +15,7 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
+Distances = "0.10"
 GoogleDrive = "0.1"
 NetCDF = "0.11"
 Revise = "3"
