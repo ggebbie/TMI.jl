@@ -5,9 +5,24 @@ using LinearAlgebra
 using SparseArrays
 using NetCDF, Downloads
 using GoogleDrive, Distances
+using PyPlot, PyCall
 
 export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
 export layerthickness, cellarea, cellvolume, planview
+export dyeplot, plotextent
+ENV["PYTHON"] = "" #use Julia-specific Python distribution - necessary on Linux
+
+#Python packages - initialize them to null globally
+const patch = PyNULL()
+const ccrs = PyNULL()
+
+#Initialize all Python packages - install with conda through Julia
+function __init__()
+    copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
+    copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
+    print("Python libraries installed")
+end
+
 
 struct grid
     lon::Vector{Real}
@@ -58,12 +73,12 @@ end
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridindex(file) 
+function gridindex(file)
     # make the Cartesian tracer grid
     it = convert(Array{Int,1},ncread(file,"xgrid"))
     jt = convert(Array{Int,1},ncread(file,"ygrid"))
     kt = convert(Array{Int,1},ncread(file,"zgrid"))
-    I = CartesianIndex.(it,jt,kt) 
+    I = CartesianIndex.(it,jt,kt)
     return I
 end
 
@@ -230,7 +245,7 @@ end
 """
 function section(cfld,lon,γ)
 
-    isec = findall(==(lon),γ.lon) 
+    isec = findall(==(lon),γ.lon)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
@@ -240,7 +255,7 @@ end
 
 function planview(cfld,depth,γ)
 
-    isec = findall(==(depth),γ.depth) 
+    isec = findall(==(depth),γ.depth)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
@@ -248,4 +263,67 @@ function planview(cfld,depth,γ)
     return cplan
 end
 
+end
+
+"""
+    function plotextent
+    Generate image showing user-specified ROI
+# Arguments
+- `latbox`: in format [lat_start, lat_stop]
+- `lonbox`: in format [lon_start, lon_stop]
+
+"""
+function plotextent(latbox, lonbox)
+    lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
+
+    #calc width and height of box
+    w = maximum(lonbox) - minimum(lonbox)
+    h = maximum(latbox) - minimum(latbox)
+
+
+    #init GeoAxes
+    fig = figure()
+    ax = fig.add_subplot(projection = ccrs.PlateCarree())
+
+
+    #plot rectangle
+    ax.add_patch(patch.Rectangle(xy=lower_left, width=w, height=h,
+                                    facecolor="blue",
+                                    alpha=0.2,
+                                    transform=ccrs.PlateCarree())
+                 )
+    #define extent of figure
+    pad = 10 #how many deg lat and lon to show outside of bbox
+    pad_add = [-pad, pad] #add this to latbox and lonbox
+    padded_lat = latbox + pad_add
+    padded_lon = lonbox + pad_add
+    ext = vcat(padded_lon, padded_lat) #make into one vector
+    ax.set_extent(ext)
+
+    ax.coastlines() #show coastlines
+
+    #add gridlines
+    gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
+    gl.top_labels = false
+    gl.right_labels = false
+
+    ax.set_title("User-defined surface patch")
+end
+
+
+"""
+    function dyeplot
+    Plot of dye in ocean
+# Arguments
+- `lat`: latitude arrays
+- `depth`: depth array
+- `vals`: lat x depth value array
+- `lims`: contour levels
+
+
+"""
+function dyeplot(lat, depth, vals, lims)
+    fig = figure()
+    contourf(lat, depth, vals, lims) # a sample plot at 22 W.
+    ax.set_title("Meridional doye concentration")
 end
