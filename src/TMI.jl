@@ -16,6 +16,7 @@ ENV["PYTHON"] = "" #use Julia-specific Python distribution - necessary on Linux
 const patch = PyNULL()
 const ccrs = PyNULL()
 
+
 #Initialize all Python packages - install with conda through Julia
 function __init__()
     copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
@@ -263,7 +264,6 @@ function planview(cfld,depth,γ)
     return cplan
 end
 
-end
 
 """
     function plotextent
@@ -279,7 +279,6 @@ function plotextent(latbox, lonbox)
     #calc width and height of box
     w = maximum(lonbox) - minimum(lonbox)
     h = maximum(latbox) - minimum(latbox)
-
 
     #init GeoAxes
     fig = figure()
@@ -323,7 +322,10 @@ end
 
 """
 function dyeplot(lat, depth, vals, lims)
-    fig = figure()
+    #calc fignum - based on current number of figures
+    figure()
     contourf(lat, depth, vals, lims) # a sample plot at 22 W.
-    ax.set_title("Meridional doye concentration")
+    gca().set_title("Meridional dye concentration")
+end
+
 end

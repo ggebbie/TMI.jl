@@ -10,8 +10,10 @@
 =#
 using Revise
 using TMI
-using PyPlot, PyCall
+using PyPlot
 using BenchmarkTools
+
+pygui(true) #needed for Atom, not sure what it will do in other places
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
@@ -41,13 +43,13 @@ else
     ctest = fld2vec(cfld,γ.I);
 end
 
+#plot bbox
+plotextent(latbox, lonbox)
+
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
 csection = section(cfld,lon_section,γ)
 lims = 0:5:100
 
-#plot bbox
-plotextent(latbox, lonbox)
-
 # make a plot of dye in the ocean
-PyPlot.contourf(γ.lat,-γ.depth[33:-1:1],100 * csection[:,33:-1:1]',lims) # a sample plot at 22 W.
+dyeplot(γ.lat,-γ.depth[33:-1:1],100 * csection[:,33:-1:1]', lims)
