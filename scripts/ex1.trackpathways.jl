@@ -9,11 +9,7 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 using Revise
-using TMI
-using BenchmarkTools
-using PyPlot, PyCall
-
-#@pyimport cartopy.crs as ccrs
+using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
@@ -40,7 +36,6 @@ if benchmark
     #@btime cfld = vec2fld(c,γ.I); # for benchmarking
     # @btime ctest = fld2vec(cfld,γ.I);cfld = vec2fld(c,γ.I);
 else
-
     cfld = vec2fld(c,γ.I); # for benchmarking
     ctest = fld2vec(cfld,γ.I);
 end

@@ -8,8 +8,6 @@ export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
 export layerthickness, cellarea, cellvolume, planview
 export dyeplot, plotextent 
 
-ENV["PYTHON"] = "" #use Julia-specific Python distribution - necessary on Linux
-
 #Python packages - initialize them to null globally
 const patch = PyNULL()
 const ccrs = PyNULL()
@@ -297,7 +295,7 @@ function plotextent(latbox, lonbox)
     ax.set_extent(ext)
 
     # using cartopy 0.18 and NaturalEarth is missing
-    #ax.coastlines() #show coastlines
+    # ax.coastlines() #show coastlines
 
     #add gridlines
     gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
@@ -306,7 +304,6 @@ function plotextent(latbox, lonbox)
 
     ax.set_title("User-defined surface patch")
 end
-
 
 """
     function dyeplot
