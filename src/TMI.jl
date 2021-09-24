@@ -1,21 +1,18 @@
 module TMI
 
 using Revise
-using LinearAlgebra
-using SparseArrays
-using NetCDF, Downloads
-using GoogleDrive, Distances
-using PyPlot, PyCall
+using LinearAlgebra, SparseArrays, NetCDF, Downloads,
+    GoogleDrive, Distances, PyPlot, PyCall
 
 export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
 export layerthickness, cellarea, cellvolume, planview
-export dyeplot, plotextent
+export dyeplot, plotextent 
+
 ENV["PYTHON"] = "" #use Julia-specific Python distribution - necessary on Linux
 
 #Python packages - initialize them to null globally
 const patch = PyNULL()
 const ccrs = PyNULL()
-
 
 #Initialize all Python packages - install with conda through Julia
 function __init__()
@@ -23,7 +20,6 @@ function __init__()
     copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
     print("Python libraries installed")
 end
-
 
 struct grid
     lon::Vector{Real}
@@ -274,6 +270,8 @@ end
 
 """
 function plotextent(latbox, lonbox)
+    
+    ccrs = pyimport("cartopy.crs")
     lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
 
     #calc width and height of box
@@ -284,13 +282,12 @@ function plotextent(latbox, lonbox)
     fig = figure()
     ax = fig.add_subplot(projection = ccrs.PlateCarree())
 
-
     #plot rectangle
-    ax.add_patch(patch.Rectangle(xy=lower_left, width=w, height=h,
-                                    facecolor="blue",
-                                    alpha=0.2,
-                                    transform=ccrs.PlateCarree())
-                 )
+    ax.add_patch(patch.Rectangle(xy=lower_left,
+                                 width=w, height=h,
+                                 facecolor="blue",
+                                 alpha=0.2,
+                                 transform=ccrs.PlateCarree()))
     #define extent of figure
     pad = 10 #how many deg lat and lon to show outside of bbox
     pad_add = [-pad, pad] #add this to latbox and lonbox
@@ -299,7 +296,8 @@ function plotextent(latbox, lonbox)
     ext = vcat(padded_lon, padded_lat) #make into one vector
     ax.set_extent(ext)
 
-    ax.coastlines() #show coastlines
+    # using cartopy 0.18 and NaturalEarth is missing
+    #ax.coastlines() #show coastlines
 
     #add gridlines
     gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
@@ -318,13 +316,11 @@ end
 - `depth`: depth array
 - `vals`: lat x depth value array
 - `lims`: contour levels
-
-
 """
 function dyeplot(lat, depth, vals, lims)
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, depth, vals, lims) # a sample plot at 22 W.
+    contourf(lat, depth, vals, lims) 
     gca().set_title("Meridional dye concentration")
 end
 
