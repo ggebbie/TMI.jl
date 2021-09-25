@@ -20,6 +20,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 BenchmarkTools = "1"
+Conda = "1"
 Distances = "0.10"
 GibbsSeaWater = "0.1"
 GoogleDrive = "0.1"
