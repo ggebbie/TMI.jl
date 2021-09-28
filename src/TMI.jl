@@ -43,7 +43,7 @@ end
 function config(url,inputdir)
 
     TMIfile = inputdir * "/TMI_4deg_2010.nc"
-    !isfile(TMIfile) ? downloadTMI(url,inputdir) : nothing
+    !isfile(TMIfile) ? download(url,inputdir) : nothing
     ncdata = NetCDF.open(TMIfile)
 
     # put together the sparse matrix, A
