@@ -322,4 +322,14 @@ end
 #     gca().set_title("Meridional dye concentration")
 # end
 
+function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)
+
+    # do each dimension separately
+    lon = 4.4
+    lonval, lonloc = findmin(abs.(γ.lon .- lon))
+
+    gridvals = lonloc
+    return gridvals
+end
+
 end
