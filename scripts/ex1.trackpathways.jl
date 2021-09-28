@@ -9,14 +9,14 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 using Revise
-using TMI, BenchmarkTools, PyPlot, PyCall
+using TMI, BenchmarkTools, PyPlot, PyCall, Plots
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
 
-A, Alu, γ = configTMI(url,inputdir)
+A, Alu, γ = config(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -41,7 +41,7 @@ else
 end
 
 #plot bbox
-#plotextent(latbox, lonbox)
+plotextent(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
@@ -49,4 +49,4 @@ csection = section(cfld,lon_section,γ)
 lims = 0:5:100
 
 # make a plot of dye in the ocean
-#dyeplot(γ.lat,-γ.depth[33:-1:1],100 * csection[:,33:-1:1]', lims)
+dyeplot(γ.lat,-γ.depth[33:-1:1],100 * csection[:,33:-1:1]', lims)

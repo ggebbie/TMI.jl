@@ -5,9 +5,11 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances
 #using PyPlot, PyCall
 
-export configTMI, downloadTMI, vec2fld, fld2vec, surfacepatch, section
-export layerthickness, cellarea, cellvolume, planview
-#export dyeplot, plotextent 
+export config, download,
+    vec2fld, fld2vec, kindex, surfaceIndex,
+    surfacepatch, section,
+    layerthickness, cellarea, cellvolume,
+    planview, dyeplot, plotextent 
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -31,14 +33,14 @@ struct grid
 end
 
 """
-    function readTMI(ncfilename)
+    function config(url,inputdir)
 # Arguments
 - `ncfilename`: NetCDF file name
 # Output
 - `A`: TMI steady-state water-mass matrix
 - `grid`: TMI grid coordinates
 """
-function configTMI(url,inputdir)
+function config(url,inputdir)
 
     TMIfile = inputdir * "/TMI_4deg_2010.nc"
     !isfile(TMIfile) ? downloadTMI(url,inputdir) : nothing
@@ -146,7 +148,7 @@ end
 
 
 """
-    function downloadTMI(url,inputdir)
+    function download(url,inputdir)
     Read and assemble all TMI inputs.
 # Arguments
 - `url`: Google Drive location of TMI input
@@ -154,7 +156,7 @@ end
 # Output
 - none
 """
-function downloadTMI(url,inputdir)
+function download(url,inputdir)
     # later include options and move these settings to arguments.
 
     # make sure input dir exists
@@ -268,59 +270,60 @@ end
 - `lonbox`: in format [lon_start, lon_stop]
 
 """
-# function plotextent(latbox, lonbox)
+function plotextent(latbox, lonbox)
     
-#     ccrs = pyimport("cartopy.crs")
-#     lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
+#    ccrs = pyimport("cartopy.crs")
+    lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
 
-#     #calc width and height of box
-#     w = maximum(lonbox) - minimum(lonbox)
-#     h = maximum(latbox) - minimum(latbox)
+    #calc width and height of box
+    w = maximum(lonbox) - minimum(lonbox)
+    h = maximum(latbox) - minimum(latbox)
 
-#     #init GeoAxes
-#     fig = figure()
-#     ax = fig.add_subplot(projection = ccrs.PlateCarree())
+    #init GeoAxes
+    #fig = figure()
+ #   ax = fig.add_subplot(projection = ccrs.PlateCarree())
 
-#     #plot rectangle
-#     ax.add_patch(patch.Rectangle(xy=lower_left,
-#                                  width=w, height=h,
-#                                  facecolor="blue",
-#                                  alpha=0.2,
-#                                  transform=ccrs.PlateCarree()))
-#     #define extent of figure
-#     pad = 10 #how many deg lat and lon to show outside of bbox
-#     pad_add = [-pad, pad] #add this to latbox and lonbox
-#     padded_lat = latbox + pad_add
-#     padded_lon = lonbox + pad_add
-#     ext = vcat(padded_lon, padded_lat) #make into one vector
-#     ax.set_extent(ext)
+    #plot rectangle
+  #  ax.add_patch(patch.Rectangle(xy=lower_left,
+  #                               width=w, height=h,
+  #                              facecolor="blue",
+  #                               alpha=0.2,
+  #                               transform=ccrs.PlateCarree()))
+    #define extent of figure
+    pad = 10 #how many deg lat and lon to show outside of bbox
+    pad_add = [-pad, pad] #add this to latbox and lonbox
+    padded_lat = latbox + pad_add
+    padded_lon = lonbox + pad_add
+    ext = vcat(padded_lon, padded_lat) #make into one vector
+   # ax.set_extent(ext)
 
-#     # using cartopy 0.18 and NaturalEarth is missing
-#     # ax.coastlines() #show coastlines
+    # using cartopy 0.18 and NaturalEarth is missing
+    # ax.coastlines() #show coastlines
 
-#     #add gridlines
-#     gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
-#     gl.top_labels = false
-#     gl.right_labels = false
+    #add gridlines
+    #gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
+    #gl.top_labels = false
+    #gl.right_labels = false
 
-#     ax.set_title("User-defined surface patch")
-# end
+    #ax.set_title("User-defined surface patch")
+end
 
-# """
-#     function dyeplot
-#     Plot of dye in ocean
-# # Arguments
-# - `lat`: latitude arrays
-# - `depth`: depth array
-# - `vals`: lat x depth value array
-# - `lims`: contour levels
-# """
-# function dyeplot(lat, depth, vals, lims)
-#     #calc fignum - based on current number of figures
-#     figure()
-#     contourf(lat, depth, vals, lims) 
-#     gca().set_title("Meridional dye concentration")
-# end
+"""
+    function dyeplot
+    Plot of dye in ocean
+# Arguments
+- `lat`: latitude arrays
+- `depth`: depth array
+- `vals`: lat x depth value array
+- `lims`: contour levels
+"""
+function dyeplot(lat, depth, vals, lims)
+    println("turned off due to matplotlib CI setup issue")
+    #calc fignum - based on current number of figures
+    #figure()
+    #contourf(lat, depth, vals, lims) 
+    #gca().set_title("Meridional dye concentration")
+end
 
 function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)
 
@@ -330,6 +333,27 @@ function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)
 
     gridvals = lonloc
     return gridvals
+end
+
+"""
+    function kindex(I) 
+    
+    Get the k-index (depth level) from the Cartesian index
+"""
+function kindex(I) 
+    k = Vector{Int64}(undef,length(I))
+    [k[n]=I[n][3] for n ∈ 1:length(I)]
+    return k
+end
+
+"""
+    function surfaceIndex(I) 
+    
+    Get the vector-index where depth level == 1 and it is ocean.
+"""
+function surfaceIndex(I)
+    Isfc = findall(kindex(I) .==1)
+    return Isfc
 end
 
 end
