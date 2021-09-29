@@ -2,7 +2,7 @@
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://ggebbie.github.io/TMI.jl/stable)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ggebbie.github.io/TMI.jl/dev)
-n[![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
+[![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
 
 * Total Matrix Intercomparison codes for Julia\
@@ -18,8 +18,25 @@ Gebbie, G., and P. Huybers, "The mean age of ocean waters inferred from radiocar
 
 Gebbie, G., "How much did Glacial North Atlantic Water shoal?", 2014, Paleoceanography.
 
+# Requirements
 
-# SETTING UP PROJECT ENVIRONMENT
+TMI.jl uses matplotlib and cartopy. Direct the python environment to an existing system-wide version of python with these already installed:
+`ENV["PYTHON"]="python/directory/on/your/machine"`
+
+Or use a Julia-specific python environment built from scratch following these directions from the Julia REPL:
+`ENV["PYTHON"]=""` \
+`import Pkg; Pkg.add("PyCall")`\
+`import Pkg; Pkg.build("PyCall")`\
+Restart the REPL.\
+`import Pkg; Pkg.add("Conda")`\
+`import Conda`\
+`Conda.add("matplotlib",channel="conda-forge")`\
+`Conda.add("shapely",channel="conda-forge")`\
+`Conda.add("cartopy",channel="conda-forge")`\
+
+This should set up cartopy v. 0.20.0 which can download coastlines from Amazon Web Services.
+
+# Setting up project environment
 
 * from Emacs editor (one possible method)
 
@@ -52,7 +69,7 @@ An example:\
 `cd TMI.jl`\
 `julia --project=@. src/ex1.trackpathways.jl`
 
-# DATA FILES
+# Data files
 
 The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive.sh` at a bash shell prompt. 
 
@@ -64,14 +81,46 @@ TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
                   resolution and 33 levels  (G & H 2010), \
 				  Includes TMI climatology of ocean properties 
 
-# FUNCTIONS 
+# Functions
 
-Source code in  `src/TMI.jl`. \ 
-See the list of `export`ed functions in the header of that file.
+Available functions are listed in the documentation at https://ggebbie.github.io/TMI.jl/dev/ .
 
-# SCRIPTS
+# Scripts
 
 See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
+
+# How this Julia package was started
+
+This package was generated using PkgTemplates.jl. 
+
+Steps: 
+1. Use PkgTemplates to make git repo.\
+	2. new empty repository on GitHub.\
+    3. Then push an existing repository from the command line:
+    `git remote add origin git@github.com:ggebbie/TMI.jl.git`
+    `git branch -M main`
+    `git push -u origin main`
+
+4. Run the following Julia code
+
+`using Revise, PkgTemplates`
+
+`t = Template(; 
+    user="ggebbie",
+    dir="~/projects",
+    authors="G Jake Gebbie",
+    julia=v"1.6",
+    plugins=[
+        License(; name="MIT"),
+        Git(; manifest=true, ssh=true),
+        GitHubActions(; x86=true),
+        Codecov(),
+        Documenter{GitHubActions}(),
+        Develop(),
+    ],
+             )`
+
+`t("TMI.jl")`
 
 # MATLAB version of code
 

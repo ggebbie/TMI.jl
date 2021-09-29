@@ -16,7 +16,7 @@ pygui(true) #needed for Atom, not sure what it will do in other places
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
 
-A, Alu, γ = configTMI(url,inputdir)
+A, Alu, γ = config(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.

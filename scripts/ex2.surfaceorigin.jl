@@ -17,7 +17,7 @@ using TMI, PyPlot, PyCall, BenchmarkTools,
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
-A, Alu, γ = configTMI(url,inputdir)
+A, Alu, γ = config(url,inputdir)
 v = cellvolume(γ)
 area = cellarea(γ)
  
@@ -34,4 +34,6 @@ dVddplan = planview(dVddfld,sfcdepth,γ)
 
 # view the surface
 cntrs = 1:0.25:6
+
+# PyPlot turned off for CI.
 contourf(γ.lon,γ.lat,log10.(dVddplan'),cntrs) # units: effective thickness in log10(meters)

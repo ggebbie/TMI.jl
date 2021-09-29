@@ -19,5 +19,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/ggebbie/TMI.jl",
+           repo="github.com/ggebbie/TMI.jl",
+           devbranch="main",
 )
