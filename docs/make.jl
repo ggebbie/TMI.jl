@@ -20,5 +20,5 @@ makedocs(;
 
 deploydocs(;
            repo="github.com/ggebbie/TMI.jl",
-           devbranch="numerics",
+           devbranch="main",
 )

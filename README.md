@@ -89,6 +89,40 @@ Available functions are listed in the documentation at https://ggebbie.github.io
 
 See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
 
+# How this Julia package was started
+
+This package was generated using PkgTemplates.jl. 
+
+Steps: 
+1. Use PkgTemplates to make git repo.\
+	2. new empty repository on GitHub.\
+    3. Then push an existing repository from the command line:
+    `git remote add origin git@github.com:ggebbie/TMI.jl.git`
+    `git branch -M main`
+    `git push -u origin main`
+
+4. Run the following Julia code
+"""
+using Revise, PkgTemplates
+
+t = Template(; 
+    user="ggebbie",
+    dir="~/projects",
+    authors="G Jake Gebbie",
+    julia=v"1.6",
+    plugins=[
+        License(; name="MIT"),
+        Git(; manifest=true, ssh=true),
+        GitHubActions(; x86=true),
+        Codecov(),
+        Documenter{GitHubActions}(),
+        Develop(),
+    ],
+             )
+
+t("TMI.jl")
+"""
+
 # MATLAB version of code
 
 MATLAB codes, 2009-2021, see also https://github.com/ggebbie/TMI .
