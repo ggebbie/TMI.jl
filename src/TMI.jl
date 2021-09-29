@@ -3,24 +3,38 @@ module TMI
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances
-#using PyPlot, PyCall
+using PyPlot, PyCall
 
 export config, download,
     vec2fld, fld2vec, kindex, surfaceIndex,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
     planview, dyeplot, plotextent 
+#export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
 #const ccrs = PyNULL()
 
+# from ClimatePlots.jl
+const mpl = PyNULL()
+const plt = PyNULL()
+const cmocean = PyNULL()
+const cartopy = PyNULL()
+
 #Initialize all Python packages - install with conda through Julia
-# function __init__()
-#     copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
-#     copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
-#     print("Python libraries installed")
-# end
+function __init__()
+    #copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
+    #copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
+
+    # ClimatePlots.jl
+    copy!(mpl, pyimport_conda("matplotlib", "matplotlib", "conda-forge"))
+    copy!(plt, pyimport_conda("matplotlib.pyplot", "matplotlib", "conda-forge"))
+    copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge"))
+    copy!(cartopy, pyimport_conda("cartopy", "cartopy", "conda-forge"))
+
+    println("Python libraries installed")
+ end
 
 struct grid
     lon::Vector{Real}
@@ -280,32 +294,32 @@ function plotextent(latbox, lonbox)
     h = maximum(latbox) - minimum(latbox)
 
     #init GeoAxes
-    #fig = figure()
- #   ax = fig.add_subplot(projection = ccrs.PlateCarree())
+    fig = figure()
+    ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
 
     #plot rectangle
-  #  ax.add_patch(patch.Rectangle(xy=lower_left,
-  #                               width=w, height=h,
-  #                              facecolor="blue",
-  #                               alpha=0.2,
-  #                               transform=ccrs.PlateCarree()))
+    ax.add_patch(TMI.mpl.patches.Rectangle(xy=lower_left,
+                                 width=w, height=h,
+                                 facecolor="blue",
+                                 alpha=0.2,
+                                 transform=TMI.cartopy.crs.PlateCarree()))
     #define extent of figure
     pad = 10 #how many deg lat and lon to show outside of bbox
     pad_add = [-pad, pad] #add this to latbox and lonbox
     padded_lat = latbox + pad_add
     padded_lon = lonbox + pad_add
     ext = vcat(padded_lon, padded_lat) #make into one vector
-   # ax.set_extent(ext)
+    ax.set_extent(ext)
 
     # using cartopy 0.18 and NaturalEarth is missing
-    # ax.coastlines() #show coastlines
+    #ax.coastlines() #show coastlines
 
     #add gridlines
-    #gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
-    #gl.top_labels = false
-    #gl.right_labels = false
+    gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
+    gl.top_labels = false
+    gl.right_labels = false
 
-    #ax.set_title("User-defined surface patch")
+    ax.set_title("User-defined surface patch")
 end
 
 """
@@ -318,11 +332,11 @@ end
 - `lims`: contour levels
 """
 function dyeplot(lat, depth, vals, lims)
-    println("turned off due to matplotlib CI setup issue")
+    #println("turned off due to matplotlib CI setup issue")
     #calc fignum - based on current number of figures
-    #figure()
-    #contourf(lat, depth, vals, lims) 
-    #gca().set_title("Meridional dye concentration")
+    figure()
+    contourf(lat, depth, vals, lims) 
+    gca().set_title("Meridional dye concentration")
 end
 
 function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)

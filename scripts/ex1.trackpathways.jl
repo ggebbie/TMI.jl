@@ -9,7 +9,7 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 using Revise
-using TMI, BenchmarkTools, PyPlot, PyCall, Plots
+using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 

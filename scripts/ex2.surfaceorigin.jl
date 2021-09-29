@@ -36,4 +36,4 @@ dVddplan = planview(dVddfld,sfcdepth,γ)
 cntrs = 1:0.25:6
 
 # PyPlot turned off for CI.
-#contourf(γ.lon,γ.lat,log10.(dVddplan'),cntrs) # units: effective thickness in log10(meters)
+contourf(γ.lon,γ.lat,log10.(dVddplan'),cntrs) # units: effective thickness in log10(meters)
