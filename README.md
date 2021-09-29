@@ -102,10 +102,10 @@ Steps:
     `git push -u origin main`
 
 4. Run the following Julia code
-"""
-using Revise, PkgTemplates
 
-t = Template(; 
+`using Revise, PkgTemplates`
+
+`t = Template(; 
     user="ggebbie",
     dir="~/projects",
     authors="G Jake Gebbie",
@@ -118,10 +118,9 @@ t = Template(;
         Documenter{GitHubActions}(),
         Develop(),
     ],
-             )
+             )`
 
-t("TMI.jl")
-"""
+`t("TMI.jl")`
 
 # MATLAB version of code
 
