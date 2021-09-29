@@ -51,6 +51,8 @@ jobs:
             using Pkg
             Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
+        env:
+          PYTHON: ""
       - run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
@@ -60,6 +62,5 @@ jobs:
       - run: julia --project=docs docs/make.jl
         env:
           JULIA_PKG_SERVER: ""
-	  PYTHON: ""
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
