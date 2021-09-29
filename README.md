@@ -67,7 +67,7 @@ Type backspace to return to command mode.
 
 An example:\
 `cd TMI.jl`\
-`julia --project=@. src/ex1.trackpathways.jl`
+`julia --project=@. scripts/ex1.trackpathways.jl`
 
 # Data files
 

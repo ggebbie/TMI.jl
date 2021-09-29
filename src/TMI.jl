@@ -27,10 +27,10 @@ function __init__()
     #copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
     #copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
 
-    # ClimatePlots.jl
+    # following ClimatePlots.jl
     copy!(mpl, pyimport_conda("matplotlib", "matplotlib", "conda-forge"))
-    copy!(plt, pyimport_conda("matplotlib.pyplot", "matplotlib", "conda-forge"))
-    copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge"))
+    #copy!(plt, pyimport_conda("matplotlib.pyplot", "matplotlib", "conda-forge"))
+    #copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge"))
     copy!(cartopy, pyimport_conda("cartopy", "cartopy", "conda-forge"))
 
     println("Python libraries installed")
@@ -41,9 +41,6 @@ struct grid
     lat::Vector{Real}
     depth::Vector{Real}
     I::Vector{CartesianIndex{3}} # index
-    #nx::Int
-    #ny::Int
-    #nz::Int
 end
 
 """
@@ -159,7 +156,6 @@ function zonalgriddist(γ::grid)
     end
     return dx
 end
-
 
 """
     function download(url,inputdir)
@@ -312,7 +308,7 @@ function plotextent(latbox, lonbox)
     ax.set_extent(ext)
 
     # using cartopy 0.18 and NaturalEarth is missing
-    #ax.coastlines() #show coastlines
+    ax.coastlines() #show coastlines
 
     #add gridlines
     gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
