@@ -7,9 +7,9 @@ using PyPlot, PyCall
 
 export config, download,
     vec2fld, fld2vec, kindex, surfaceIndex,
-    surfacepatch, section,
+    surfacePatch, section,
     layerthickness, cellarea, cellvolume,
-    planview, dyeplot, plotextent 
+    planview, dyeplot, plotextent, tracerFieldInit
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
 #Python packages - initialize them to null globally
@@ -41,6 +41,7 @@ struct grid
     lat::Vector{Real}
     depth::Vector{Real}
     I::Vector{CartesianIndex{3}} # index
+    wet::BitArray{3}
 end
 
 """
@@ -51,6 +52,7 @@ end
 - `A`: TMI steady-state water-mass matrix
 - `grid`: TMI grid coordinates
 """
+
 function config(url,inputdir)
 
     TMIfile = inputdir * "/TMI_4deg_2010.nc"
@@ -58,8 +60,12 @@ function config(url,inputdir)
     ncdata = NetCDF.open(TMIfile)
 
     # put together the sparse matrix, A
-    A = watermassmatrix(TMIfile)
+    A = watermassMatrix(TMIfile)
+    c = readTracer(TMIfile,"θ")
 
+    # make a mask
+    wet = .!isnan.(c)
+    
     # LU factorization for efficient matrix inversions
     Alu = lu(A)
 
@@ -69,9 +75,9 @@ function config(url,inputdir)
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
 
-    γ = grid(lon,lat,depth,I)
+    γ = grid(lon,lat,depth,I,wet)
 
-    return A, Alu, γ
+    return A, Alu, c, γ
 end
 
 """
@@ -107,19 +113,33 @@ function gridprops(file)
 end
 
 """
-    function watermassmatrix(file)
+    function watermassMatrix(file)
     Read and assemble the water-mass matrix.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `A`: water-mass matrix
 """
-function watermassmatrix(file)
+function watermassMatrix(file)
     i = ncread(file,"i")
     j = ncread(file,"j")
     m = ncread(file,"m")
     A = sparse(i,j,m)
     return A
+end
+
+"""
+    function readTracer(file,tracername)
+    Read and assemble the water-mass matrix.
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+# Output
+- `c`: 3D tracer field
+"""
+function readTracer(file,tracername)
+    c = ncread(file,tracername)
+    return c
 end
 
 function cellarea(γ)
@@ -217,7 +237,7 @@ function fld2vec(field::Array{Float64,3},I::Vector{CartesianIndex{3}})
  end
 
 """
-    function surfacepatch
+    function surfacePatch
     Make a surface boundary condition
     with a rectangular patch
 # Arguments
@@ -227,17 +247,25 @@ function fld2vec(field::Array{Float64,3},I::Vector{CartesianIndex{3}})
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacepatch(lonbox,latbox,γ)
+function surfacePatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float64} where T<:Real
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
     lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
 
     # define the surface boundary condition
-    nfield = length(γ.I) # number of ocean points
-    d = zeros(Int,nfield) # preallocate
-    [d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
-         && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
+
+    # preallocate
+    d = tracerFieldInit(γ.wet)
+
+    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+    d[.!γ.wet] .= NaN # double check that NaNs stay NaNs
+
+    # old method for vectors
+        #nfield = length(γ.I) # number of ocean points
+    #d = zeros(Int,nfield) # preallocate
+    #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
+    #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
     return d
 end
 
@@ -364,6 +392,22 @@ end
 function surfaceIndex(I)
     Isfc = findall(kindex(I) .==1)
     return Isfc
+end
+
+""" 
+    function tracerFieldInit(wet)
+      initialize tracer field on TMI grid
+    perhaps better to have a tracer struct and constructor
+"""
+function tracerFieldInit(wet)
+    # preallocate
+    d = Array{Float64}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    d[wet] .= 0.0
+    d[.!wet] .= NaN
+    return d
 end
 
 end

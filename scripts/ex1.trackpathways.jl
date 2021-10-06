@@ -16,7 +16,9 @@ pygui(true) #needed for Atom, not sure what it will do in other places
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
 
-A, Alu, γ = config(url,inputdir)
+#c = readtracer(url,"θ")
+
+A, Alu, c, γ = config(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -24,10 +26,12 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 # mutable due to wraparound: don't use an immutable tuple
 lonbox = [-50,0]; # 50 W -> prime meridian
 
-d = surfacepatch(lonbox,latbox,γ)
+d = surfacePatch(lonbox,latbox,γ)
+dwet = view(d,γ.wet)
 
 # do matrix inversion to get quantity of dyed water throughout ocean:
-c = Alu\d # presumably equivalent but faster than `c = A\d`
+c = tracerFieldInit(γ.wet); # pre-allocate c
+c[γ.wet] = A\d[γ.wet] # presumably equivalent but faster than `c = A\d`
 
 # after doing calculations with vectors, translate to a 3D geometric field
 # Is this step even necessary? Instead just construct section below?
