@@ -8,8 +8,12 @@ using PyPlot, PyCall
 export config, download,
     vec2fld, fld2vec, kindex, surfaceIndex,
     surfacePatch, section,
-    layerthickness, cellarea, cellvolume,
-    planview, dyeplot, plotextent, tracerFieldInit
+    layerthickness, cellArea, cellVolume,
+    planview, dyeplot, plotextent, tracerFieldInit,
+    updateLinearIndex,
+    watermassMatrixXYZ, watermassMatrixZYX,
+    linearIndexXYZ
+
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
 #Python packages - initialize them to null globally
@@ -41,6 +45,8 @@ struct grid
     lat::Vector{Real}
     depth::Vector{Real}
     I::Vector{CartesianIndex{3}} # index
+    R::Array{Union{Integer,Nothing},3}
+#    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
 end
 
@@ -60,35 +66,42 @@ function config(url,inputdir)
     ncdata = NetCDF.open(TMIfile)
 
     # put together the sparse matrix, A
-    A = watermassMatrix(TMIfile)
+    Azyx = watermassMatrixZYX(TMIfile)
+    
     c = readTracer(TMIfile,"θ")
 
     # make a mask
     wet = .!isnan.(c)
     
-    # LU factorization for efficient matrix inversions
-    Alu = lu(A)
-
     # Do bookkeeping for TMI grid coordinates
-    I = gridindex(TMIfile)
+    I = cartesianIndexZYX(TMIfile)
 
+    R = linearIndexXYZ(wet)
+
+    Axyz = watermassMatrixXYZ(TMIfile,I,R)
+    #R = R[ wet ] # eliminate land points
+
+    # LU factorization for efficient matrix inversions
+    Alu = lu(Axyz)
+    
     # get properties of grid
-    lat,lon,depth = gridprops(TMIfile)
+    lat,lon,depth = gridProps(TMIfile)
 
-    γ = grid(lon,lat,depth,I,wet)
+    γ = grid(lon,lat,depth,I,R,wet)
 
-    return A, Alu, c, γ
+    return Azyx, Axyz, Alu, c, γ
 end
 
 """
-    function gridcoords(file)
-    Read and assemble the grid coordinates.
+    function cartesianIndexZYX(file)
+    Read and assemble the grid coordinates
+    according to the legacy MATLAB code.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridindex(file)
+function cartesianIndexZYX(file)
     # make the Cartesian tracer grid
     it = convert(Array{Int,1},ncread(file,"xgrid"))
     jt = convert(Array{Int,1},ncread(file,"ygrid"))
@@ -98,18 +111,98 @@ function gridindex(file)
 end
 
 """
-    function gridprops(file)
+    function linearIndexXYZ(file)
+    Read and assemble the grid coordinates.
+# Arguments
+- `wet`: 3D mask for wet points
+# Output
+- `R`: array of linear indices, but not a LinearIndices type
+"""
+function linearIndexXYZ(wet)
+    R = Array{Union{Int64,Nothing},3}(nothing,size(wet))
+    R[wet]=1:sum(wet)
+    # R = LinearIndices((1:maximum(it),1:maximum(jt),1:maximum(kt)));
+    # R = LinearIndices((it,jt,kt));
+    #Rwet = R[γ.wet]
+    return R
+end
+
+"""
+    function gridProps(file)
     Read and assemble the grid properties.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridprops(file)
+function gridProps(file)
     lat = ncread(file,"lat")
     lon = ncread(file,"lon")
     depth = ncread(file,"depth")
     return lat,lon,depth
+end
+
+"""
+    function watermassMatrixZYX(file)
+    Read and assemble the water-mass matrix.
+    Legacy version from MATLAB.
+# Arguments
+- `file`: TMI NetCDF file name
+# Output
+- `A`: water-mass matrix
+"""
+function watermassMatrixZYX(file)
+    i = ncread(file,"i")
+    j = ncread(file,"j")
+    m = ncread(file,"m")
+    A = sparse(i,j,m)
+    return A
+end
+
+"""
+        function watermassMatrixXYZ(file,γ)
+    Read and assemble the water-mass matrix from MATLAB.
+    Transfer to updated x,y,z version
+# Arguments
+- `file`: TMI NetCDF file name
+- `γ`: TMI grid
+# Output
+- `A`: water-mass matrix
+"""
+function watermassMatrixXYZ(file,I,R)
+
+    # MATLAB accounting z,y,x
+    izyx = convert(Vector{Int},ncread(file,"i"))
+    jzyx = convert(Vector{Int},ncread(file,"j"))
+
+    # Julia accounting x,y,z
+    ixyz = updateLinearIndex(izyx,I,R)
+    jxyz = updateLinearIndex(jzyx,I,R)
+    
+    m = ncread(file,"m")
+
+    # use grid indices to switch i,j values
+    A = sparse(ixyz,jxyz,m)
+    #A = A[wet,:];
+    return A
+end
+
+
+"""
+    function updateLinearIndex(i,I,R)
+    Linear index translated from z,y,x to x,y,z accounting
+# Arguments
+- `izyx`: index of interest in z,y,x accounting
+- `I`: wet Cartesian Index for z,y,x
+- `R`: Linear indices for x,y,z 
+# Output
+- `ixyz`: index of interest in x,y,z accounting
+"""
+function updateLinearIndex(izyx,I,R)
+    #ixyz = similar(izyx)
+    #[ixyz[vv] = R[I[izyx[vv]]] for vv in eachindex(izyx)]
+    ixyz = R[I[izyx]]
+    return ixyz
 end
 
 """
@@ -121,13 +214,102 @@ end
 - `A`: water-mass matrix
 """
 function watermassMatrix(file)
-    i = ncread(file,"i")
-    j = ncread(file,"j")
-    m = ncread(file,"m")
-    A = sparse(i,j,m)
+
+    m = massFractions(file)
+
+    A = watermassMatrix(m)
+    
+    # assemble m into A
+    # Atest = Array{SparseArrays.SparseMatrixCSC{Float64, Int64},3}
+
+    
+    # it = convert(Vector{Int},ncread(file,"xgrid"))
+    # jt = convert(Vector{Int},ncread(file,"ygrid"))
+    # kt = convert(Vector{Int},ncread(file,"zgrid"))
+    # i = convert(Vector{Int},ncread(file,"i"))
+    # j = convert(Vector{Int},ncread(file,"j"))
+    # m = ncread(file,"m")
+
+    # for gg = 1:length(i)
+
+    #     list = findall(x -> x == gg, i)
+
+    #     # get linear coordinates.
+    #     [linear[q] = R[it[list[q]],jt[list[q]],kt[list[q]]] for q = 1:length(list)] 
+        
+    #     # can't store sparse 3D matrix. just 2D.
+    #     # need to go from i,j,k to linear index
+    #     Arowsparse = sparse(  m[gg])
+    #     A[it[i[gg]],jt[i[gg]],kt[i[gg]]] = sparse([it[j[gg]],jt[j[gg]],kt[j[gg]]] = m[gg]
+    # end
+    
+    #A = sparse(i,j,m)
     return A
 end
 
+"""
+    function watermassMatrix(file)
+    Assemble the water-mass matrix given mass fractions `m`
+# Arguments
+- `m`: mass fractions
+# Output
+- `A`: water-mass matrix
+"""
+# function watermassMatrix(m)
+#     # Goal:assemble m into A
+
+#     # preallocate A
+#     A = Array{SparseArrays.SparseMatrixCSC{Float64, Int64},3}
+                                                  
+#     # loop over each equation
+    
+#     # get linear index for equation (destination)
+
+#     # get linear indices for sources
+
+#     # make a list of row (destination), column (destination), m value
+
+#     # complete loop
+
+#     # make sparse matrix
+#     #A = sparse(i,j,m)
+#     return A
+# end
+
+"""
+    function massFractions(file)
+    Read and assemble the water-mass fractions, `m`
+# Arguments
+- `file`: TMI NetCDF file name
+# Output
+- `m`: mass fractions
+"""
+# function massFractions(file)
+#     Atest = Array{SparseArrays.SparseMatrixCSC{Float64, Int64},3}
+    
+#     it = convert(Vector{Int},ncread(file,"xgrid"))
+#     jt = convert(Vector{Int},ncread(file,"ygrid"))
+#     kt = convert(Vector{Int},ncread(file,"zgrid"))
+#     i = convert(Vector{Int},ncread(file,"i"))
+#     j = convert(Vector{Int},ncread(file,"j"))
+#     mMat = ncread(file,"m") # MATLAB generated list
+
+#     for gg = 1:length(i)
+
+#         list = findall(x -> x == gg, i)
+
+#         # get linear coordinates.
+#         [linear[q] = R[it[list[q]],jt[list[q]],kt[list[q]]] for q = 1:length(list)] 
+        
+#         # can't store sparse 3D matrix. just 2D.
+#         # need to go from i,j,k to linear index
+#         Arowsparse = sparse(  m[gg])
+#         A[it[i[gg]],jt[i[gg]],kt[i[gg]]] = sparse([it[j[gg]],jt[j[gg]],kt[j[gg]]] = m[gg]
+#     end
+    
+#     return m
+# end
+                                                  
 """
     function readTracer(file,tracername)
     Read and assemble the water-mass matrix.
@@ -142,23 +324,36 @@ function readTracer(file,tracername)
     return c
 end
 
-function cellarea(γ)
+function cellArea(γ)
     dx = zonalgriddist(γ)
     dy = haversine((γ.lon[1],γ.lat[1])
                   ,(γ.lon[1],γ.lat[2]))
 
-    area = Vector{Float64}(undef,length(γ.I))
-    [area[v] = dx[γ.I[v][2]] for v ∈ eachindex(γ.I)]
-    area *= dy
+    area = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
+    fill!(area,0.0)
+
+    # to calculate area everywhere
+    #[area[i,j] = dx[j] * dy for i ∈ eachindex(γ.lon) for j ∈ eachindex(γ.lat)]
+
+    # to calculate sea surface area
+    I = γ.I
+    [area[I[ii][1],I[ii][2]] = dx[I[ii][2]] * dy for ii ∈ eachindex(I) if I[ii][3] == 1]
+
     return area
 end
 
-function cellvolume(γ)
+function cellVolume(γ)
     dz = layerthickness(γ)
-    area = cellarea(γ)
-    volume = similar(area)
-    [volume[v] = dz[γ.I[v][3]] for v ∈ eachindex(γ.I)]
-    volume .*= area
+    area = cellArea(γ)
+    volume = Array{Float64,3}(undef,length(γ.lon),length(γ.lat),length(γ.depth))
+    fill!(volume,0.0)
+
+    # for volume everywhere
+    # [volume[i,j,k] = area[i,j] * dz[k] for i ∈ eachindex(γ.lon) for j ∈ eachindex(γ.lat) for k ∈ eachindex(γ.depth)]
+
+    # for ocean volume only
+    I = γ.I
+    [volume[I[ii]] = area[I[ii][1],I[ii][2]] * dz[I[ii][3]] for ii ∈ eachindex(I)]
     return volume
 end
 
@@ -273,32 +468,31 @@ end
     function section
     View latitude-depth slice of field
 # Arguments
-- `cfld`: 3d tracer field
+- `c`: 3d tracer field
 - `lon`: longitude of section
 - `γ`: TMI.grid
 # Output
 - `csection`: 2d slice of field
 """
-function section(cfld,lon,γ)
+function section(c,lon,γ)
 
     isec = findall(==(lon),γ.lon)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    csection= dropdims(view(cfld,isec,:,:),dims=1)
+    csection= dropdims(view(c,isec,:,:),dims=1)
     return csection
 end
 
-function planview(cfld,depth,γ)
+function planview(c,depth,γ)
 
     isec = findall(==(depth),γ.depth)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    cplan = dropdims(view(cfld,:,:,isec),dims=3)
+    cplan = dropdims(view(c,:,:,isec),dims=3)
     return cplan
 end
-
 
 """
     function plotextent

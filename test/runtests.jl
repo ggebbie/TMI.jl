@@ -2,31 +2,52 @@ using TMI
 using Test
 
 @testset "TMI.jl" begin
-    # Write your tests here.
+
+    ## example 1
     url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
     inputdir = "../data"
-
-    A, Alu, γ = config(url,inputdir)
     
-    c = randn(length(γ.I))
-    cfld = vec2fld(c,γ.I)
+    Azyx, Axyz, Alu, c, γ = config(url,inputdir)
 
-    @test isapprox( sum(replace(cfld,NaN => 0.0)), sum(c))
+    @test isapprox(maximum(sum(Axyz,dims=2)),1.0)
+    @test minimum(sum(Axyz,dims=2))> -1e-14
+
+    #- define the surface patch by the bounding latitude and longitude.
+    latbox = [50,60]; # 50 N -> 60 N, for example.
+
+    # mutable due to wraparound: don't use an immutable tuple
+    lonbox = [-50,0]; # 50 W -> prime meridian
+
+    d = surfacePatch(lonbox,latbox,γ)
+
+    # do matrix inversion to get quantity of dyed water throughout ocean:
+    c = tracerFieldInit(γ.wet); # pre-allocate c
+
+    # make methods that make the "wet" index unnecessary
+    c[γ.wet] = Alu\d[γ.wet] # presumably equivalent but faster than `c = A\d`
+
+    @test (maximum(c[γ.wet]) ≤ 1.0)
+    @test (minimum(c[γ.wet]) ≥ 0.0)
     
-    # do the functions represent a true inverse?
-    @test isapprox( fld2vec(vec2fld(c,γ.I),γ.I) , c)
-
+    ## example 2
     # are the areas and volumes consistent?
-    v = cellvolume(γ)
-    area = cellarea(γ)
+    v = cellVolume(γ)
+    area = cellArea(γ)
     @test sum(0. .< v./area .< 1000.)/length(γ.I) == 1
-
  
     # effectively take inverse of transpose A matrix.
-    dVdd = Alu'\v
+    dVdd = tracerFieldInit(γ.wet); # pre-allocate c
+    dVdd[γ.wet] = Alu'\v[γ.wet]
 
-    # dVdd positive at surface?
-    Isfc = surfaceIndex(γ.I)
-    @test sum(dVdd[Isfc] .< 0) == 0
+    # scale the sensitivity value by surface area so that converging meridians are taken into account.
+    I = γ.I
+    volumefill = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
+    fill!(volumefill,0.0)
+
+    [volumefill[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
+
+    # volumefill positive at surface?
+    @test sum(volumefill .< 0) == 0
+    @test minimum(volumefill) ≤ 0.0
 
 end

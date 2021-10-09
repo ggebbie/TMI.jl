@@ -17,23 +17,25 @@ using TMI, PyPlot, PyCall, BenchmarkTools,
 
 url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
 inputdir = "../data"
-A, Alu, γ = config(url,inputdir)
-v = cellvolume(γ)
-area = cellarea(γ)
+
+Azyx, Axyz, Alu, c, γ = config(url,inputdir)
+
+v = cellVolume(γ)
+area = cellArea(γ)
  
 # effectively take inverse of transpose A matrix.
-dVdd = Alu'\v
+dVdd = tracerFieldInit(γ.wet); # pre-allocate c
+dVdd[γ.wet] = Alu'\v[γ.wet]
 
 # scale the sensitivity value by surface area so that converging meridians are taken into account.
-dVdd ./= area
+I = γ.I
+volumefill = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
+fill!(volumefill,0.0)
 
-dVddfld = vec2fld(dVdd,γ.I)
-
-sfcdepth = 0.0 # only works if you choose a model depth
-dVddplan = planview(dVddfld,sfcdepth,γ)
+[volumefill[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
 # view the surface
 cntrs = 1:0.25:6
 
 # PyPlot turned off for CI.
-contourf(γ.lon,γ.lat,log10.(dVddplan'),cntrs) # units: effective thickness in log10(meters)
+contourf(γ.lon,γ.lat,log10.(volumefill'),cntrs) # units: effective thickness in log10(meters)
