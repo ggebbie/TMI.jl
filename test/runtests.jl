@@ -50,4 +50,18 @@ using Test
     @test sum(volumefill .< 0) == 0
     @test minimum(volumefill) ≤ 0.0
 
+    ## example 3
+    δ = nearestneighbormask(loc,γ)
+    @test isapprox(sum(replace(δ,NaN=>0.0)),1)
+
+    dVdδ = tracerinit(γ.wet); # pre-allocate c
+    dVdδ[γ.wet] = Alu'\δ[γ.wet]
+
+    # surfaceorigin only exists at sea surface
+    surfaceorigin = view(dVdδ,:,:,1)
+
+    @test isapprox(sum(filter(!isnan,surfaceorigin)),1)
+    @test minimum(filter(!isnan,surfaceorigin)) ≥ 0
+    @test maximum(filter(!isnan,surfaceorigin)) ≤ 1
+    
 end

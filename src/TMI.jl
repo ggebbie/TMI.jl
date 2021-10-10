@@ -13,7 +13,7 @@ export config, download,
     updateLinearindex,
     watermassmatrixXYZ, watermassmatrixZYX,
     linearindexXYZ, nearestneighbor,
-    horizontaldistance
+    nearestneighbormask, horizontaldistance
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -482,6 +482,26 @@ function surfacepatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float
 end
 
 """
+    function nearestneighbormask
+    Make a 3D tracer field that is 1 at location 
+    of nearest neighbor, 0 elsewhere
+# Arguments
+- `loc`: location in a 3-tuple (lon,lat,depth)
+- `γ`: TMI.grid
+# Output
+- `δ`: nearest neighbor mask 3D field
+"""
+function nearestneighbormask(loc,γ::grid)
+
+    Inn, Rnn = nearestneighbor(loc,γ)
+
+    # preallocate
+    δ = tracerinit(γ.wet)
+    δ[Inn] = 1
+    return δ
+end
+
+"""
     function nearestneighbor(loc,γ)
     return the Cartesian index and linear index 
     of the nearest N neighbors
@@ -496,14 +516,23 @@ function nearestneighbor(loc,γ)
 
     xydist = horizontaldistance(loc[1:2],γ)
     ijdist,ijmin = findmin(xydist[γ.wet[:,:,1]])
-
-
-    
     
     kdist,kmin = findmin(abs.(loc[3] .- γ.depth))
 
     # translate ijmin into imin, jmin
     Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin)
+    Rnn = γ.R[Inn]
+
+    # what if there is no Rnn? Outside of grid. Could move vertically by one.
+    if iszero(Rnn)
+        Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin-1)
+        Rnn = γ.R[Inn]
+    end
+
+    # if still not available, then give up.
+    iszero(Rnn) && println("Warning: outside of grid")
+    
+    return Inn, Rnn
     
     # given Cartesian index 
     
