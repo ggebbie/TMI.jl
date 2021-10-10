@@ -6,13 +6,14 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
 using PyPlot, PyCall
 
 export config, download,
-    vec2fld, fld2vec, kindex, surfaceIndex,
-    surfacePatch, section,
-    layerthickness, cellArea, cellVolume,
-    planview, dyeplot, plotextent, tracerFieldInit,
-    updateLinearIndex,
-    watermassMatrixXYZ, watermassMatrixZYX,
-    linearIndexXYZ
+    vec2fld, fld2vec, depthindex, surfaceindex,
+    surfacepatch, section,
+    layerthickness, cellarea, cellvolume,
+    planview, dyeplot, plotextent, tracerinit,
+    updateLinearindex,
+    watermassmatrixXYZ, watermassmatrixZYX,
+    linearindexXYZ, nearestneighbor,
+    horizontaldistance
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -45,7 +46,8 @@ struct grid
     lat::Vector{Real}
     depth::Vector{Real}
     I::Vector{CartesianIndex{3}} # index
-    R::Array{Union{Integer,Nothing},3}
+    R::Array{Integer,3}
+#        R::Array{Union{Integer,Nothing},3}
 #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
 end
@@ -66,42 +68,44 @@ function config(url,inputdir)
     ncdata = NetCDF.open(TMIfile)
 
     # put together the sparse matrix, A
-    Azyx = watermassMatrixZYX(TMIfile)
+    # move this to runtests.jl to see if it is read correctly
+    # Azyx = watermassmatrixZYX(TMIfile)
     
+    # could be better to read indices to form wet mask rather than a sample variable.
     c = readTracer(TMIfile,"θ")
 
     # make a mask
     wet = .!isnan.(c)
     
-    # Do bookkeeping for TMI grid coordinates
-    I = cartesianIndexZYX(TMIfile)
+    # need to write this function
+    I = cartesianindexXYZ(wet)
 
-    R = linearIndexXYZ(wet)
+    R = linearindexXYZ(wet)
 
-    Axyz = watermassMatrixXYZ(TMIfile,I,R)
+    A = watermassmatrixXYZ(TMIfile,R)
     #R = R[ wet ] # eliminate land points
 
     # LU factorization for efficient matrix inversions
-    Alu = lu(Axyz)
+    Alu = lu(A)
     
     # get properties of grid
-    lat,lon,depth = gridProps(TMIfile)
+    lat,lon,depth = gridprops(TMIfile)
 
     γ = grid(lon,lat,depth,I,R,wet)
 
-    return Azyx, Axyz, Alu, c, γ
+    return  A, Alu, c, γ
 end
 
 """
-    function cartesianIndexZYX(file)
+    function cartesianindexZYX(file)
     Read and assemble the grid coordinates
-    according to the legacy MATLAB code.
+    according to the legacy MATLAB code (z,y,x order).
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function cartesianIndexZYX(file)
+function cartesianindexZYX(file)
     # make the Cartesian tracer grid
     it = convert(Array{Int,1},ncread(file,"xgrid"))
     jt = convert(Array{Int,1},ncread(file,"ygrid"))
@@ -111,15 +115,28 @@ function cartesianIndexZYX(file)
 end
 
 """
-    function linearIndexXYZ(file)
+    function cartesianindexXYZ(wet)
+    Read and assemble the grid coordinates
+    according to a 3D tracer in x,y,z order
+# Arguments
+- `wet`: BitArray logical mask for wet points
+# Output
+- `I`: 3D Cartesian indices
+"""
+cartesianindexXYZ(wet) = findall(wet)
+
+"""
+    function linearindexXYZ(file)
     Read and assemble the grid coordinates.
 # Arguments
 - `wet`: 3D mask for wet points
 # Output
 - `R`: array of linear indices, but not a LinearIndices type
 """
-function linearIndexXYZ(wet)
-    R = Array{Union{Int64,Nothing},3}(nothing,size(wet))
+function linearindexXYZ(wet)
+    R = Array{Int64,3}(undef,size(wet))
+    fill!(R,0)
+    # R = Array{Union{Int64,Nothing},3}(nothing,size(wet))
     R[wet]=1:sum(wet)
     # R = LinearIndices((1:maximum(it),1:maximum(jt),1:maximum(kt)));
     # R = LinearIndices((it,jt,kt));
@@ -128,14 +145,14 @@ function linearIndexXYZ(wet)
 end
 
 """
-    function gridProps(file)
+    function gridprops(file)
     Read and assemble the grid properties.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridProps(file)
+function gridprops(file)
     lat = ncread(file,"lat")
     lon = ncread(file,"lon")
     depth = ncread(file,"depth")
@@ -143,7 +160,7 @@ function gridProps(file)
 end
 
 """
-    function watermassMatrixZYX(file)
+    function watermassmatrixZYX(file)
     Read and assemble the water-mass matrix.
     Legacy version from MATLAB.
 # Arguments
@@ -151,7 +168,7 @@ end
 # Output
 - `A`: water-mass matrix
 """
-function watermassMatrixZYX(file)
+function watermassmatrixZYX(file)
     i = ncread(file,"i")
     j = ncread(file,"j")
     m = ncread(file,"m")
@@ -160,7 +177,7 @@ function watermassMatrixZYX(file)
 end
 
 """
-        function watermassMatrixXYZ(file,γ)
+        function watermassmatrixXYZ(file,R)
     Read and assemble the water-mass matrix from MATLAB.
     Transfer to updated x,y,z version
 # Arguments
@@ -169,15 +186,16 @@ end
 # Output
 - `A`: water-mass matrix
 """
-function watermassMatrixXYZ(file,I,R)
+function watermassmatrixXYZ(file,R)
 
     # MATLAB accounting z,y,x
     izyx = convert(Vector{Int},ncread(file,"i"))
     jzyx = convert(Vector{Int},ncread(file,"j"))
 
     # Julia accounting x,y,z
-    ixyz = updateLinearIndex(izyx,I,R)
-    jxyz = updateLinearIndex(jzyx,I,R)
+    Izyx = cartesianindexZYX(file)
+    ixyz = updatelinearindex(izyx,Izyx,R)
+    jxyz = updatelinearindex(jzyx,Izyx,R)
     
     m = ncread(file,"m")
 
@@ -189,35 +207,34 @@ end
 
 
 """
-    function updateLinearIndex(i,I,R)
+    function updatelinearindex(izyx,Izyx,R)
     Linear index translated from z,y,x to x,y,z accounting
 # Arguments
 - `izyx`: index of interest in z,y,x accounting
-- `I`: wet Cartesian Index for z,y,x
+- `Izyx`: wet Cartesian Index for z,y,x
 - `R`: Linear indices for x,y,z 
 # Output
 - `ixyz`: index of interest in x,y,z accounting
 """
-function updateLinearIndex(izyx,I,R)
-    #ixyz = similar(izyx)
-    #[ixyz[vv] = R[I[izyx[vv]]] for vv in eachindex(izyx)]
-    ixyz = R[I[izyx]]
+function updatelinearindex(izyx,Izyx,R)
+    # get Izyx Cartesian index stored from legacy MATLAB code
+    ixyz = R[Izyx[izyx]]
     return ixyz
 end
 
 """
-    function watermassMatrix(file)
+    function watermassmatrix(file)
     Read and assemble the water-mass matrix.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `A`: water-mass matrix
 """
-function watermassMatrix(file)
+function watermassmatrix(file)
 
     m = massFractions(file)
 
-    A = watermassMatrix(m)
+    A = watermassmatrix(m)
     
     # assemble m into A
     # Atest = Array{SparseArrays.SparseMatrixCSC{Float64, Int64},3}
@@ -248,14 +265,14 @@ function watermassMatrix(file)
 end
 
 """
-    function watermassMatrix(file)
+    function watermassmatrix(file)
     Assemble the water-mass matrix given mass fractions `m`
 # Arguments
 - `m`: mass fractions
 # Output
 - `A`: water-mass matrix
 """
-# function watermassMatrix(m)
+# function watermassmatrix(m)
 #     # Goal:assemble m into A
 
 #     # preallocate A
@@ -324,7 +341,7 @@ function readTracer(file,tracername)
     return c
 end
 
-function cellArea(γ)
+function cellarea(γ)
     dx = zonalgriddist(γ)
     dy = haversine((γ.lon[1],γ.lat[1])
                   ,(γ.lon[1],γ.lat[2]))
@@ -342,9 +359,9 @@ function cellArea(γ)
     return area
 end
 
-function cellVolume(γ)
+function cellvolume(γ)
     dz = layerthickness(γ)
-    area = cellArea(γ)
+    area = cellarea(γ)
     volume = Array{Float64,3}(undef,length(γ.lon),length(γ.lat),length(γ.depth))
     fill!(volume,0.0)
 
@@ -432,7 +449,7 @@ function fld2vec(field::Array{Float64,3},I::Vector{CartesianIndex{3}})
  end
 
 """
-    function surfacePatch
+    function surfacepatch
     Make a surface boundary condition
     with a rectangular patch
 # Arguments
@@ -442,7 +459,7 @@ function fld2vec(field::Array{Float64,3},I::Vector{CartesianIndex{3}})
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacePatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float64} where T<:Real
+function surfacepatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float64} where T<:Real
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
@@ -451,7 +468,7 @@ function surfacePatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float
     # define the surface boundary condition
 
     # preallocate
-    d = tracerFieldInit(γ.wet)
+    d = tracerinit(γ.wet)
 
     [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
     d[.!γ.wet] .= NaN # double check that NaNs stay NaNs
@@ -462,6 +479,74 @@ function surfacePatch(lonbox::Vector{T},latbox::Vector{T},γ::grid)::Array{Float
     #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
     #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
     return d
+end
+
+"""
+    function nearestneighbor(loc,γ)
+    return the Cartesian index and linear index 
+    of the nearest N neighbors
+# Arguments
+- `loc`: 3-tuple of lon,lat,depth location
+- `γ`: TMI.grid
+# Output
+- `Inn`: Cartesian indices of nearest neighbor
+- `Rnn`: linear indices of nearest neighbor
+"""
+function nearestneighbor(loc,γ)
+
+    xydist = horizontaldistance(loc[1:2],γ)
+    ijdist,ijmin = findmin(xydist[γ.wet[:,:,1]])
+
+
+    
+    
+    kdist,kmin = findmin(abs.(loc[3] .- γ.depth))
+
+    # translate ijmin into imin, jmin
+    Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin)
+    
+    # given Cartesian index 
+    
+    # ternary operator to handle longitudinal wraparound
+#    lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
+#    lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
+
+    
+    # define the surface boundary condition
+
+    # preallocate
+#    d = tracerinit(γ.wet)
+
+#    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+#    d[.!γ.wet] .= NaN # double check that NaNs stay NaNs
+
+    # old method for vectors
+        #nfield = length(γ.I) # number of ocean points
+    #d = zeros(Int,nfield) # preallocate
+    #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
+    #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
+end
+
+"""
+    function horizontaldistance(loc,γ)
+    return the Cartesian index and linear index 
+    of the nearest N neighbors
+# Arguments
+- `loc`: 3-tuple of lon,lat,depth location
+- `γ`: TMI.grid
+# Output
+- `hordist`: horizontal distance to nearest tracer grid points
+"""
+function horizontaldistance(loc,γ::grid)
+
+    # pre-allocate horizontal distance
+    hordist = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
+    fill!(hordist,NaN)
+    
+    # calculate haversine horizontal distance on sphere
+    [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),                  (γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
+       for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    return hordist
 end
 
 """
@@ -568,32 +653,32 @@ function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)
 end
 
 """
-    function kindex(I) 
+    function depthindex(I) 
     
     Get the k-index (depth level) from the Cartesian index
 """
-function kindex(I) 
+function depthindex(I) 
     k = Vector{Int64}(undef,length(I))
     [k[n]=I[n][3] for n ∈ 1:length(I)]
     return k
 end
 
 """
-    function surfaceIndex(I) 
+    function surfaceindex(I) 
     
     Get the vector-index where depth level == 1 and it is ocean.
 """
-function surfaceIndex(I)
-    Isfc = findall(kindex(I) .==1)
+function surfaceindex(I)
+    Isfc = findall(depthindex(I) .==1)
     return Isfc
 end
 
 """ 
-    function tracerFieldInit(wet)
+    function tracerinit(wet)
       initialize tracer field on TMI grid
     perhaps better to have a tracer struct and constructor
 """
-function tracerFieldInit(wet)
+function tracerinit(wet)
     # preallocate
     d = Array{Float64}(undef,size(wet))
 

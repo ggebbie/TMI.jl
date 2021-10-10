@@ -32,6 +32,7 @@ I = γ.I
 volumefill = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
 fill!(volumefill,0.0)
 
+# this step could use a function with γ.I argument
 [volumefill[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
 # view the surface

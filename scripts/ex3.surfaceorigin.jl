@@ -11,19 +11,40 @@
  % Very similar mathematically to example 2.                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 =#
+using Revise
+using TMI, Interpolations, PyPlot, PyCall
 
- nz = maximum(kt);
- ny = maximum(jt);
- nx = maximum(it);
- nfield = size(A,1);
- 
 # % choose an interior location X (Xlon[lon], Xlat [lat], Xdepth [m depth]).
 #% -7.38, 115.26E
- xlon = 125.26; #% deg E.
- xlat = -6.38; 
- xdepth = 500; #% meters.
- 
- % Find the coordinate on the grid by linear interpolation. 
+
+xlon = 125.26; # deg E.
+xlat = -6.38;  # deg N.
+xdepth = 500;  # meters.
+loc = (xlon,xlat,xdepth)
+
+url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
+inputdir = "../data"
+
+A, Alu, c, γ = config(url,inputdir)
+
+# Find nearest neighbor on grid
+# set δ = 1 at grid cell of interest
+inn = indexneighbor(loc,γ) 
+
+# Find the coordinate on the grid by linear interpolation/extrapolation
+
+# try Interpolations.jl, need interpolation factors that add up to one
+v = cellVolume(γ)
+itp = interpolate(v)
+
+#
+dVdd = tracerFieldInit(γ.wet); # pre-allocate c
+dVdd[γ.wet] = Alu'\δ[γ.wet]
+
+   
+
+
+    
  LONtmp = [LON(1)-4 ; LON; LON(end)+4];  %% watch out for the
                                          %wraparound of the grid.
  iX = interp1(LONtmp,0:length(LON)+1,Xlon,'linear')
