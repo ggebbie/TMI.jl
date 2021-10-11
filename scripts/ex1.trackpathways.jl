@@ -18,7 +18,7 @@ inputdir = "../data"
 
 #c = readTracer(url,"θ")
 
-Azyx, Axyz, Alu, c, γ = config(url,inputdir)
+A, Alu, c, γ = config(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -26,10 +26,10 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 # mutable due to wraparound: don't use an immutable tuple
 lonbox = [-50,0]; # 50 W -> prime meridian
 
-d = surfacePatch(lonbox,latbox,γ)
+d = surfacepatch(lonbox,latbox,γ)
 
 # do matrix inversion to get quantity of dyed water throughout ocean:
-c = tracerFieldInit(γ.wet); # pre-allocate c
+c = tracerinit(γ.wet); # pre-allocate c
 
 # make methods that make the "wet" index unnecessary
 c[γ.wet] = Alu\d[γ.wet] # presumably equivalent but faster than `c = A\d`

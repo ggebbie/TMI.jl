@@ -1,14 +1,14 @@
 #= %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
- % Example 3: Find the surface origin of water for some interior box %
+ % Example: Find the surface origin of water for some interior box %
  %                                                                   %
  % This is equivalent to solving a sensitivity problem:              %
  % The total volume is V = v^T c , where v is the volume of a
  % given interior box,
  % and c is the fraction of volume from a given source which         %
- % satisfies the equation A c = d.                                   %
- % Next, dV/d(d) = A^(-T) v, and dV/d(d) is exactly the volume       %
+ % satisfies the equation A c = δ.                                   %
+ % Next, dV/d(δ) = A^(-T) v, and dV/d(δ) is exactly the volume       %
  % originating from each source.      
- % Very similar mathematically to example 2.                         %
+ % Very similar mathematically to determining how the ocean is filled.                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 =#
 using Revise

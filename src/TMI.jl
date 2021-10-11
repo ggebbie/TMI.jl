@@ -58,7 +58,11 @@ end
 - `ncfilename`: NetCDF file name
 # Output
 - `A`: TMI steady-state water-mass matrix
-- `grid`: TMI grid coordinates
+- `Alu`: LU decomposition of A
+- `c`: potential temperature tracer field
+- `ΔPO₄`: local source of remineralized phosphate
+- `γ`: TMI grid properties
+    return  A, Alu, c, ΔPO₄, γ
 """
 
 function config(url,inputdir)
@@ -66,14 +70,16 @@ function config(url,inputdir)
     TMIfile = inputdir * "/TMI_4deg_2010.nc"
     !isfile(TMIfile) ? download(url,inputdir) : nothing
     ncdata = NetCDF.open(TMIfile)
-
+    println(ncdata)
+    
     # put together the sparse matrix, A
     # move this to runtests.jl to see if it is read correctly
     # Azyx = watermassmatrixZYX(TMIfile)
     
     # could be better to read indices to form wet mask rather than a sample variable.
     c = readTracer(TMIfile,"θ")
-
+    ΔPO₄ = readTracer(TMIfile,"qpo4")
+    
     # make a mask
     wet = .!isnan.(c)
     
@@ -93,7 +99,8 @@ function config(url,inputdir)
 
     γ = grid(lon,lat,depth,I,R,wet)
 
-    return  A, Alu, c, γ
+    return  A, Alu, c, ΔPO₄, γ
+
 end
 
 """

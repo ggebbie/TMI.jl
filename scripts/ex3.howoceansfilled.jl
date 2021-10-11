@@ -1,5 +1,5 @@
 #=
-% Example 2: Find the ocean volume that has originated from each    %
+% Example: Find the ocean volume that has originated from each    %
 %            surface box.                                           %
 %                                                                   %
 % This is equivalent to solving a sensitivity problem:              %
