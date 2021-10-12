@@ -18,7 +18,7 @@ inputdir = "../data"
 
 #c = readTracer(url,"θ")
 
-A, Alu, c, γ = config(url,inputdir)
+A, Alu, c, ΔPO₄, γ = config(url,inputdir)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.

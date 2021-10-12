@@ -13,7 +13,8 @@ export config, download,
     updateLinearindex,
     watermassmatrixXYZ, watermassmatrixZYX,
     linearindexXYZ, nearestneighbor,
-    nearestneighbormask, horizontaldistance
+    nearestneighbormask, horizontaldistance,
+    readtracer, cartesianindexZYX
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -59,29 +60,31 @@ end
 # Output
 - `A`: TMI steady-state water-mass matrix
 - `Alu`: LU decomposition of A
-- `c`: potential temperature tracer field
-- `ΔPO₄`: local source of remineralized phosphate
 - `γ`: TMI grid properties
-    return  A, Alu, c, ΔPO₄, γ
+- `TMIfile`: TMI file name
+    return  A, Alu, γ, TMIfile
 """
-
 function config(url,inputdir)
 
     TMIfile = inputdir * "/TMI_4deg_2010.nc"
     !isfile(TMIfile) ? download(url,inputdir) : nothing
+
     ncdata = NetCDF.open(TMIfile)
     println(ncdata)
     
-    # put together the sparse matrix, A
     # move this to runtests.jl to see if it is read correctly
     # Azyx = watermassmatrixZYX(TMIfile)
-    
-    # could be better to read indices to form wet mask rather than a sample variable.
-    c = readTracer(TMIfile,"θ")
-    ΔPO₄ = readTracer(TMIfile,"qpo4")
-    
+
+    # make a sample field from zyx cartesian indices
+    Izyx = cartesianindexZYX(TMIfile)
+
     # make a mask
-    wet = .!isnan.(c)
+    wet = BitArray{3}(undef,maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
+    fill!(wet,0)
+    wet[Izyx] .= 1
+
+    # if a tracer is available, should be consistent with this definition
+    #wet = .!isnan.(c)
     
     # need to write this function
     I = cartesianindexXYZ(wet)
@@ -99,7 +102,7 @@ function config(url,inputdir)
 
     γ = grid(lon,lat,depth,I,R,wet)
 
-    return  A, Alu, c, ΔPO₄, γ
+    return  A, Alu, γ, TMIfile
 
 end
 
@@ -335,7 +338,7 @@ end
 # end
                                                   
 """
-    function readTracer(file,tracername)
+    function readtracer(file,tracername)
     Read and assemble the water-mass matrix.
 # Arguments
 - `file`: TMI NetCDF file name
@@ -343,7 +346,7 @@ end
 # Output
 - `c`: 3D tracer field
 """
-function readTracer(file,tracername)
+function readtracer(file,tracername)
     c = ncread(file,tracername)
     return c
 end
