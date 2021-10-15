@@ -14,7 +14,8 @@ export config, download,
     watermassmatrixXYZ, watermassmatrixZYX,
     linearindexXYZ, nearestneighbor,
     nearestneighbormask, horizontaldistance,
-    readtracer, cartesianindexZYX
+    readtracer, cartesianindexZYX, Γ,
+    misfit_gridded_data, misfit_gridded_data!
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -713,19 +714,181 @@ function surfaceindex(I)
 end
 
 """ 
-    function tracerinit(wet)
+    function tracerinit(wet,ltype=Float64)
       initialize tracer field on TMI grid
     perhaps better to have a tracer struct and constructor
+# Arguments
+- `wet`::BitArray mask of ocean points
+# Output
+- `d`:: 3d tracer field with NaN on dry points
 """
-function tracerinit(wet)
+function tracerinit(wet,ltype=Float64)
     # preallocate
-    d = Array{Float64}(undef,size(wet))
+    d = Array{ltype}(undef,size(wet))
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    d[wet] .= 0.0
-    d[.!wet] .= NaN
+    d[wet] .= zero(ltype)
+    d[.!wet] .= zero(ltype)/zero(ltype) # NaNs with right type
     return d
 end
+
+""" 
+    function Γ(tracer2D,γ)
+    turn 2D surface field into 3D field with zeroes below surface    
+# Arguments
+- `tracer2D`:: 2D surface tracer field
+- `wet`::BitArray mask of ocean points
+# Output
+- `tracer3D`:: 3d tracer field with NaN on dry points
+"""
+function Γ(tracer2D::Matrix{T},wet) where T<: Real
+    # preallocate
+    tracer3D = Array{T}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer3D[wet] .= zero(T)
+    tracer3D[.!wet] .= zero(T)/zero(T)
+    tracer3D[:,:,1] = tracer2D
+    return tracer3D
+end
+
+""" 
+    function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
+    squared model-data misfit
+# Arguments
+- `u`: controls, 2D surface perturbation
+- `Alu`: LU decomposition of water-mass matrix
+- `y`: observations on grid
+- `d`: model constraints
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `Qⁱ`: inverse of Q weighting matrix for controls
+- `wet`: BitArray ocean mask
+# Output
+- `J`: cost function value
+- `gJ`: derivative of cost function wrt to controls
+"""
+function misfit_gridded_data(u::Matrix{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    # below surface = 0 % no internal sinks or sources.
+    ỹ = tracerinit(wet,T)
+    n = tracerinit(wet,T)
+    dJdn = tracerinit(wet,T)
+    dJdd = tracerinit(wet,T)
+    
+    gJ = tracerinit(wet[:,:,1],T)
+    
+    # first-guess reconstruction of observations
+    Δd = d + Γ(u,wet)
+    ỹ[wet] =  Alu\Δd[wet]
+    n = y .- ỹ
+    
+    J = n[wet]'* (Wⁱ * n[wet])
+    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+    dJdn[wet] = 2Wⁱ*n[wet]
+    dJdd[wet] = -( Alu'\dJdn[wet])
+    
+    gJ[wet[:,:,1]] = dJdd[:,:,1][wet[:,:,1]]
+    gJ[wet[:,:,1]] += 2Qⁱ*u[wet[:,:,1]]
+
+    # any way to put J and gradient into one function?
+    return J, gJ
+end
+
+""" 
+    function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
+    squared model-data misfit
+    controls are a vector input for Optim.jl
+# Arguments
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `y`: observations on grid
+- `d`: model constraints
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `Qⁱ`: inverse of Q weighting matrix for controls
+- `wet`: BitArray ocean mask
+# Output
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+"""
+function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    # below surface = 0 % no internal sinks or sources.
+    u = tracerinit(wet[:,:,1],T)
+    u[wet[:,:,1]] = uvec
+
+    ỹ = tracerinit(wet,T)
+    n = tracerinit(wet,T)
+    dJdn = tracerinit(wet,T)
+    dJdd = tracerinit(wet,T)
+    
+    # first-guess reconstruction of observations
+    Δd = d + Γ(u,wet)
+    ỹ[wet] =  Alu\Δd[wet]
+    n = y .- ỹ
+    
+    J = n[wet]'* (Wⁱ * n[wet])
+    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+    dJdn[wet] = 2Wⁱ*n[wet]
+    dJdd[wet] = -( Alu'\dJdn[wet])
+    
+    gJ = dJdd[:,:,1][wet[:,:,1]]
+    gJ += 2Qⁱ*u[wet[:,:,1]]
+
+    return J, gJ
+end
+
+""" 
+    function misfit_gridded_data!(J,gJ,u,Alu,y,d,Wⁱ,Qⁱ,wet)
+    in-place version for computations, no allocation
+    squared model-data misfit
+    controls are a vector input for Optim.jl
+# Arguments
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `y`: observations on grid
+- `d`: model constraints
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `Qⁱ`: inverse of Q weighting matrix for controls
+- `wet`: BitArray ocean mask
+# Output
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+"""
+function misfit_gridded_data!(J::T,gJ::Vector{T},uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    # below surface = 0 % no internal sinks or sources.
+    u = tracerinit(wet[:,:,1],T)
+    u[wet[:,:,1]] = uvec
+
+    ỹ = tracerinit(wet,T)
+    n = tracerinit(wet,T)
+    
+    #dJdn = tracerinit(wet,T)
+    dJdd = tracerinit(wet,T)
+    
+    # first-guess reconstruction of observations
+    Δd = d + Γ(u,wet)
+    ỹ[wet] =  Alu\Δd[wet]
+    n = y .- ỹ
+    
+    J = n[wet]'* (Wⁱ * n[wet])
+    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+    #dJdn[wet] = 2Wⁱ*n[wet]
+    dJdd[wet] = -( Alu'\ 2Wⁱ*n[wet])
+    
+    gJ = dJdd[:,:,1][wet[:,:,1]]
+    gJ += 2Qⁱ*u[wet[:,:,1]]
+    
+    return J, gJ
+end
+
 
 end
