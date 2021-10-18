@@ -13,10 +13,7 @@ using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../data"
-
-A, Alu, γ = config(url,inputdir)
+TMIversion = "TMI_2010_2012_4x4x33"
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -24,28 +21,15 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 # mutable due to wraparound: don't use an immutable tuple
 lonbox = [-50,0]; # 50 W -> prime meridian
 
-d = surfacepatch(lonbox,latbox,γ)
+# do numerical analysis
+c,γ = trackpathways(TMIversion,latbox,lonbox)
 
-# do matrix inversion to get quantity of dyed water throughout ocean:
-c = Alu\d # presumably equivalent but faster than `c = A\d`
-
-# after doing calculations with vectors, translate to a 3D geometric field
-# Is this step even necessary? Instead just construct section below?
-benchmark = false
-if benchmark
-    #@btime cfld = vec2fld(c,γ.I); # for benchmarking
-    # @btime ctest = fld2vec(cfld,γ.I);cfld = vec2fld(c,γ.I);
-else
-    cfld = vec2fld(c,γ.I); # for benchmarking
-    ctest = fld2vec(cfld,γ.I);
-end
-
-#plot bbox
+# do plotting (could be a function)
 plotextent(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;
-csection = section(cfld,lon_section,γ)
+csection = section(c,lon_section,γ)
 lims = 0:5:100
 
 # make a plot of dye in the ocean
