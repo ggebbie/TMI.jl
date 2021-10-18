@@ -1,11 +1,12 @@
-using TMI
+using TMI, ILUZero
 using Test
 
 @testset "TMI.jl" begin
 
     TMIversion = "TMI_2010_2012_4x4x33"
-    A, Alu, γ = config(TMIversion)
+    A, Alu, γ, TMIfile = config(TMIversion)
 
+    
     ############################
     ## trackpathways
     @testset "trackpathways" begin
@@ -81,12 +82,11 @@ using Test
 
         # first guess of change to surface boundary conditions
         # ocean values are 0
-        u₀ = Vector{Float64}(undef,sum(γ.wet[:,:,1]))
-        fill!(u₀,zero(Float64))
+        u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻ = sample_observations(TMIversion,"θ")
-        A, Alu, γ, inputfile = config(TMIversion) 
+        y, W⁻, ctrue = sample_observations(TMIversion,"θ")
+        #A, Alu, γ, inputfile = config(TMIversion) 
 
         # a first guess: observed surface boundary conditions are perfect.
         # set surface boundary condition to the observations.
@@ -96,6 +96,7 @@ using Test
 
         # check gradients in misfit_gridded_data!
         fg(x) = misfit_gridded_data(x,Alu,y,d₀,W⁻,γ.wet)
+        f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
         fg!(F,G,x) = misfit_gridded_data!(F,G,x,Alu,y,d₀,W⁻,γ.wet)
 
@@ -104,6 +105,7 @@ using Test
         ii = rand(1:sum(γ.wet[:,:,1]))
         δu = copy(u₀); δu[ii] += ϵ
         ∇f_finite = (fg(δu)[1] - fg(u₀)[1])/ϵ # `[1]` to pick out cost function
+        ∇f_finite = (f(δu) - f(u₀))/ϵ 
 
         fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
         ∇f = gJ₀[ii]
@@ -116,6 +118,14 @@ using Test
         #gJforward = gmisfitForward(u₀)
 
         # gradient check with autodiff? doesn't work: issue #17
+
+        # get a special LU decomposition that works with automatic differentiation
+        Aluzero = ILUZero.ilu0(A)
+        ilu0!(Aluzero,A)
+        f_diffable2(x) = misfit_gridded_data_diffable(x,Aluzero,y,d₀,W⁻,γ.wet)
+        #Jtest = f_diffable2(u₀)
+        using ReverseDiff
+        ForwardDiff.gradient(f_diffable2, u₀) #, cfg::GradientConfig = GradientConfig(input))
         #test = gradient(misfit,u₀)
 
         # filter the data with an Optim.jl method
@@ -129,6 +139,7 @@ using Test
         J̃,gJ̃ = fg(ũ)
         @test J̃ < J̃₀
 
+        # show plan view before, after, and truth.
     end
     
 end

@@ -22,7 +22,7 @@
 # #uncomment if using R: using RCall #Inter
 
 using Revise, TMI, GoogleDrive
-using PyPlot, PyCall
+using PyPlot, PyCall, Test
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "TMI_2010_2012_4x4x33"
@@ -30,11 +30,10 @@ A, Alu, γ, inputfile = config(TMIversion)
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u₀ = Vector{Float64}(undef,sum(γ.wet[:,:,1]))
-fill!(u₀,zero(Float64))
+u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
-y, W⁻ = sample_observations(TMIversion,"θ")
+y, W⁻, ctrue = sample_observations(TMIversion,"θ")
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
@@ -57,7 +56,7 @@ fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
 ∇f = gJ₀[ii]
 
 # error less than 10 percent?
-@assert (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+@test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
 # sophisticated method: doesn't work due to issue #17
 #gmisfitForward = x -> ForwardDiff.gradient(misfit, x); # g = ∇f
@@ -70,15 +69,35 @@ fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
 out = filterdata(u₀,Alu,y,d₀,W⁻,γ.wet)
 
 # was cost function decreased?
-@assert out.minimum < J̃₀
+@test out.minimum < J̃₀
 
 # reconstruct by hand to double-check.
 ũ = out.minimizer
 J̃,gJ̃ = fg(ũ)
-@assert J̃ < J̃₀
+@test J̃ < J̃₀
 
 # reconstruct tracer map
+c₀ = steady_inversion(u₀,Alu,d₀,γ.wet)
+c̃ = steady_inversion(ũ,Alu,d₀,γ.wet)
 
+# view the surface
+cntrs = -1:0.05:1
+
+# what model depth level?
+level = 15
+Δc̃ = c̃[:,:,level] .- ctrue[:,:,level]
+Δc₀ = c₀[:,:,level] .- ctrue[:,:,level]
+
+figure()
+contourf(γ.lon,γ.lat,Δc̃',cntrs)
+#contour(γ.lon,γ.lat,Δc̃',cntrs)
+
+figure()
+contourf(γ.lon,γ.lat,Δc₀',cntrs)
+
+# sample tests
+#maximum(filter(!isnan,Δc₀))
+#maximum(filter(!isnan,Δc̃))
 
 # future step: box minimization to eliminate unreasonable temperatures.
 # should be made more generic for other tracers
