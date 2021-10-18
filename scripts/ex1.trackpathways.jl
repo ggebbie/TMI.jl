@@ -13,12 +13,7 @@ using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../data"
-
-#c = readTracer(url,"θ")
-
-A, Alu, c, ΔPO₄, γ = config(url,inputdir)
+TMIversion = "TMI_2010_2012_4x4x33"
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -26,15 +21,10 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 # mutable due to wraparound: don't use an immutable tuple
 lonbox = [-50,0]; # 50 W -> prime meridian
 
-d = surfacepatch(lonbox,latbox,γ)
+# do numerical analysis
+c,γ = trackpathways(TMIversion,latbox,lonbox)
 
-# do matrix inversion to get quantity of dyed water throughout ocean:
-c = tracerinit(γ.wet); # pre-allocate c
-
-# make methods that make the "wet" index unnecessary
-c[γ.wet] = Alu\d[γ.wet] # presumably equivalent but faster than `c = A\d`
-
-#plot bbox
+# do plotting (could be a function)
 plotextent(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)

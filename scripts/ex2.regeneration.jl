@@ -7,16 +7,11 @@ using TMI, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../data"
+# A, Alu, γ, inputfile = config(url,inputdir)
+# ΔPO₄ = readtracer(inputfile,"qpo4")
+TMIversion = "TMI_2010_2012_4x4x33"
+PO₄ᴿ, γ = regeneratedphosphate(TMIversion)
 
-#c = readTracer(url,"θ")
-
-A, Alu, c, ΔPO₄, γ = config(url,inputdir)
-
-# PO₄ᴿ = cumulative regenerated phosphate
-PO₄ᴿ = tracerinit(γ.wet); # pre-allocate 
-PO₄ᴿ[γ.wet] = -(Alu\ΔPO₄[γ.wet])
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330;

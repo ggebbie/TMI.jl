@@ -12,31 +12,13 @@
 % See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
 =#
 using Revise
-using TMI, PyPlot, PyCall, BenchmarkTools,
- GibbsSeaWater, Distances 
+using TMI, PyPlot, PyCall
 
-url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../data"
-
-Azyx, Axyz, Alu, c, γ = config(url,inputdir)
-
-v = cellVolume(γ)
-area = cellArea(γ)
- 
-# effectively take inverse of transpose A matrix.
-dVdd = tracerFieldInit(γ.wet); # pre-allocate c
-dVdd[γ.wet] = Alu'\v[γ.wet]
-
-# scale the sensitivity value by surface area so that converging meridians are taken into account.
-I = γ.I
-volumefill = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
-fill!(volumefill,0.0)
-
-# this step could use a function with γ.I argument
-[volumefill[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
+TMIversion = "TMI_2010_2012_4x4x33"
+volume = volumefilled(TMIversion)
 
 # view the surface
 cntrs = 1:0.25:6
 
 # PyPlot turned off for CI.
-contourf(γ.lon,γ.lat,log10.(volumefill'),cntrs) # units: effective thickness in log10(meters)
+contourf(γ.lon,γ.lat,log10.(volume'),cntrs) # units: effective thickness in log10(meters)

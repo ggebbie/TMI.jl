@@ -2,8 +2,8 @@ module TMI
 
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
-    GoogleDrive, Distances
-using PyPlot, PyCall
+    GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
+    PyPlot, PyCall, Distributions, Optim
 
 export config, download,
     vec2fld, fld2vec, depthindex, surfaceindex,
@@ -15,7 +15,9 @@ export config, download,
     linearindexXYZ, nearestneighbor,
     nearestneighbormask, horizontaldistance,
     readtracer, cartesianindexZYX, Γ,
-    misfit_gridded_data, misfit_gridded_data!
+    misfit_gridded_data, misfit_gridded_data!,
+    trackpathways, regeneratedphosphate, volumefilled,
+    surfaceorigin, sample_observations, filterdata
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -57,21 +59,24 @@ end
 """
     function config(url,inputdir)
 # Arguments
-- `ncfilename`: NetCDF file name
+- `TMIversion`: TMI version for water-mass/circulation model
 # Output
 - `A`: TMI steady-state water-mass matrix
 - `Alu`: LU decomposition of A
 - `γ`: TMI grid properties
 - `TMIfile`: TMI file name
-    return  A, Alu, γ, TMIfile
 """
-function config(url,inputdir)
+function config(TMIversion)
 
-    TMIfile = inputdir * "/TMI_4deg_2010.nc"
-    !isfile(TMIfile) ? download(url,inputdir) : nothing
+    #- `url`: Google Drive URL for data
+    url = gdriveurl(TMIversion)
+    
+    TMIfile = datadir(TMIversion*".nc")
+    !isdir(datadir()) ? mkpath(datadir()) : nothing
+    !isfile(TMIfile) ? download(url,datadir()) : nothing
 
     ncdata = NetCDF.open(TMIfile)
-    println(ncdata)
+    #println(ncdata)
     
     # move this to runtests.jl to see if it is read correctly
     # Azyx = watermassmatrixZYX(TMIfile)
@@ -507,7 +512,9 @@ function nearestneighbormask(loc,γ::grid)
     Inn, Rnn = nearestneighbor(loc,γ)
 
     # preallocate
-    δ = tracerinit(γ.wet)
+    δ = falses(size(γ.wet))
+    #Array{BitArray,3}(undef,size(γ.wet))
+    #fill!(δ,zero(Bool))
     δ[Inn] = 1
     return δ
 end
@@ -544,27 +551,6 @@ function nearestneighbor(loc,γ)
     iszero(Rnn) && println("Warning: outside of grid")
     
     return Inn, Rnn
-    
-    # given Cartesian index 
-    
-    # ternary operator to handle longitudinal wraparound
-#    lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
-#    lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
-
-    
-    # define the surface boundary condition
-
-    # preallocate
-#    d = tracerinit(γ.wet)
-
-#    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
-#    d[.!γ.wet] .= NaN # double check that NaNs stay NaNs
-
-    # old method for vectors
-        #nfield = length(γ.I) # number of ocean points
-    #d = zeros(Int,nfield) # preallocate
-    #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
-    #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
 end
 
 """
@@ -754,52 +740,325 @@ function Γ(tracer2D::Matrix{T},wet) where T<: Real
     return tracer3D
 end
 
+# """ 
+#     function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
+#     squared model-data misfit
+# # Arguments
+# - `u`: controls, 2D surface perturbation
+# - `Alu`: LU decomposition of water-mass matrix
+# - `y`: observations on grid
+# - `d`: model constraints
+# - `Wⁱ`: inverse of W weighting matrix for observations
+# - `Qⁱ`: inverse of Q weighting matrix for controls
+# - `wet`: BitArray ocean mask
+# # Output
+# - `J`: cost function value
+# - `gJ`: derivative of cost function wrt to controls
+# """
+# function misfit_gridded_data(u::Matrix{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+#     # a first guess: observed surface boundary conditions are perfect.
+#     # set surface boundary condition to the observations.
+#     # below surface = 0 % no internal sinks or sources.
+#     ỹ = tracerinit(wet,T)
+#     n = tracerinit(wet,T)
+#     dJdn = tracerinit(wet,T)
+#     dJdd = tracerinit(wet,T)
+    
+#     gJ = tracerinit(wet[:,:,1],T)
+    
+#     # first-guess reconstruction of observations
+#     Δd = d + Γ(u,wet)
+#     ỹ[wet] =  Alu\Δd[wet]
+#     n = y .- ỹ
+    
+#     J = n[wet]'* (Wⁱ * n[wet])
+#     J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+#     dJdn[wet] = 2Wⁱ*n[wet]
+#     dJdd[wet] = -( Alu'\dJdn[wet])
+    
+#     gJ[wet[:,:,1]] = dJdd[:,:,1][wet[:,:,1]]
+#     gJ[wet[:,:,1]] += 2Qⁱ*u[wet[:,:,1]]
+
+#     # any way to put J and gradient into one function?
+#     return J, gJ
+# end
+
+# """ 
+#     function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
+#     squared model-data misfit
+#     controls are a vector input for Optim.jl
+# # Arguments
+# - `u`: controls, vector format
+# - `Alu`: LU decomposition of water-mass matrix
+# - `y`: observations on grid
+# - `d`: model constraints
+# - `Wⁱ`: inverse of W weighting matrix for observations
+# - `Qⁱ`: inverse of Q weighting matrix for controls
+# - `wet`: BitArray ocean mask
+# # Output
+# - `J`: cost function of sum of squared misfits
+# - `gJ`: derivative of cost function wrt to controls
+# """
+# function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},wet::BitArray{3}) where T <: Real
+#     # a first guess: observed surface boundary conditions are perfect.
+#     # set surface boundary condition to the observations.
+#     # below surface = 0 % no internal sinks or sources.
+#     u = tracerinit(wet[:,:,1],T)
+#     u[wet[:,:,1]] = uvec
+
+#     ỹ = tracerinit(wet,T)
+#     n = tracerinit(wet,T)
+#     dJdn = tracerinit(wet,T)
+#     dJdd = tracerinit(wet,T)
+    
+#     # first-guess reconstruction of observations
+#     Δd = d + Γ(u,wet)
+#     ỹ[wet] =  Alu\Δd[wet]
+#     n = y .- ỹ
+    
+#     J = n[wet]'* (Wⁱ * n[wet])
+#     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+#     dJdn[wet] = 2*(Wⁱ*n[wet])
+#     dJdd[wet] = -( Alu'\dJdn[wet])
+    
+#     gJ = dJdd[:,:,1][wet[:,:,1]]
+#     #gJ += 2Qⁱ*u[wet[:,:,1]]
+
+#     return J, gJ
+# end
+
+# """ 
+#     function misfit_gridded_data!(J,gJ,u,Alu,y,d,Wⁱ,Qⁱ,wet)
+#     in-place version for computations, no allocation
+#     squared model-data misfit
+#     controls are a vector input for Optim.jl
+# # Arguments
+# - `u`: controls, vector format
+# - `Alu`: LU decomposition of water-mass matrix
+# - `y`: observations on grid
+# - `d`: model constraints
+# - `Wⁱ`: inverse of W weighting matrix for observations
+# - `Qⁱ`: inverse of Q weighting matrix for controls
+# - `wet`: BitArray ocean mask
+# # Output
+# - `J`: cost function of sum of squared misfits
+# - `gJ`: derivative of cost function wrt to controls
+# """
+# function misfit_gridded_data!(J::T,gJ::Vector{T},uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},wet::BitArray{3}) where T <: Real
+#     # a first guess: observed surface boundary conditions are perfect.
+#     # set surface boundary condition to the observations.
+#     # below surface = 0 % no internal sinks or sources.
+#     u = tracerinit(wet[:,:,1],T)
+#     u[wet[:,:,1]] = uvec
+
+#     ỹ = tracerinit(wet,T)
+#     n = tracerinit(wet,T)
+    
+#     dJdn = tracerinit(wet,T)
+#     dJdd = tracerinit(wet,T)
+    
+#     # first-guess reconstruction of observations
+#     Δd = d + Γ(u,wet)
+#     ỹ[wet] =  Alu\Δd[wet]
+#     n = y .- ỹ
+    
+#     J = n[wet]'* (Wⁱ * n[wet])
+#     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+#     dJdn[wet] = 2*(Wⁱ*n[wet])
+#     dJdd[wet] = -( Alu'\ dJdn[wet])
+    
+#     gJ = dJdd[:,:,1][wet[:,:,1]]
+#     #gJ += 2Qⁱ*u[wet[:,:,1]]
+    
+#     return J, gJ
+# end
+
 """ 
-    function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
-    squared model-data misfit
+    function trackpathways(TMIversion,latbox,lonbox)
+    Fraction of water originating from surface box    
 # Arguments
-- `u`: controls, 2D surface perturbation
-- `Alu`: LU decomposition of water-mass matrix
-- `y`: observations on grid
-- `d`: model constraints
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `Qⁱ`: inverse of Q weighting matrix for controls
-- `wet`: BitArray ocean mask
+- `TMIversion`: version of TMI water-mass/circulation model
+- `latbox`: min and max latitude of box
+- `lonbox`: min and max longitude of box
 # Output
-- `J`: cost function value
-- `gJ`: derivative of cost function wrt to controls
+- `c`: fraction of water from surface source
+- `γ`: TMI grid
 """
-function misfit_gridded_data(u::Matrix{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-    ỹ = tracerinit(wet,T)
-    n = tracerinit(wet,T)
-    dJdn = tracerinit(wet,T)
-    dJdd = tracerinit(wet,T)
-    
-    gJ = tracerinit(wet[:,:,1],T)
-    
-    # first-guess reconstruction of observations
-    Δd = d + Γ(u,wet)
-    ỹ[wet] =  Alu\Δd[wet]
-    n = y .- ỹ
-    
-    J = n[wet]'* (Wⁱ * n[wet])
-    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+function trackpathways(TMIversion,latbox,lonbox)
 
-    dJdn[wet] = 2Wⁱ*n[wet]
-    dJdd[wet] = -( Alu'\dJdn[wet])
-    
-    gJ[wet[:,:,1]] = dJdd[:,:,1][wet[:,:,1]]
-    gJ[wet[:,:,1]] += 2Qⁱ*u[wet[:,:,1]]
+    A, Alu, γ = config(TMIversion)
 
-    # any way to put J and gradient into one function?
-    return J, gJ
+    d = surfacepatch(lonbox,latbox,γ)
+
+    # do matrix inversion to get quantity of dyed water throughout ocean:
+    c = tracerinit(γ.wet); # pre-allocate c
+
+    # make methods that make the "wet" index unnecessary
+    c[γ.wet] = Alu\d[γ.wet] # presumably equivalent but faster than `c = A\d`
+
+    return c, γ
 end
 
 """ 
-    function misfit_gridded_data(u,Alu,y,d,Wⁱ,Qⁱ,wet)
+    function gdriveurl(TMIversion)
+    placeholder function to give location (URL) of Google Drive input
+    in the future, consider a struct or Dict that describes all TMI versions.
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+# Output
+- `url`: location (URL) for download
+"""
+function gdriveurl(TMIname)
+    if TMIname == "TMI_2010_2012_4x4x33"
+        #        url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
+        url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
+    else
+        url = nothing
+    end
+end
+
+""" 
+    function regeneratedphosphate(TMIversion)
+    Regenerated (i.e., accumulated, remineralized) phosphate
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+# Output
+- `PO₄ᴿ`: regenerated phosphate
+- `γ`: TMI grid
+"""
+function regeneratedphosphate(TMIversion)
+
+    A, Alu, γ, inputfile = config(TMIversion)
+    ΔPO₄ = readtracer(inputfile,"qpo4")
+
+    # PO₄ᴿ = cumulative regenerated phosphate
+    PO₄ᴿ = tracerinit(γ.wet); # pre-allocate 
+    PO₄ᴿ[γ.wet] = -(Alu\ΔPO₄[γ.wet])
+    return PO₄ᴿ, γ
+end
+
+""" 
+    function volumefilled(TMIversion)
+
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+# Output
+- `volume`: global ocean volume filled by a surface region
+"""
+function volumefilled(TMIversion)
+
+    A, Alu, γ = config(TMIversion)
+    
+    v = cellvolume(γ)
+    area = cellarea(γ)
+    
+    # effectively take inverse of transpose A matrix.
+    dVdd = tracerinit(γ.wet); # pre-allocate c
+    dVdd[γ.wet] = Alu'\v[γ.wet]
+
+    # scale the sensitivity value by surface area so that converging meridians are taken into account.
+    I = γ.I
+    volume = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
+    fill!(volume,0.0)
+
+    # this step could use a function with γ.I argument
+    [volume[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
+
+    return volume
+end
+
+""" 
+    function surfaceorigin(TMIversion,loc)
+
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `loc`: location (lon,lat,depth) of location of interest
+# Output
+- `origin`: surface map of fraction of source water for a given location
+- `γ`: TMI grid
+"""
+function surfaceorigin(TMIversion,loc)
+
+    A, Alu, γ = config(TMIversion)
+
+    # Find nearest neighbor on grid
+    # set δ = 1 at grid cell of interest
+    δ = nearestneighbormask(loc,γ)
+
+    # Include option: find grid coordinate by linear interpolation/extrapolation
+    # try Interpolations.jl, need interpolation factors that add up to one
+    # a false start to fix this issue 
+    #v = cellVolume(γ)
+    #itp = interpolate(v)
+
+    #
+    dVdδ = tracerinit(γ.wet); # pre-allocate c
+    dVdδ[γ.wet] = Alu'\δ[γ.wet]
+
+    # surfaceorigin only exists at sea surface
+    origin = view(dVdδ,:,:,1)
+    return origin, γ
+end
+
+function filterdata(u₀,Alu,y,d₀,W⁻,wet)
+#using Distributions, PyPlot, PyCall,
+ #   LinearAlgebra,  Zygote, ForwardDiff, Optim
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    fg(x) = misfit_gridded_data(x,Alu,y,d₀,W⁻,wet)
+    F0,G0 = fg(u₀)
+    fg!(F,G,x) = misfit_gridded_data!(F,G,x,Alu,y,d₀,W⁻,wet)
+    #F1,G1 = fg!(F0,G0,u₀)
+
+    # optimize with Optim.jl
+    #optimize(Optim.only_fg!(fg!), u₀, Optim.LBFGS())
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+
+    # no gradient
+    #optimize(misfit,u₀,NelderMead())
+
+    # with gradient
+    # G = gmisfit(u₀vec)
+    # function g!(G, x)
+    #     G = gmisfit(x)
+    #     return G
+    # end
+    # out = optimize(misfit,g!,u₀vec,LBFGS())
+    return out    
+end
+
+function sample_observations(TMIversion,variable)
+    
+    A, Alu, γ, inputfile = config(TMIversion)
+
+    # take synthetic observations
+    # get observational uncertainty
+    # could be better to read indices to form wet mask rather than a sample variable.
+    θtrue = readtracer(inputfile,variable)
+
+    #ΔPO₄ = readtracer(inputfile,"qpo4")
+    σθ = readtracer(inputfile,"σ"*variable)
+
+    ntrue = tracerinit(γ.wet)
+    ntrue[γ.wet] = rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+
+    y = θtrue .+ ntrue
+
+    # get cost function (J) based on model misfit
+    # here the data-model misfit is weighted by the expected error
+
+    # weighting matrix
+    W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    Wⁱ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ[γ.wet].^2)
+    return y, Wⁱ
+end
+
+""" 
+    function misfit_gridded_data(u,Alu,y,d,Wⁱ,wet)
     squared model-data misfit
     controls are a vector input for Optim.jl
 # Arguments
@@ -808,13 +1067,12 @@ end
 - `y`: observations on grid
 - `d`: model constraints
 - `Wⁱ`: inverse of W weighting matrix for observations
-- `Qⁱ`: inverse of Q weighting matrix for controls
 - `wet`: BitArray ocean mask
 # Output
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
@@ -832,13 +1090,13 @@ function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},W�
     n = y .- ỹ
     
     J = n[wet]'* (Wⁱ * n[wet])
-    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+    #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
 
     dJdn[wet] = 2Wⁱ*n[wet]
-    dJdd[wet] = -( Alu'\dJdn[wet])
+    dJdd[wet] = Alu'\dJdn[wet]
     
-    gJ = dJdd[:,:,1][wet[:,:,1]]
-    gJ += 2Qⁱ*u[wet[:,:,1]]
+    gJ = -dJdd[:,:,1][wet[:,:,1]]
+    #gJ += 2Qⁱ*u[wet[:,:,1]]
 
     return J, gJ
 end
@@ -854,40 +1112,48 @@ end
 - `y`: observations on grid
 - `d`: model constraints
 - `Wⁱ`: inverse of W weighting matrix for observations
-- `Qⁱ`: inverse of Q weighting matrix for controls
 - `wet`: BitArray ocean mask
 # Output
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function misfit_gridded_data!(J::T,gJ::Vector{T},uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+#function misfit_gridded_data!(J,gJ,uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+# eliminate type definitions to help with automatic differentiation
+function misfit_gridded_data!(J,gJ,uvec,Alu,y,d,Wⁱ,wet) 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
+    T = eltype(uvec)
     u = tracerinit(wet[:,:,1],T)
     u[wet[:,:,1]] = uvec
 
     ỹ = tracerinit(wet,T)
     n = tracerinit(wet,T)
     
-    #dJdn = tracerinit(wet,T)
+    dJdn = tracerinit(wet,T)
     dJdd = tracerinit(wet,T)
     
     # first-guess reconstruction of observations
     Δd = d + Γ(u,wet)
+    
     ỹ[wet] =  Alu\Δd[wet]
     n = y .- ỹ
-    
-    J = n[wet]'* (Wⁱ * n[wet])
-    J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
 
-    #dJdn[wet] = 2Wⁱ*n[wet]
-    dJdd[wet] = -( Alu'\ 2Wⁱ*n[wet])
+    if gJ != nothing
+        dJdn[wet] = 2Wⁱ*n[wet]
+        dJdd[wet] =  Alu' \ dJdn[wet]
     
-    gJ = dJdd[:,:,1][wet[:,:,1]]
-    gJ += 2Qⁱ*u[wet[:,:,1]]
+        gJ .= -dJdd[:,:,1][wet[:,:,1]]
+        #gJ .+= 2Qⁱ*u[wet[:,:,1]]
+    end
+
+    if J != nothing
+        # don't understand why I can't compute J and then return J
+        # when I tried that, J was not passed out of function
+        # because J is a scalar not a vector?
+        return n[wet]'* (Wⁱ * n[wet]) # +  u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+    end
     
-    return J, gJ
 end
 
 

@@ -12,7 +12,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 =#
 using Revise
-using TMI, Interpolations, PyPlot, PyCall
+using TMI, PyPlot, PyCall
 
 # % choose an interior location X (Xlon[lon], Xlat [lat], Xdepth [m depth]).
 #% -7.38, 115.26E
@@ -22,31 +22,7 @@ xlat = -6.38;  # deg N.
 xdepth = 3000;  # meters.
 loc = (xlon,xlat,xdepth)
 
-url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
-inputdir = "../data"
-
-A, Alu, c, γ = config(url,inputdir)
-
-# Find nearest neighbor on grid
-# set δ = 1 at grid cell of interest
-δ = nearestneighbormask(loc,γ)
-
-# Include option: find grid coordinate by linear interpolation/extrapolation
-# try Interpolations.jl, need interpolation factors that add up to one
-# a false start to fix this issue 
-#v = cellVolume(γ)
-#itp = interpolate(v)
-
-#
-dVdδ = tracerinit(γ.wet); # pre-allocate c
-dVdδ[γ.wet] = Alu'\δ[γ.wet]
-
-# surfaceorigin only exists at sea surface
-surfaceorigin = view(dVdδ,:,:,1)
-
-# view the surface
-#cntrs = 1:0.25:6
+origin, γ = surfaceorigin(TMIversion,loc)
 
 # units: effective thickness in log10(meters)
-figure()
-contourf(γ.lon,γ.lat,log10.(surfaceorigin'))
+contourf(γ.lon,γ.lat,log10.(origin'))
