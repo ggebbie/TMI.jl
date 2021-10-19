@@ -1,5 +1,4 @@
-using TMI, ILUZero
-using Test
+using TMI, Test
 
 @testset "TMI.jl" begin
 
@@ -62,14 +61,22 @@ using Test
         # would be better to randomize location.
         xlon = 125.26; # deg E.
         xlat = -6.38;  # deg N.
-        xdepth = 3000;  # meters.
+        xdepth = 2578.2;  # meters.
 
         loc = (xlon,xlat,xdepth)
-        δ = nearestneighbormask(loc,γ)
+        # choose linear or nearest neighbor interpolation
 
-        @test sum(δ) > 0
+        # temporary tracer to initialize linear interp
+        ctmp = tracerinit(γ.wet)
+        δ = linearinterpweights(ctmp,loc,γ)
+
+        # alternate choice
+        #δ = nearestneighbormask(loc,γ)
+
+        @test isapprox(sum(filter(!isnan,δ)),1.0) 
 
         origin, γ = surfaceorigin(TMIversion,loc)
+        
         @test isapprox(sum(filter(!isnan,origin)),1)
         @test isapprox(sum(filter(!isnan,origin)),1)
         @test minimum(filter(!isnan,origin)) ≥ 0
@@ -112,21 +119,6 @@ using Test
         
         # error less than 10 percent?
         @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-        
-        # sophisticated method: doesn't work due to issue #17
-        #gmisfitForward = x -> ForwardDiff.gradient(misfit, x); # g = ∇f
-        #gJforward = gmisfitForward(u₀)
-
-        # gradient check with autodiff? doesn't work: issue #17
-
-        # get a special LU decomposition that works with automatic differentiation
-        Aluzero = ILUZero.ilu0(A)
-        ilu0!(Aluzero,A)
-        f_diffable2(x) = misfit_gridded_data_diffable(x,Aluzero,y,d₀,W⁻,γ.wet)
-        #Jtest = f_diffable2(u₀)
-        using ReverseDiff
-        ForwardDiff.gradient(f_diffable2, u₀) #, cfg::GradientConfig = GradientConfig(input))
-        #test = gradient(misfit,u₀)
 
         # filter the data with an Optim.jl method
         out = filterdata(u₀,Alu,y,d₀,W⁻,γ.wet)
@@ -139,7 +131,57 @@ using Test
         J̃,gJ̃ = fg(ũ)
         @test J̃ < J̃₀
 
-        # show plan view before, after, and truth.
+    end
+    
+    #########################################
+    ## globalmap
+    @testset "globalmap" begin
+        # first guess of change to surface boundary conditions
+        # ocean values are 0
+        u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
+
+        # take synthetic, noisy observations
+        y, W⁻, ctrue = sample_observations(TMIversion,"θ")
+        #A, Alu, γ, inputfile = config(TMIversion) 
+
+        # a first guess: observed surface boundary conditions are perfect.
+        # set surface boundary condition to the observations.
+        # below surface = 0 % no internal sinks or sources.
+        d₀ = tracerinit(γ.wet)
+        d₀[:,:,1] = y[:,:,1]
+
+        # check gradients in misfit_gridded_data!
+        fg(x) = misfit_gridded_data(x,Alu,y,d₀,W⁻,γ.wet)
+        f(x) = fg(x)[1]
+        J̃₀,gJ₀ = fg(u₀)
+        fg!(F,G,x) = misfit_gridded_data!(F,G,x,Alu,y,d₀,W⁻,γ.wet)
+
+        # check with forward differences
+        ϵ = 1e-5
+        ii = rand(1:sum(γ.wet[:,:,1]))
+        δu = copy(u₀); δu[ii] += ϵ
+        ∇f_finite = (fg(δu)[1] - fg(u₀)[1])/ϵ # `[1]` to pick out cost function
+        ∇f_finite = (f(δu) - f(u₀))/ϵ 
+
+        fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
+        ∇f = gJ₀[ii]
+        
+        # error less than 10 percent?
+        @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+
+        # filter the data with an Optim.jl method
+        out = filterdata(u₀,Alu,y,d₀,W⁻,γ.wet)
+
+        # was cost function decreased?
+        @test out.minimum < J̃₀
+
+        # reconstruct by hand to double-check.
+        ũ = out.minimizer
+        J̃,gJ̃ = fg(ũ)
+        @test J̃ < J̃₀
+
+        
+
     end
     
 end

@@ -3,7 +3,8 @@ module TMI
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
-    PyPlot, PyCall, Distributions, Optim, ILUZero
+    PyPlot, PyCall, Distributions, Optim, ILUZero,
+    Interpolations
 
 export config, download,
     vec2fld, fld2vec, depthindex, surfaceindex,
@@ -19,7 +20,7 @@ export config, download,
     misfit_gridded_data_diffable,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, sample_observations, filterdata,
-    steady_inversion
+    steady_inversion, linearinterpweights
 
 #export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
 
@@ -810,7 +811,14 @@ end
 
 """ 
     function volumefilled(TMIversion)
+    Find the ocean volume that has originated from each surface box.
+     This is equivalent to solving a sensitivity problem:
+     The total volume is V = vᵀ c , where v is the volume of each box 
+     and c is the fraction of volume from a given source which
+     satisfies the equation A c = d.                     
+     Next, dV/d(d) = A⁻ᵀ v, and dV/d(d) is exactly the volume originating from each source.
 
+     See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
 # Arguments
 - `TMIversion`: version of TMI water-mass/circulation model
 # Output
@@ -840,7 +848,14 @@ end
 
 """ 
     function surfaceorigin(TMIversion,loc)
-
+     Find the surface origin of water for some interior box 
+     This is equivalent to solving a sensitivity problem:
+     The mass fraction at a location `loc` of interest is 
+    `c[loc] = δᵀ c`, where `δ` samples the location of the global mass-fraction variable, c.
+    Then the sensitivity of `c[loc]` is: d(c[loc])/d(d) = A⁻ᵀ δ.
+    The derivative is solved using the constraint: Ac = d.
+    The sensitivity is exactly the mass fraction originating from each source.      
+    This problem is mathematically similar to determining how the ocean is filled.
 # Arguments
 - `TMIversion`: version of TMI water-mass/circulation model
 - `loc`: location (lon,lat,depth) of location of interest
@@ -852,23 +867,53 @@ function surfaceorigin(TMIversion,loc)
 
     A, Alu, γ = config(TMIversion)
 
+    ctmp = tracerinit(γ.wet)
+    δ = linearinterpweights(ctmp,loc,γ)
+    
     # Find nearest neighbor on grid
     # set δ = 1 at grid cell of interest
-    δ = nearestneighbormask(loc,γ)
+    #δ = nearestneighbormask(loc,γ)
 
-    # Include option: find grid coordinate by linear interpolation/extrapolation
-    # try Interpolations.jl, need interpolation factors that add up to one
-    # a false start to fix this issue 
-    #v = cellVolume(γ)
-    #itp = interpolate(v)
+    # Note: ctrue[γ.wet]'*δ[γ.wet] returns interpolated value
 
-    #
-    dVdδ = tracerinit(γ.wet); # pre-allocate c
-    dVdδ[γ.wet] = Alu'\δ[γ.wet]
+    dvlocdd = tracerinit(γ.wet); # pre-allocate c
+    dvlocdd[γ.wet] = Alu'\δ[γ.wet]
 
-    # surfaceorigin only exists at sea surface
-    origin = view(dVdδ,:,:,1)
+    # origin is defined at sea surface
+    origin = view(dvlocdd,:,:,1)
     return origin, γ
+end
+
+function linearinterpweights(c,loc,γ)
+
+    # warning: doesn't handle longitudinal periodic condition (i.e., wraparound)
+    nodes = (γ.lon,γ.lat,γ.depth)
+    itp = interpolate(nodes,c,Gridded(Linear())) # this step seems unnecessary except to get itpinfo below
+   
+    #itp(loc...) # returns the interpolated value
+    wis = Interpolations.weightedindexes((Interpolations.value_weights,), Interpolations.itpinfo(itp)..., loc)
+
+    # translate to weights via
+    #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
+    δ = tracerinit(γ.wet)
+    for ii = 1:2
+        for jj = 1:2
+            for kk = 1:2
+                δ[wis[1].istart+ii-1,wis[2].istart+jj-1,wis[3].istart+kk-1] +=
+                    wis[1].weights[ii]*wis[2].weights[jj]*wis[3].weights[kk]
+            end
+        end
+    end
+
+    # if some adjacent points are dry, then re-normalize to keep this interpolation as an average.
+    # The hope is that the interpolation is stable with this approach, but other side effects are likely.
+    if iszero(sum(filter(!isnan,δ)))
+        error("No ocean points for interpolation")
+    elseif sum(filter(!isnan,δ)) < 1.0
+        δ ./= sum(filter(!isnan,δ))
+    end
+    
+    return δ
 end
 
 """
@@ -879,7 +924,7 @@ function filterdata(u₀,Alu,y,d₀,W⁻,wet)
      (c) perturbations to the surface boundary condition u₀
     that best fits observations, y,
     according to the cost function,
-    J = (ỹ - y)ᵀ W⁻ (ỹ - y)
+    J = (ỹ - y)ᵀ W⁻¹ (ỹ - y)
     subject to Aỹ = d₀ + Γ u₀.                 
     W⁻ is a (sparse) weighting matrix.
     See Supplementary Section 2, Gebbie & Huybers 2011.
@@ -1049,7 +1094,6 @@ function misfit_gridded_data!(J,gJ,uvec,Alu,y,d,Wⁱ,wet)
     
 end
 
- 
 """ 
     function misfit_gridded_data_diffable(u,Alu,y,d,Wⁱ,wet)
     squared model-data misfit (differentiable version)
