@@ -884,11 +884,30 @@ function surfaceorigin(TMIversion,loc)
     return origin, γ
 end
 
+"""
+function linearinterpweights(c,loc,γ)
+    Weights for linear interpolation.
+    The derivative of linear interpolation is needed in sensitivity studies.
+    ReverseDiff.jl could find this quantity automatically.
+    Instead we dig into the Interpolations.jl package to find the weights that are effectively the partial derivatives of the function.
+# Arguments
+- `c`: a temporary tracer field, would be nice to make it unnecessary
+- `loc`: (lon,lat,depth) tuple of a location of interest
+- `γ`: TMI grid
+# Output
+- `δ`: weights on a 3D tracer field grid
+"""
 function linearinterpweights(c,loc,γ)
 
-    # warning: doesn't handle longitudinal periodic condition (i.e., wraparound)
-    nodes = (γ.lon,γ.lat,γ.depth)
-    itp = interpolate(nodes,c,Gridded(Linear())) # this step seems unnecessary except to get itpinfo below
+    # Handle longitudinal periodic condition (i.e., wraparound)
+    lon = vcat(copy(γ.lon),γ.lon[1]+360)
+    list = vcat(1:length(γ.lon),1)
+    #ctmp = view(c,list,:,:)
+    ctmp = c[list,:,:]
+    #nodes = (view(γ.lon,list,:,:),γ.lat,γ.depth)
+    nodes = (lon,γ.lat,γ.depth)
+
+    itp = interpolate(nodes,ctmp,Gridded(Linear())) # this step seems unnecessary except to get itpinfo below
    
     #itp(loc...) # returns the interpolated value
     wis = Interpolations.weightedindexes((Interpolations.value_weights,), Interpolations.itpinfo(itp)..., loc)
@@ -896,10 +915,13 @@ function linearinterpweights(c,loc,γ)
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
     δ = tracerinit(γ.wet)
+
+    # changes in δwrap i=91 are translated back to δ i=1
+    δwrap = view(δ,list,:,:)
     for ii = 1:2
         for jj = 1:2
             for kk = 1:2
-                δ[wis[1].istart+ii-1,wis[2].istart+jj-1,wis[3].istart+kk-1] +=
+                δwrap[wis[1].istart+ii-1,wis[2].istart+jj-1,wis[3].istart+kk-1] +=
                     wis[1].weights[ii]*wis[2].weights[jj]*wis[3].weights[kk]
             end
         end
