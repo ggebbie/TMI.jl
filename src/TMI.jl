@@ -801,6 +801,21 @@ function control2state!(c::Vector{T},u::Vector{T},γ) where T<: Real
     return c
 end
 
+function state2obs(cvec,wis,γ)
+    # interpolate onto data points
+    N = length(wis)
+    sumwis = Vector{Float64}(undef,N)
+    [sumwis[i] = γ.wet[wis[i]...] for i in eachindex(wis)]
+
+    # reconstruct the observations
+    ỹ = Vector{Float64}(undef,N)
+    c̃ = tracerinit(γ.wet)
+    c̃[γ.wet] = cvec
+    replace!(c̃,NaN=>0.0)
+    [ỹ[i] = c̃[wis[i]...]/sumwis[i] for i in 1:N]
+    return ỹ
+end
+
 # can I use multiple dispatch like this?
 # don't think so.
 #Γ(x) = Γ(x,wet)
@@ -961,7 +976,7 @@ function interpindex(loc,γ)
 function interpindex(loc,γ)
 
     # Handle longitudinal periodic condition (i.e., wraparound)
-    lon = vcat(copy(γ.lon),γ.lon[1]+360)
+    lon = vcat(copy(γ.lon),γ.lon[1]+360.)
     list = vcat(1:length(γ.lon),1)
     nodes = (lon,γ.lat,γ.depth)
 
@@ -1044,6 +1059,36 @@ function filterdata(u₀,Alu,y,d₀,W⁻,γ)
 - `γ`: grid
 """
 function filterdata(u₀,Alu,d₀,y,W⁻,fg!,γ)
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+
+    return out    
+end
+
+"""
+function globalmap(u₀,Alu,y,d₀,W⁻,γ)
+     Find the distribution of a tracer given:
+     (a) the pathways described by A or its LU decomposition Alu,
+     (b) first-guess boundary conditions and interior sources given by d₀,
+     (c) perturbations to the surface boundary condition u₀
+    that best fits observations, y,
+    according to the cost function,
+    J = (ỹ - y)ᵀ W⁻¹ (ỹ - y)
+    subject to Aỹ = d₀ + Γ u₀.                 
+    W⁻ is a (sparse) weighting matrix.
+    See Supplementary Section 2, Gebbie & Huybers 2011.
+# Arguments
+- `u₀`:
+- `Alu`:
+- `d₀`: first guess of boundary conditions and interior sources
+- `y`: observations on 3D grid
+- `W⁻`: weighting matrix best chosen as inverse error covariance matrix
+- `fg!`: compute cost function and gradient in place
+- `γ`: grid
+"""
+function globalmap(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1340,6 +1385,49 @@ end
 # end
 
 """ 
+    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,γ)
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+# Arguments
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `y`: pointwise observations
+- `d`: model constraints
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `γ`: grid
+# Output
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+"""
+function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+
+    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
+
+    # use in-place functions: more performant
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d) # d stores c̃
+
+    ỹ = state2obs(d,wis,γ)
+    ỹ .-= y # stores n, data-model misfit
+    J = ỹ'* (Wⁱ * ỹ)
+
+    gỹ = 2*(Wⁱ*ỹ)
+
+    #gd = Array{T,3}(undef,size(dfld))
+    gd = Vector{T}(undef,sum(γ.wet))
+    for ii in eachindex(y)
+        # interpweights repeats some calculations
+        gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+    end
+    # do Eᵀ gỹ 
+    ldiv!(Alu',gd)
+    list = surfaceindex(γ.I)
+    gJ = Vector{T}(undef,sum(γ.wet[:,:,1]))
+    [gJ[ii] = gd[list[ii]] for ii in 1:length(list)]
+    return J, gJ
+end
+
+""" 
     function steady_inversion(u,Alu,d,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
@@ -1411,13 +1499,17 @@ function iswet(loc,γ)
     # approach 1
     wis = interpindex(loc,γ)
 
+    # handle wraparound
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+
     # are any of them wet?
     # interpolate ones and zeros on to this loc.
     # if there is land nearby, the interpolated value
     # will be greater than 0.
     # this criterion only requires on land point nearby,
     # where nearby is one of the 8 corners of the cube that contains loc
-    return γ.wet[wis...] > 0
+    return wetwrap[wis...] > 0
 end
 
 end

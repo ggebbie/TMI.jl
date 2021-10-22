@@ -149,11 +149,19 @@ using TMI, Test
 
         # take synthetic, noisy observations
         y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",20)
-        #A, Alu, γ, inputfile = config(TMIversion) 
 
-        # a first guess: observed surface boundary conditions are perfect.
-        # set surface boundary condition to the observations.
-        # below surface = 0 % no internal sinks or sources.
+        # make a silly first guess for surface
+        d₀ = tracerinit(γ.wet)
+        [d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+
+        # check gradients in misfit_gridded_data!
+        fg(x) = costfunction_obs(x,Alu,d₀,y,W⁻,wis,locs,γ)
+        f(x) = fg(x)[1]
+        J̃₀,gJ₀ = fg(u₀)
+
+        ## NEXT STEP: SETUP ! FUNCTION. TEST GRADIENT. OPTIMIZE.
+        #fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,γ)
+        
 
     end
     

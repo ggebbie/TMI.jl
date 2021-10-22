@@ -113,7 +113,7 @@ Steps:
     plugins=[
         License(; name="MIT"),
         Git(; manifest=true, ssh=true),
-        GitHubActions(; x86=true),
+        GitHubActions(; x86=false),
         Codecov(),
         Documenter{GitHubActions}(),
         Develop(),
