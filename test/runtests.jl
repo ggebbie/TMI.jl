@@ -1,4 +1,4 @@
-using TMI, Test
+using Revise, TMI, Test
 
 @testset "TMI.jl" begin
 
@@ -139,7 +139,7 @@ using TMI, Test
     
     #########################################
     ## globalmap
-    @testset "globalmap" begin
+    @testset "sparsedatamap" begin
         # first guess of change to surface boundary conditions
         # how many randomly sampled observations?
         N = 20
@@ -159,9 +159,37 @@ using TMI, Test
         f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
 
+        fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,locs,γ)
+
         ## NEXT STEP: SETUP ! FUNCTION. TEST GRADIENT. OPTIMIZE.
         #fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,γ)
+        fg!(J̃₀,gJ₀,u₀)
+        # filter the data with an Optim.jl method
         
+        out = sparsedatamap(u₀,Alu,y,d₀,W⁻,fg!,γ)
+
+        # check with forward differences
+        ϵ = 1e-5
+        ii = rand(1:sum(γ.wet[:,:,1]))
+        δu = copy(u₀); δu[ii] += ϵ
+        ∇f_finite = (f(δu) - f(u₀))/ϵ 
+
+        fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
+        ∇f = gJ₀[ii]
+        
+        # error less than 10 percent?
+        
+        println("Percent error ",100*(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+        @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+
+        # was cost function decreased?
+        @test out.minimum < J̃₀
+
+        # reconstruct by hand to double-check.
+        ũ = out.minimizer
+        # problem, some of the hidden arguments have changed, gives NaNs in gJ̃
+        J̃,gJ̃ = fg(ũ)
+        @test J̃ < J̃₀
 
     end
     

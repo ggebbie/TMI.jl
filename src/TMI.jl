@@ -17,13 +17,13 @@ export config, download,
     nearestneighbormask, horizontaldistance,
     readtracer, cartesianindexZYX, Γ,
     costfunction_obs, costfunction_obs!,
-    costfunction_obs_diffable,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, sample_observations, filterdata,
     steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
-    control2state, control2state!
+    control2state, control2state!,
+    sparsedatamap
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1068,7 +1068,7 @@ function filterdata(u₀,Alu,d₀,y,W⁻,fg!,γ)
 end
 
 """
-function globalmap(u₀,Alu,y,d₀,W⁻,γ)
+function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1088,7 +1088,7 @@ function globalmap(u₀,Alu,y,d₀,W⁻,γ)
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function globalmap(u₀,Alu,d₀,y,W⁻,fg!,γ)
+function sparsedatamap(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1228,13 +1228,8 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
     # use in-place functions to make this more performant
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores -ỹ
-    # for ii in eachindex(γ.I)
-    #     d[γ.I[ii]] = dtest[ii]
-    # end
-    #println(maximum(d[γ.wet]))
-    #d .+= y # d stores n
-    d .-= y # .- d
-    #println(maximum(d[γ.wet]))
+    d .-= y # d stores n
+    println(maximum(d))
     J = d'* (Wⁱ * d)
     # move this to its own function
     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
@@ -1286,7 +1281,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,
     
     if J !=nothing
         #println(d'* (Wⁱ * d))
-        J =  d'* (Wⁱ * d)       
+        return  d'* (Wⁱ * d)       
         #        return d'* (Wⁱ * d)
         #return J
     end
@@ -1385,7 +1380,7 @@ end
 # end
 
 """ 
-    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,γ)
+    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
 # Arguments
@@ -1394,6 +1389,8 @@ end
 - `y`: pointwise observations
 - `d`: model constraints
 - `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation 
+- `locs`: data locations
 - `γ`: grid
 # Output
 - `J`: cost function of sum of squared misfits
@@ -1410,7 +1407,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     ỹ = state2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
     J = ỹ'* (Wⁱ * ỹ)
-
+    #println(J)
     gỹ = 2*(Wⁱ*ỹ)
 
     #gd = Array{T,3}(undef,size(dfld))
@@ -1423,8 +1420,56 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     ldiv!(Alu',gd)
     list = surfaceindex(γ.I)
     gJ = Vector{T}(undef,sum(γ.wet[:,:,1]))
-    [gJ[ii] = gd[list[ii]] for ii in 1:length(list)]
+    [gJ[ii] = gd[list[ii]] for ii in eachindex(list)]
     return J, gJ
+end
+
+""" 
+    function costfunction_obs!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,γ)
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `dfld`: model constraints
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `γ`: grid
+"""
+function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+
+    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
+
+    # use in-place functions: more performant
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d) # d stores c̃
+
+    ỹ = state2obs(d,wis,γ)
+    ỹ .-= y # stores n, data-model misfit
+
+    if gJ != nothing    
+        gỹ = 2*(Wⁱ*ỹ)
+
+        #gd = Array{T,3}(undef,size(dfld))
+        gd = Vector{T}(undef,sum(γ.wet))
+        for ii in eachindex(y)
+            # interpweights repeats some calculations
+            gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+        end
+        # do Eᵀ gỹ 
+        ldiv!(Alu',gd)
+        list = surfaceindex(γ.I)
+        [gJ[ii] = gd[list[ii]] for ii in eachindex(list)]
+
+    end
+
+    if J != nothing
+        return  ỹ'* (Wⁱ * ỹ)
+    end
 end
 
 """ 
