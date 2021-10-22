@@ -41,10 +41,10 @@ y, W⁻, ctrue = sample_observations(TMIversion,"θ")
 d₀ = tracerinit(γ.wet)
 d₀[:,:,1] = y[:,:,1]
 
-# check gradients in misfit_gridded_data!
-fg(x) = misfit_gridded_data(x,Alu,y,d₀,W⁻,γ.wet)
+# check gradients in costfunction_gridded_data!
+fg(x) = costfunction_gridded_data(x,Alu,y,d₀,W⁻,γ.wet)
 J̃₀,gJ₀ = fg(u₀)
-fg!(F,G,x) = misfit_gridded_data!(F,G,x,Alu,y,d₀,W⁻,γ.wet)
+fg!(F,G,x) = costfunction_gridded_data!(F,G,x,Alu,y,d₀,W⁻,γ.wet)
 
 # check with forward differences
 ϵ = 1e-5

@@ -3,7 +3,7 @@ module TMI
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
-    PyPlot, PyCall, Distributions, Optim, ILUZero,
+    PyPlot, PyCall, Distributions, Optim,
     Interpolations
 
 export config, download,
@@ -16,19 +16,20 @@ export config, download,
     linearindexXYZ, nearestneighbor,
     nearestneighbormask, horizontaldistance,
     readtracer, cartesianindexZYX, Γ,
-    misfit_gridded_data, misfit_gridded_data!,
-    misfit_gridded_data_diffable,
+    costfunction_obs, costfunction_obs!,
+    costfunction_obs_diffable,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, sample_observations, filterdata,
-    steady_inversion, linearinterpweights
-
-#export JULIA_SSL_NO_VERIFY_HOSTS:"naturalearth.s3.amazonaws.com"
+    steady_inversion,
+    interpweights, interpindex,
+    wetlocation, iswet,
+    control2state, control2state!
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
 #const ccrs = PyNULL()
 
-# from ClimatePlots.jl
+# following example at ClimatePlots.jl
 const mpl = PyNULL()
 const plt = PyNULL()
 const cmocean = PyNULL()
@@ -510,15 +511,15 @@ end
 # Output
 - `δ`: nearest neighbor mask 3D field
 """
-function nearestneighbormask(loc,γ::grid)
+function nearestneighbormask(loc,γ::grid,N=1)
 
-    Inn, Rnn = nearestneighbor(loc,γ)
+    Inn, Rnn = nearestneighbor(loc,γ,N)
 
     # preallocate
     δ = falses(size(γ.wet))
     #Array{BitArray,3}(undef,size(γ.wet))
     #fill!(δ,zero(Bool))
-    δ[Inn] = 1
+    δ[Inn] = 1 
     return δ
 end
 
@@ -531,29 +532,48 @@ end
 - `γ`: TMI.grid
 # Output
 - `Inn`: Cartesian indices of nearest neighbor
-- `Rnn`: linear indices of nearest neighbor
+#- `Rnn`: linear indices of nearest neighbor, Removed from code
 """
-function nearestneighbor(loc,γ)
+function nearestneighbor(loc,γ,N=1)
 
     xydist = horizontaldistance(loc[1:2],γ)
-    ijdist,ijmin = findmin(xydist[γ.wet[:,:,1]])
-    
-    kdist,kmin = findmin(abs.(loc[3] .- γ.depth))
 
-    # translate ijmin into imin, jmin
-    Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin)
-    Rnn = γ.R[Inn]
-
-    # what if there is no Rnn? Outside of grid. Could move vertically by one.
-    if iszero(Rnn)
-        Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin-1)
-        Rnn = γ.R[Inn]
+    if N==1
+        ijdist,ijmin = findmin(xydist[γ.wet[:,:,1]])
+        kdist,kmin = findmin(abs.(loc[3] .- γ.depth))
+    elseif N > 1
+        ijmin = sortperm(xydist[γ.wet[:,:,1]])
+        kmin = sortperm(abs.(loc[3] .- γ.depth))
     end
 
+    if N == 1
+        Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin)
+    elseif N > 1
+        Inn = Vector{CartesianIndex}(undef,N)
+        cN2 = ceil(Integer,N/2)
+        for ii in 1:cN2
+            # translate ijmin into imin, jmin
+            Inn[ii] = CartesianIndex.(γ.I[ijmin[ii]][1],γ.I[ijmin[ii]][2],kmin[1])
+        end
+        for ii in 1:floor(Integer,N/2)
+            Inn[cN2+ii] = CartesianIndex.(γ.I[ijmin[ii]][1],γ.I[ijmin[ii]][2],kmin[2])
+        end        
+    end
+
+    #Rnn = γ.R[Inn]
+
+    # This code led to a check bounds error.
+    # what if there is no Rnn? Outside of grid. Could move vertically by one.
+    #if iszero(Rnn)
+    #    Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin-1)
+    #    Rnn = γ.R[Inn]
+    #end
+
     # if still not available, then give up.
-    iszero(Rnn) && println("Warning: outside of grid")
+    # Not sure this makes logical sense anymore.
+    #iszero(Rnn) && println("Warning: outside of grid")
     
-    return Inn, Rnn
+    return Inn
 end
 
 """
@@ -671,19 +691,8 @@ function dyeplot(lat, depth, vals, lims)
     gca().set_title("Meridional dye concentration")
 end
 
-function nearest_gridpoints(lon::Float64,lat::Float64,depth::Float64,γ::grid)
-
-    # do each dimension separately
-    lon = 4.4
-    lonval, lonloc = findmin(abs.(γ.lon .- lon))
-
-    gridvals = lonloc
-    return gridvals
-end
-
 """
     function depthindex(I) 
-    
     Get the k-index (depth level) from the Cartesian index
 """
 function depthindex(I) 
@@ -694,7 +703,6 @@ end
 
 """
     function surfaceindex(I) 
-    
     Get the vector-index where depth level == 1 and it is ocean.
 """
 function surfaceindex(I)
@@ -723,7 +731,7 @@ function tracerinit(wet,ltype=Float64)
 end
 
 """ 
-    function Γ(tracer2D,γ)
+    function control2state(tracer2D,γ)
     turn 2D surface field into 3D field with zeroes below surface    
 # Arguments
 - `tracer2D`:: 2D surface tracer field
@@ -731,7 +739,7 @@ end
 # Output
 - `tracer3D`:: 3d tracer field with NaN on dry points
 """
-function Γ(tracer2D::Matrix{T},wet) where T<: Real
+function control2state(tracer2D::Matrix{T},wet) where T<: Real
     # preallocate
     tracer3D = Array{T}(undef,size(wet))
 
@@ -739,10 +747,64 @@ function Γ(tracer2D::Matrix{T},wet) where T<: Real
     # consider whether land should be nothing or missing
     tracer3D[wet] .= zero(T)
     tracer3D[.!wet] .= zero(T)/zero(T)
+    println("here")
     tracer3D[:,:,1] = tracer2D
     return tracer3D
 end
 
+""" 
+    function control2state(u,γ)
+    turn surface control vector into 3D field with zeroes below surface    
+# Arguments
+- `u`:: surface control vector
+- `wet`::BitArray mask of ocean points
+# Output
+- `tracer3D`:: 3d tracer field with NaN on dry points
+"""
+function control2state(u::Vector{T},wet) where T<: Real
+    # preallocate
+    tracer3D = Array{T}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer3D[wet] .= zero(T)
+    tracer3D[.!wet] .= zero(T)/zero(T)
+    tracer3D[:,:,1][wet[:,:,1]] = u
+    return tracer3D
+end
+
+""" 
+    function control2state!(c,u,γ)
+    Add surface control vector to existing 3D field 
+# Arguments
+- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
+- `u`:: surface control vector
+- `wet`::BitArray mask of ocean points
+"""
+function control2state!(c::Array{T,3},u::Vector{T},γ) where T<: Real
+    #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
+#    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    [c[γ.I[ii]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    return c
+end
+
+""" 
+    function control2state!(c,u,γ)
+    Add surface control vector to existing 3D field 
+# Arguments
+- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
+- `u`:: surface control vector
+- `wet`::BitArray mask of ocean points
+"""
+function control2state!(c::Vector{T},u::Vector{T},γ) where T<: Real
+    [c[ii] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    return c
+end
+
+# can I use multiple dispatch like this?
+# don't think so.
+#Γ(x) = Γ(x,wet)
+    
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
     Track the pathways of a user-defined water mass.
@@ -868,12 +930,11 @@ function surfaceorigin(TMIversion,loc)
     A, Alu, γ = config(TMIversion)
 
     ctmp = tracerinit(γ.wet)
-    δ = linearinterpweights(ctmp,loc,γ)
+    δ = interpweights(loc,γ)
     
     # Find nearest neighbor on grid
     # set δ = 1 at grid cell of interest
     #δ = nearestneighbormask(loc,γ)
-
     # Note: ctrue[γ.wet]'*δ[γ.wet] returns interpolated value
 
     dvlocdd = tracerinit(γ.wet); # pre-allocate c
@@ -885,7 +946,7 @@ function surfaceorigin(TMIversion,loc)
 end
 
 """
-function linearinterpweights(c,loc,γ)
+function interpindex(loc,γ)
     Weights for linear interpolation.
     The derivative of linear interpolation is needed in sensitivity studies.
     ReverseDiff.jl could find this quantity automatically.
@@ -897,20 +958,42 @@ function linearinterpweights(c,loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function linearinterpweights(c,loc,γ)
+function interpindex(loc,γ)
 
     # Handle longitudinal periodic condition (i.e., wraparound)
     lon = vcat(copy(γ.lon),γ.lon[1]+360)
     list = vcat(1:length(γ.lon),1)
-    #ctmp = view(c,list,:,:)
-    ctmp = c[list,:,:]
-    #nodes = (view(γ.lon,list,:,:),γ.lat,γ.depth)
     nodes = (lon,γ.lat,γ.depth)
 
-    itp = interpolate(nodes,ctmp,Gridded(Linear())) # this step seems unnecessary except to get itpinfo below
-   
-    #itp(loc...) # returns the interpolated value
-    wis = Interpolations.weightedindexes((Interpolations.value_weights,), Interpolations.itpinfo(itp)..., loc)
+    # eliminate need to pass tracer value
+    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes, loc)
+
+    # issue, some of weighted points may be NaNs in tracer field
+    # handle this in the Interpolations.jl routines
+    # may involve chaging Gridded(Linear()) above
+    return wis
+end
+
+"""
+function interpweights(loc,γ)
+    Weights for linear interpolation.
+    The derivative of linear interpolation is needed in sensitivity studies.
+    ReverseDiff.jl could find this quantity automatically.
+    Instead we dig into the Interpolations.jl package to find the weights that are effectively the partial derivatives of the function.
+# Arguments
+- `loc`: (lon,lat,depth) tuple of a location of interest
+- `γ`: TMI grid
+# Output
+- `δ`: weights on a 3D tracer field grid
+"""
+function interpweights(loc,γ)
+
+    # handle wraparound
+    # repeated (unnecessarily?) in interpindex
+    lon = vcat(copy(γ.lon),γ.lon[1]+360)
+    list = vcat(1:length(γ.lon),1)
+
+    wis = interpindex(loc,γ)
 
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
@@ -922,15 +1005,16 @@ function linearinterpweights(c,loc,γ)
         for jj = 1:2
             for kk = 1:2
                 δwrap[wis[1].istart+ii-1,wis[2].istart+jj-1,wis[3].istart+kk-1] +=
-                    wis[1].weights[ii]*wis[2].weights[jj]*wis[3].weights[kk]
+                wis[1].weights[ii]*wis[2].weights[jj]*wis[3].weights[kk]
             end
         end
     end
 
     # if some adjacent points are dry, then re-normalize to keep this interpolation as an average.
     # The hope is that the interpolation is stable with this approach, but other side effects are likely.
+    # Note that this should be handled earlier, like in the interpindex section. For this reason, there could be an inconsistency in the global map function.
     if iszero(sum(filter(!isnan,δ)))
-        error("No ocean points for interpolation")
+        δ = nothing
     elseif sum(filter(!isnan,δ)) < 1.0
         δ ./= sum(filter(!isnan,δ))
     end
@@ -939,7 +1023,7 @@ function linearinterpweights(c,loc,γ)
 end
 
 """
-function filterdata(u₀,Alu,y,d₀,W⁻,wet)
+function filterdata(u₀,Alu,y,d₀,W⁻,γ)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -953,39 +1037,25 @@ function filterdata(u₀,Alu,y,d₀,W⁻,wet)
 # Arguments
 - `u₀`:
 - `Alu`:
-- `y`: observations on 3D grid
 - `d₀`: first guess of boundary conditions and interior sources
+- `y`: observations on 3D grid
 - `W⁻`: weighting matrix best chosen as inverse error covariance matrix
-- `wet`: BitArray mask of ocean points
+- `fg!`: compute cost function and gradient in place
+- `γ`: grid
 """
-function filterdata(u₀,Alu,y,d₀,W⁻,wet)
+function filterdata(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    fg(x) = misfit_gridded_data(x,Alu,y,d₀,W⁻,wet)
-    F0,G0 = fg(u₀)
-    fg!(F,G,x) = misfit_gridded_data!(F,G,x,Alu,y,d₀,W⁻,wet)
-    #F1,G1 = fg!(F0,G0,u₀)
-
-    # optimize with Optim.jl
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
 
-    # no gradient
-    #optimize(misfit,u₀,NelderMead())
-
-    # with gradient
-    # G = gmisfit(u₀vec)
-    # function g!(G, x)
-    #     G = gmisfit(x)
-    #     return G
-    # end
-    # out = optimize(misfit,g!,u₀vec,LBFGS())
     return out    
 end
 
 """ 
     function sample_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
+    This version: gridded observations
 # Arguments
 - `TMIversion::String`: version of TMI water-mass/circulation model
 - `variable::String`: variable name to use as template
@@ -1018,8 +1088,65 @@ function sample_observations(TMIversion,variable)
 end
  
 """ 
-    function misfit_gridded_data(u,Alu,y,d,Wⁱ,wet)
-    squared model-data misfit
+    function sample_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+function sample_observations(TMIversion,variable,N)
+    
+    A, Alu, γ, inputfile = config(TMIversion)
+
+    # take synthetic observations
+    # get observational uncertainty
+    
+    θtrue = readtracer(inputfile,variable)
+    replace!(θtrue,NaN=>0.0)
+    σθ = readtracer(inputfile,"σ"*variable)
+    replace!(σθ,NaN=>0.0)
+
+    # get random locations that are wet (ocean)
+    locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
+    [locs[i] = wetlocation(γ) for i in 1:N]
+
+    wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+    [wis[i] = interpindex(locs[i],γ) for i in 1:N]
+
+    # look at total weight, < 1 if there are land points
+    # later make sure total weight = 1 for proper average
+    sumwis = Vector{Float64}(undef,N)
+    [sumwis[i] = γ.wet[wis[i]...] for i in 1:N]
+
+    # sample the true field at these random locations
+    ytrue = Vector{Float64}(undef,N)
+    replace!(θtrue,NaN=>0.0)
+    [ytrue[i] = θtrue[wis[i]...]/sumwis[i] for i in 1:N]
+
+    # interpolate the standard deviation of expected error
+    σtrue = Vector{Float64}(undef,N)
+    [σtrue[i] = σθ[wis[i]...]/sumwis[i] for i in 1:N]
+
+    ntrue = rand(Normal(),N) .* σtrue
+    y = ytrue .+ ntrue
+
+    # weighting matrix
+    #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
+    return y, W⁻, ytrue, locs, wis
+end
+ 
+""" 
+    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
+    squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
 # Arguments
 - `u`: controls, vector format
@@ -1032,127 +1159,185 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function misfit_gridded_data(uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},wet::BitArray{3}) where T <: Real
+function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
-    u = tracerinit(wet[:,:,1],T)
-    u[wet[:,:,1]] = uvec
+    #u = tracerinit(γ.wet[:,:,1],T)
+    #u[γ.wet[:,:,1]] = uvec
 
-    ỹ = tracerinit(wet,T)
-    n = tracerinit(wet,T)
-    dJdn = tracerinit(wet,T)
-    dJdd = tracerinit(wet,T)
+    d = dfld[γ.wet]
+    y = view(yfld,γ.wet)
+    
+    #ỹ = tracerinit(γ.wet,T)
+    #n = tracerinit(γ.wet,T)
+    #dJdn = tracerinit(γ.wet,T)
+    dJdd = tracerinit(γ.wet,T)
     
     # first-guess reconstruction of observations
-    Δd = d + Γ(u,wet)
-    ỹ[wet] =  Alu\Δd[wet]
-    n = y .- ỹ
-    
-    J = n[wet]'* (Wⁱ * n[wet])
+    #Δd = d + Γ(u,wet)
+    #ỹ[wet] =  Alu\Δd[wet]
+    #n = y .- ỹ
+    #d[γ.wet] = Alu\d[γ.wet]
+
+    # use in-place functions to make this more performant
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d) # d stores -ỹ
+    # for ii in eachindex(γ.I)
+    #     d[γ.I[ii]] = dtest[ii]
+    # end
+    #println(maximum(d[γ.wet]))
+    #d .+= y # d stores n
+    d .-= y # .- d
+    #println(maximum(d[γ.wet]))
+    J = d'* (Wⁱ * d)
+    # move this to its own function
     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
 
-    dJdn[wet] = 2Wⁱ*n[wet]
-    dJdd[wet] = Alu'\dJdn[wet]
-    
-    gJ = -dJdd[:,:,1][wet[:,:,1]]
-    #gJ += 2Qⁱ*u[wet[:,:,1]]
+    #dJdn[wet] = 2Wⁱ*[wet]
+    #dJdd[wet] = Alu'\dJdn[wet]
+    gd = 2Wⁱ*d
+    ldiv!(Alu',gd)
+    gJ = gd[surfaceindex(γ.I)]
 
     return J, gJ
 end
 
 """ 
-    function misfit_gridded_data!(J,gJ,u,Alu,y,d,Wⁱ,Qⁱ,wet)
+    function costfunction_obs(u,Alu,y,d,Wⁱ,wet)
+    squared model-data misfit for gridded data
+    controls are a vector input for Optim.jl
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `d`: model constraints
+- `y`: observations on grid
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `γ`: grid
+"""
+function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
+
+    d = dfld[γ.wet]
+    y = view(yfld,γ.wet)
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d)
+    d .-= y # .- d
+
+    if gJ != nothing
+        gd = Vector{T}(undef,length(d))
+        gd = 2Wⁱ*d
+        ldiv!(Alu',gd)
+
+        list = surfaceindex(γ.I)
+        [gJ[ii] = gd[list[ii]] for ii in 1:length(list)]
+        #gJ = gd[surfaceindex(γ.I)]
+        #[gJ[γ.R[ii]] = gd[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+
+        #pick out I[3]==1
+        #gJ = -dJdd[:,:,1][γ.wet[:,:,1]]
+    end
+    
+    if J !=nothing
+        #println(d'* (Wⁱ * d))
+        J =  d'* (Wⁱ * d)       
+        #        return d'* (Wⁱ * d)
+        #return J
+    end
+end
+
+""" 
+    function costfunction_obs!(J,gJ,u,Alu,d,y,Wⁱ,Qⁱ,wet)
     in-place version for computations, no allocation
     squared model-data misfit
     controls are a vector input for Optim.jl
 # Arguments
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `y`: observations on grid
-- `d`: model constraints
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wet`: BitArray ocean mask
-# Output
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
-"""
-#function misfit_gridded_data!(J,gJ,uvec::Vector{T},Alu,y::Array{T,3},d::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
-# eliminate type definitions to help with automatic differentiation
-function misfit_gridded_data!(J,gJ,uvec,Alu,y,d,Wⁱ,wet) 
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-    T = eltype(uvec)
-    u = tracerinit(wet[:,:,1],T)
-    u[wet[:,:,1]] = uvec
-
-    ỹ = tracerinit(wet,T)
-    n = tracerinit(wet,T)
-    
-    dJdn = tracerinit(wet,T)
-    dJdd = tracerinit(wet,T)
-    
-    # first-guess reconstruction of observations
-    Δd = d + Γ(u,wet)
-    
-    ỹ[wet] =  Alu\Δd[wet]
-    n = y .- ỹ
-
-    if gJ != nothing
-        dJdn[wet] = 2Wⁱ*n[wet]
-        dJdd[wet] =  Alu' \ dJdn[wet]
-    
-        gJ .= -dJdd[:,:,1][wet[:,:,1]]
-        #gJ .+= 2Qⁱ*u[wet[:,:,1]]
-    end
-
-    if J != nothing
-        # don't understand why I can't compute J and then return J
-        # when I tried that, J was not passed out of function
-        # because J is a scalar not a vector?
-        return n[wet]'* (Wⁱ * n[wet]) # +  u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
-    end
-    
-end
-
-""" 
-    function misfit_gridded_data_diffable(u,Alu,y,d,Wⁱ,wet)
-    squared model-data misfit (differentiable version)
-    controls are a vector input for Optim.jl
-    only forward program for sake of ReverseDiff.jl
-# Arguments
 - `u`: controls, vector format
 - `Alu`: LU decomposition of water-mass matrix
 - `y`: observations on grid
 - `d`: model constraints
 - `Wⁱ`: inverse of W weighting matrix for observations
-- `wet`: BitArray ocean mask
-# Output
-- `J`: cost function of sum of squared misfits
+- `γ`: grid
 """
-function misfit_gridded_data_diffable(uvec,Alu,y,d,Wⁱ,wet) 
+#function costfunction_obs!(J,gJ,uvec::Vector{T},Alu,d::Array{T,3},y::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
+# eliminate type definitions to help with automatic differentiation
+#function costfunction_obs!(J,gJ,uvec,Alu,d,y,Wⁱ,γ) 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
-    T = eltype(uvec)
-    u = tracerinit(wet[:,:,1],T)
-    u[wet[:,:,1]] = uvec
+#     T = eltype(uvec)
+#     u = tracerinit(γ.wet[:,:,1],T)
+#     u[γ.wet[:,:,1]] = uvec
 
-    ỹ = tracerinit(wet,T)
-    n = tracerinit(wet,T)
+#     ỹ = tracerinit(γ.wet,T)
+#     n = tracerinit(γ.wet,T)
     
-    # first-guess reconstruction of observations
-    Δd = d + Γ(u,wet)
-    #ỹ[wet] =  Alu\Δd[wet]
-    println(typeof(Δd[wet]))
-    ILUZero.ldiv!(Alu,Δd[wet])
-    #ỹ[wet] =  ILUZero.\(Alu,Δd[wet])
-    n = y .- Δd
+#     dJdn = tracerinit(γ.wet,T)
+#     dJdd = tracerinit(γ.wet,T)
     
-    J = n[wet]'* (Wⁱ * n[wet])
-    return J
-end
+#     # first-guess reconstruction of observations
+#     Δd = d + Γ(u,γ.wet)
+    
+#     ỹ[γ.wet] =  Alu\Δd[γ.wet]
+#     n = y .- ỹ
+
+#     if gJ != nothing
+#         dJdn[γ.wet] = 2Wⁱ*n[γ.wet]
+#         dJdd[γ.wet] =  Alu' \ dJdn[γ.wet]
+    
+#         gJ .= -dJdd[:,:,1][γ.wet[:,:,1]]
+#         #gJ .+= 2Qⁱ*u[wet[:,:,1]]
+#     end
+
+#     if J != nothing
+#         # don't understand why I can't compute J and then return J
+#         # when I tried that, J was not passed out of function
+#         # because J is a scalar not a vector?
+#         return n[γ.wet]'* (Wⁱ * n[γ.wet]) # +  u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+#     end
+    
+# end
+
+# """ 
+#     function costfunction_obs_diffable(u,Alu,d,y,Wⁱ,wet)
+#     squared model-data misfit (differentiable version)
+#     controls are a vector input for Optim.jl
+#     only forward program for sake of ReverseDiff.jl
+# # Arguments
+# - `u`: controls, vector format
+# - `Alu`: LU decomposition of water-mass matrix
+# - `y`: observations on grid
+# - `d`: model constraints
+# - `Wⁱ`: inverse of W weighting matrix for observations
+# - `wet`: BitArray ocean mask
+# # Output
+# - `J`: cost function of sum of squared misfits
+# """
+# function costfunction_obs_diffable(uvec,Alu,d,y,Wⁱ,wet) 
+#     # a first guess: observed surface boundary conditions are perfect.
+#     # set surface boundary condition to the observations.
+#     # below surface = 0 % no internal sinks or sources.
+#     T = eltype(uvec)
+#     u = tracerinit(wet[:,:,1],T)
+#     u[wet[:,:,1]] = uvec
+
+#     ỹ = tracerinit(wet,T)
+#     n = tracerinit(wet,T)
+    
+#     # first-guess reconstruction of observations
+#     Δd = d + Γ(u,wet)
+#     #ỹ[wet] =  Alu\Δd[wet]
+#     println(typeof(Δd[wet]))
+#     ILUZero.ldiv!(Alu,Δd[wet])
+#     #ỹ[wet] =  ILUZero.\(Alu,Δd[wet])
+#     n = y .- Δd
+    
+#     J = n[wet]'* (Wⁱ * n[wet])
+#     return J
+# end
 
 """ 
     function steady_inversion(u,Alu,d,γ.wet)
@@ -1180,6 +1365,59 @@ function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) wh
     c[wet] =  Alu\Δd[wet]
 
     return c
+end
+
+"""
+    function wetlocation(γ)
+    Get (lon,lat,depth) tuples of wet locations.
+    Allow a location to be wet if at least one out of 8 nearby gridpoints is wet.
+    Certainly "wet" gridpoints could be defined more strictly.
+# Arguments
+- `γ`: TMI.grid
+# Output
+- `loc`: lon,lat,depth tuple
+"""
+function wetlocation(γ)
+
+    confirmwet = false
+    neighbors  = 8
+    while !confirmwet
+        loc = (rand(0.0:0.1:360.0),
+               rand(-90.0:0.1:90.0),
+               rand(0.0:1.0:5750.0))
+
+        iswet(loc,γ) && return loc
+        println("dry point, try again")
+    end # if not, then start over.
+end
+
+function iswet(loc,γ,neighbors)
+    # two approaches
+    # approach 2
+    # find 8 nearest neighbors
+    Inn = nearestneighbor(loc,γ,neighbors)
+
+    # are any of them wet?
+    for ii = 1:neighbors
+        if γ.wet[Inn[ii]]
+            return true
+        end
+    end
+    return false
+end
+
+function iswet(loc,γ)
+    # two approaches
+    # approach 1
+    wis = interpindex(loc,γ)
+
+    # are any of them wet?
+    # interpolate ones and zeros on to this loc.
+    # if there is land nearby, the interpolated value
+    # will be greater than 0.
+    # this criterion only requires on land point nearby,
+    # where nearby is one of the 8 corners of the cube that contains loc
+    return γ.wet[wis...] > 0
 end
 
 end

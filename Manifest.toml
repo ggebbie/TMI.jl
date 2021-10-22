@@ -421,12 +421,6 @@ git-tree-sha1 = "8a954fed8ac097d5be04921d595f741115c1b2ad"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+0"
 
-[[ILUZero]]
-deps = ["LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "30eab84a73590ed968415a22815a02bddd78f0cc"
-uuid = "88f59080-6952-5380-9ea5-54057fb9a43f"
-version = "0.1.0"
-
 [[IfElse]]
 git-tree-sha1 = "28e837ff3e7a6c3cdb252ce49fb412c8eb3caeef"
 uuid = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
