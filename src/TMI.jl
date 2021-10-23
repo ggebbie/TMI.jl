@@ -560,19 +560,6 @@ function nearestneighbor(loc,γ,N=1)
             Inn[cN2+ii] = CartesianIndex.(γ.I[ijmin[ii]][1],γ.I[ijmin[ii]][2],kmin[2])
         end        
     end
-
-    #Rnn = γ.R[Inn]
-
-    # This code led to a check bounds error.
-    # what if there is no Rnn? Outside of grid. Could move vertically by one.
-    #if iszero(Rnn)
-    #    Inn = CartesianIndex.(γ.I[ijmin][1],γ.I[ijmin][2],kmin-1)
-    #    Rnn = γ.R[Inn]
-    #end
-
-    # if still not available, then give up.
-    # Not sure this makes logical sense anymore.
-    #iszero(Rnn) && println("Warning: outside of grid")
     
     return Inn
 end
@@ -1089,16 +1076,10 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 - `γ`: grid
 """
 #function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,fg!,γ)
+function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
     # ### added this
-    # # check gradients 
-    # fg(x) = costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
-    # f(x) = fg(x)[1]
-    # J̃₀,gJ₀ = fg(u₀)
-    # println(J̃₀)
-    # println(gJ₀)
-    # fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+     fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1297,60 +1278,6 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,
 end
 
 """ 
-    function costfunction_obs!(J,gJ,u,Alu,d,y,Wⁱ,Qⁱ,wet)
-    in-place version for computations, no allocation
-    squared model-data misfit
-    controls are a vector input for Optim.jl
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `y`: observations on grid
-- `d`: model constraints
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `γ`: grid
-"""
-#function costfunction_obs!(J,gJ,uvec::Vector{T},Alu,d::Array{T,3},y::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::T,wet::BitArray{3}) where T <: Real
-# eliminate type definitions to help with automatic differentiation
-#function costfunction_obs!(J,gJ,uvec,Alu,d,y,Wⁱ,γ) 
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-#     T = eltype(uvec)
-#     u = tracerinit(γ.wet[:,:,1],T)
-#     u[γ.wet[:,:,1]] = uvec
-
-#     ỹ = tracerinit(γ.wet,T)
-#     n = tracerinit(γ.wet,T)
-    
-#     dJdn = tracerinit(γ.wet,T)
-#     dJdd = tracerinit(γ.wet,T)
-    
-#     # first-guess reconstruction of observations
-#     Δd = d + Γ(u,γ.wet)
-    
-#     ỹ[γ.wet] =  Alu\Δd[γ.wet]
-#     n = y .- ỹ
-
-#     if gJ != nothing
-#         dJdn[γ.wet] = 2Wⁱ*n[γ.wet]
-#         dJdd[γ.wet] =  Alu' \ dJdn[γ.wet]
-    
-#         gJ .= -dJdd[:,:,1][γ.wet[:,:,1]]
-#         #gJ .+= 2Qⁱ*u[wet[:,:,1]]
-#     end
-
-#     if J != nothing
-#         # don't understand why I can't compute J and then return J
-#         # when I tried that, J was not passed out of function
-#         # because J is a scalar not a vector?
-#         return n[γ.wet]'* (Wⁱ * n[γ.wet]) # +  u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
-#     end
-    
-# end
-
-""" 
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
@@ -1500,7 +1427,6 @@ function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diago
     return J, gJ
 end
 
-
 """ 
     function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
@@ -1524,12 +1450,10 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
     if gJ != nothing
-        list = surfaceindex(γ.I)
-        [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
         #gJ = 2*(Q⁻*u)
     end
     if J != nothing
-        Jcontrol = u'*(Q⁻*u)
+
     end
 
     # use in-place functions: more performant
@@ -1542,8 +1466,6 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
     if gJ != nothing    
         gỹ = 2*(Wⁱ*ỹ)
 
-        #gd = Array{T,3}(undef,size(dfld))
-        #gd = Vector{T}(undef,sum(γ.wet))
         gd = zeros(T,sum(γ.wet))
         for ii in eachindex(y)
             # interpweights repeats some calculations
@@ -1552,12 +1474,14 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
         # do Eᵀ gỹ 
         ldiv!(Alu',gd)
         list = surfaceindex(γ.I)
-        #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
+
+        [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
         [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
 
     end
 
     if J != nothing
+        Jcontrol = u'*(Q⁻*u)
         return  ỹ'* (Wⁱ * ỹ) + Jcontrol
     end
 end
@@ -1584,7 +1508,7 @@ function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) wh
     n = tracerinit(wet,T)
     
     # first-guess reconstruction of observations
-    Δd = d + Γ(u,wet)
+    Δd = d + control2state(u,wet)
     c[wet] =  Alu\Δd[wet]
 
     return c

@@ -41,40 +41,13 @@ y, W⁻, ctrue = sample_observations(TMIversion,"θ")
 d₀ = tracerinit(γ.wet)
 d₀[:,:,1] = y[:,:,1]
 
-# check gradients in costfunction_gridded_data!
-fg(x) = costfunction_gridded_data(x,Alu,y,d₀,W⁻,γ.wet)
-J̃₀,gJ₀ = fg(u₀)
-fg!(F,G,x) = costfunction_gridded_data!(F,G,x,Alu,y,d₀,W⁻,γ.wet)
-
-# check with forward differences
-ϵ = 1e-5
-ii = rand(1:sum(γ.wet[:,:,1]))
-δu = copy(u₀); δu[ii] += ϵ
-∇f_finite = (fg(δu)[1] - fg(u₀)[1])/ϵ # `[1]` to pick out cost function
-
-fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
-∇f = gJ₀[ii]
-
-# error less than 10 percent?
-@test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-
-# sophisticated method: doesn't work due to issue #17
-#gmisfitForward = x -> ForwardDiff.gradient(misfit, x); # g = ∇f
-#gJforward = gmisfitForward(u₀)
-
-# gradient check with autodiff? doesn't work: issue #17
-#test = gradient(misfit,u₀)
+fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
 
 # filter the data with an Optim.jl method
-out = filterdata(u₀,Alu,y,d₀,W⁻,γ.wet)
-
-# was cost function decreased?
-@test out.minimum < J̃₀
+out = filterdata(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
 # reconstruct by hand to double-check.
 ũ = out.minimizer
-J̃,gJ̃ = fg(ũ)
-@test J̃ < J̃₀
 
 # reconstruct tracer map
 c₀ = steady_inversion(u₀,Alu,d₀,γ.wet)

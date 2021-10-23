@@ -166,8 +166,6 @@ using Revise, TMI, Test
         fg(x) = costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
         f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
-
-        #fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,locs,γ)
         fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
         ϵ = 1e-5
@@ -183,9 +181,7 @@ using Revise, TMI, Test
         @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
         # optimize the sparse data map with an Optim.jl method
-        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,fg!,γ)
-        #out = sparsedatamap(u₀,fg!)
-
+        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
         # was cost function decreased?
         @test out.minimum < J̃₀
