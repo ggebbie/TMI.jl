@@ -784,8 +784,8 @@ end
 function control2state!(c::Array{T,3},u::Vector{T},γ) where T<: Real
     #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
 #    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-    [c[γ.I[ii]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-    return c
+    list = surfaceindex(γ.I)
+    [c[γ.I[ii]] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
 """ 
@@ -797,8 +797,8 @@ end
 - `wet`::BitArray mask of ocean points
 """
 function control2state!(c::Vector{T},u::Vector{T},γ) where T<: Real
-    [c[ii] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-    return c
+    list = surfaceindex(γ.I)
+    [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
 function state2obs(cvec,wis,γ)
@@ -1246,8 +1246,10 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
 
     #dJdn[wet] = 2Wⁱ*[wet]
     #dJdd[wet] = Alu'\dJdn[wet]
-    gd = 2Wⁱ*d
+    gd = 2*(Wⁱ*d)
     ldiv!(Alu',gd)
+
+    # "transpose" of control2state! operation
     gJ = gd[surfaceindex(γ.I)]
 
     return J, gJ
@@ -1380,7 +1382,10 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     gỹ = 2*(Wⁱ*ỹ)
 
     #gd = Array{T,3}(undef,size(dfld))
-    gd = Vector{T}(undef,sum(γ.wet))
+    #gd = Vector{T}(undef,sum(γ.wet))
+    gd = zeros(T,sum(γ.wet))
+    
+    # transpose of "E" operation in state2obs
     for ii in eachindex(y)
         # interpweights repeats some calculations
         gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
@@ -1424,7 +1429,8 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
         gỹ = 2*(Wⁱ*ỹ)
 
         #gd = Array{T,3}(undef,size(dfld))
-        gd = Vector{T}(undef,sum(γ.wet))
+        #gd = Vector{T}(undef,sum(γ.wet))
+        gd = zeros(T,sum(γ.wet))
         for ii in eachindex(y)
             # interpweights repeats some calculations
             gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
@@ -1441,15 +1447,59 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
     end
 end
 
-function costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+""" 
+    function costfunction(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+    Issue: couldn't figure out how to nest with costfunction_obs!
+# Arguments
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `dfld`: model constraints
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `Q⁻`: weights for control vector
+- `γ`: grid
+# Output
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+"""
+function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
 
-    J,gJ =  costfunction_obs(x,Alu,d₀,y,W⁻,wis,locs,γ)
+    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
+    list = surfaceindex(γ.I)
+    gJ = Vector{T}(undef,size(u))
+    [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
+    Jcontrol = u'*(Q⁻*u)
 
-    J += x'*(Q⁻*x)
-    gJ .+= 2*(Q⁻*x)
-    
+    # use in-place functions: more performant
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d) # d stores c̃
+
+    ỹ = state2obs(d,wis,γ)
+    ỹ .-= y # stores n, data-model misfit
+
+    gỹ = 2*(Wⁱ*ỹ)
+
+    #gd = Array{T,3}(undef,size(dfld))
+    #gd = Vector{T}(undef,sum(γ.wet))
+    gd = zeros(T,sum(γ.wet))
+    for ii in eachindex(y)
+        # interpweights repeats some calculations
+        gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+    end
+    # do Eᵀ gỹ 
+    ldiv!(Alu',gd)
+    list = surfaceindex(γ.I)
+    #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
+    [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
+
+    J = ỹ'* (Wⁱ * ỹ) + Jcontrol
     return J, gJ
 end
+
 
 """ 
     function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
@@ -1493,7 +1543,8 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
         gỹ = 2*(Wⁱ*ỹ)
 
         #gd = Array{T,3}(undef,size(dfld))
-        gd = Vector{T}(undef,sum(γ.wet))
+        #gd = Vector{T}(undef,sum(γ.wet))
+        gd = zeros(T,sum(γ.wet))
         for ii in eachindex(y)
             # interpweights repeats some calculations
             gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
