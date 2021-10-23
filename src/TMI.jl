@@ -4,7 +4,7 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations
+    Interpolations, LineSearches
 
 export config, download,
     vec2fld, fld2vec, depthindex, surfaceindex,
@@ -17,6 +17,7 @@ export config, download,
     nearestneighbormask, horizontaldistance,
     readtracer, cartesianindexZYX, Γ,
     costfunction_obs, costfunction_obs!,
+    costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, sample_observations, filterdata,
     steady_inversion,
@@ -684,7 +685,7 @@ end
 - `lims`: contour levels
 """
 function dyeplot(lat, depth, vals, lims)
-    #println("turned off due to matplotlib CI setup issue")
+
     #calc fignum - based on current number of figures
     figure()
     contourf(lat, depth, vals, lims) 
@@ -747,7 +748,6 @@ function control2state(tracer2D::Matrix{T},wet) where T<: Real
     # consider whether land should be nothing or missing
     tracer3D[wet] .= zero(T)
     tracer3D[.!wet] .= zero(T)/zero(T)
-    println("here")
     tracer3D[:,:,1] = tracer2D
     return tracer3D
 end
@@ -1088,11 +1088,22 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,fg!,γ)
+#function sparsedatamap(u₀,fg!)
+function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,fg!,γ)
 
+    # ### added this
+    # # check gradients 
+    # fg(x) = costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+    # f(x) = fg(x)[1]
+    # J̃₀,gJ₀ = fg(u₀)
+    # println(J̃₀)
+    # println(gJ₀)
+    # fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+    
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 5))
+#    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
     return out    
 end
@@ -1229,7 +1240,6 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores -ỹ
     d .-= y # d stores n
-    println(maximum(d))
     J = d'* (Wⁱ * d)
     # move this to its own function
     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
@@ -1280,10 +1290,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,
     end
     
     if J !=nothing
-        #println(d'* (Wⁱ * d))
         return  d'* (Wⁱ * d)       
-        #        return d'* (Wⁱ * d)
-        #return J
     end
 end
 
@@ -1341,44 +1348,6 @@ end
     
 # end
 
-# """ 
-#     function costfunction_obs_diffable(u,Alu,d,y,Wⁱ,wet)
-#     squared model-data misfit (differentiable version)
-#     controls are a vector input for Optim.jl
-#     only forward program for sake of ReverseDiff.jl
-# # Arguments
-# - `u`: controls, vector format
-# - `Alu`: LU decomposition of water-mass matrix
-# - `y`: observations on grid
-# - `d`: model constraints
-# - `Wⁱ`: inverse of W weighting matrix for observations
-# - `wet`: BitArray ocean mask
-# # Output
-# - `J`: cost function of sum of squared misfits
-# """
-# function costfunction_obs_diffable(uvec,Alu,d,y,Wⁱ,wet) 
-#     # a first guess: observed surface boundary conditions are perfect.
-#     # set surface boundary condition to the observations.
-#     # below surface = 0 % no internal sinks or sources.
-#     T = eltype(uvec)
-#     u = tracerinit(wet[:,:,1],T)
-#     u[wet[:,:,1]] = uvec
-
-#     ỹ = tracerinit(wet,T)
-#     n = tracerinit(wet,T)
-    
-#     # first-guess reconstruction of observations
-#     Δd = d + Γ(u,wet)
-#     #ỹ[wet] =  Alu\Δd[wet]
-#     println(typeof(Δd[wet]))
-#     ILUZero.ldiv!(Alu,Δd[wet])
-#     #ỹ[wet] =  ILUZero.\(Alu,Δd[wet])
-#     n = y .- Δd
-    
-#     J = n[wet]'* (Wⁱ * n[wet])
-#     return J
-# end
-
 """ 
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
@@ -1425,7 +1394,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
 end
 
 """ 
-    function costfunction_obs!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,γ)
+    function costfunction_obs!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
 # Arguments
@@ -1469,6 +1438,76 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
 
     if J != nothing
         return  ỹ'* (Wⁱ * ỹ)
+    end
+end
+
+function costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+
+    J,gJ =  costfunction_obs(x,Alu,d₀,y,W⁻,wis,locs,γ)
+
+    J += x'*(Q⁻*x)
+    gJ .+= 2*(Q⁻*x)
+    
+    return J, gJ
+end
+
+""" 
+    function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+    Issue: couldn't figure out how to nest with costfunction_obs!
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `dfld`: model constraints
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `Q⁻`: weights for control vector
+- `γ`: grid
+"""
+function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
+
+    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
+
+    if gJ != nothing
+        list = surfaceindex(γ.I)
+        [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
+        #gJ = 2*(Q⁻*u)
+    end
+    if J != nothing
+        Jcontrol = u'*(Q⁻*u)
+    end
+
+    # use in-place functions: more performant
+    control2state!(d,u,γ) # d stores Δd
+    ldiv!(Alu,d) # d stores c̃
+
+    ỹ = state2obs(d,wis,γ)
+    ỹ .-= y # stores n, data-model misfit
+
+    if gJ != nothing    
+        gỹ = 2*(Wⁱ*ỹ)
+
+        #gd = Array{T,3}(undef,size(dfld))
+        gd = Vector{T}(undef,sum(γ.wet))
+        for ii in eachindex(y)
+            # interpweights repeats some calculations
+            gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+        end
+        # do Eᵀ gỹ 
+        ldiv!(Alu',gd)
+        list = surfaceindex(γ.I)
+        #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
+        [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
+
+    end
+
+    if J != nothing
+        return  ỹ'* (Wⁱ * ỹ) + Jcontrol
     end
 end
 
@@ -1554,7 +1593,7 @@ function iswet(loc,γ)
     # will be greater than 0.
     # this criterion only requires on land point nearby,
     # where nearby is one of the 8 corners of the cube that contains loc
-    return wetwrap[wis...] > 0
+    return wetwrap[wis...] > 0.9
 end
 
 end

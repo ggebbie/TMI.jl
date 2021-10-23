@@ -125,6 +125,7 @@ using Revise, TMI, Test
         ∇f = gJ₀[ii]
         
         # error less than 10 percent?
+        println("Percent error ",100*(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
         # was cost function decreased?
@@ -148,27 +149,27 @@ using Revise, TMI, Test
         u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",20)
+        y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",N)
 
+        # does this help optimization stay stable?
+        #W⁻ *= 1.0/100.0
+            
         # make a silly first guess for surface
         d₀ = tracerinit(γ.wet)
         [d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-
-        # check gradients in misfit_gridded_data!
-        fg(x) = costfunction_obs(x,Alu,d₀,y,W⁻,wis,locs,γ)
+                
+        Q⁻ = 1.0/(5.0^2)
+        #Q⁻ = 10.0
+        
+        # gradient check
+        # check with forward differences
+        fg(x) = costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
         f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
 
-        fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,locs,γ)
+        #fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,locs,γ)
+        fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
-        ## NEXT STEP: SETUP ! FUNCTION. TEST GRADIENT. OPTIMIZE.
-        #fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,wis,γ)
-        fg!(J̃₀,gJ₀,u₀)
-        # filter the data with an Optim.jl method
-        
-        out = sparsedatamap(u₀,Alu,y,d₀,W⁻,fg!,γ)
-
-        # check with forward differences
         ϵ = 1e-5
         ii = rand(1:sum(γ.wet[:,:,1]))
         δu = copy(u₀); δu[ii] += ϵ
@@ -176,11 +177,15 @@ using Revise, TMI, Test
 
         fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
         ∇f = gJ₀[ii]
-        
+
         # error less than 10 percent?
-        
         println("Percent error ",100*(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+
+        # optimize the sparse data map with an Optim.jl method
+        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,fg!,γ)
+        #out = sparsedatamap(u₀,fg!)
+
 
         # was cost function decreased?
         @test out.minimum < J̃₀
