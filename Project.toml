@@ -39,7 +39,6 @@ Plots = "1"
 PyCall = "1"
 PyPlot = "2"
 Revise = "3"
-Roots = "1"
 julia = "1.6"
 
 [extras]
