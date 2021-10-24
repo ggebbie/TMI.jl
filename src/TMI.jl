@@ -792,7 +792,10 @@ function state2obs(cvec,wis,γ)
     # interpolate onto data points
     N = length(wis)
     sumwis = Vector{Float64}(undef,N)
-    [sumwis[i] = γ.wet[wis[i]...] for i in eachindex(wis)]
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+
+    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # reconstruct the observations
     ỹ = Vector{Float64}(undef,N)
@@ -1161,7 +1164,9 @@ function sample_observations(TMIversion,variable,N)
     # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
     sumwis = Vector{Float64}(undef,N)
-    [sumwis[i] = γ.wet[wis[i]...] for i in 1:N]
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+    [sumwis[i] = wetwrap[wis[i]...] for i in 1:N]
 
     # sample the true field at these random locations
     ytrue = Vector{Float64}(undef,N)
