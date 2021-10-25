@@ -6,7 +6,7 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     PyPlot, PyCall, Distributions, Optim,
     Interpolations, LineSearches
 
-export config, download,
+export config, config_from_mat, download,
     vec2fld, fld2vec, depthindex, surfaceindex,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
@@ -115,6 +115,55 @@ function config(TMIversion)
 
     return  A, Alu, γ, TMIfile
 
+end
+
+"""
+Configure from original MATLAB output
+"""
+function config_from_mat(TMIversion)
+
+    #- `url`: Google Drive URL for data
+    url = maturl(TMIversion)
+    TMIfile = datadir("TMI_"*TMIversion*".mat")
+    
+    !isdir(datadir()) ? mkpath(datadir()) : nothing
+    !isfile(TMIfile) ? download(url,datadir()) : nothing
+
+    # ncdata = NetCDF.open(TMIfile)
+    # #println(ncdata)
+    
+    # # move this to runtests.jl to see if it is read correctly
+    # # Azyx = watermassmatrixZYX(TMIfile)
+
+    # # make a sample field from zyx cartesian indices
+    # Izyx = cartesianindexZYX(TMIfile)
+
+    # # make a mask
+    # wet = BitArray{3}(undef,maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
+    # fill!(wet,0)
+    # wet[Izyx] .= 1
+
+    # # if a tracer is available, should be consistent with this definition
+    # #wet = .!isnan.(c)
+    
+    # # need to write this function
+    # I = cartesianindexXYZ(wet)
+
+    # R = linearindexXYZ(wet)
+
+    # A = watermassmatrixXYZ(TMIfile,R)
+    # #R = R[ wet ] # eliminate land points
+
+    # # LU factorization for efficient matrix inversions
+    # Alu = lu(A)
+    
+    # # get properties of grid
+    # lat,lon,depth = gridprops(TMIfile)
+
+    # γ = grid(lon,lat,depth,I,R,wet)
+
+    # return  A, Alu, γ, TMIfile
+    return TMIfile
 end
 
 """
@@ -848,12 +897,32 @@ end
 - `url`: location (URL) for download
 """
 function gdriveurl(TMIname)
-    if TMIname == "TMI_2010_2012_4x4x33"
+    if TMIname == "modern_4x4x33_GH10_GH12"
         #        url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
     else
         url = nothing
     end
+end
+
+
+""" 
+    function maturl(TMIversion)
+    Find *mat file here.
+    placeholder function to give location (URL) of Google Drive input
+    in the future, consider a struct or Dict that describes all TMI versions.
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+# Output
+- `url`: location (URL) for download
+"""
+function maturl(TMIname)
+    if TMIname == "modern_4x4x33_GH10_GH12" 
+        url = "https://docs.google.com/uc?export=download&id=15O3QBzeSUIsuF7lZMbUixzZuEwDiaAdo"
+    else
+        url = nothing
+    end
+    return url
 end
 
 """ 
