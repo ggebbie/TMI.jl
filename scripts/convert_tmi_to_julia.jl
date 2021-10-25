@@ -58,44 +58,44 @@ TMIgrids = Dict("lon" => convert2intvec!(Avars["LON"]),
 #                "Itmi" => Itmi,
 #                 "A" => Avars["A"])
                  
-TMIfields = Dict("qpo4" => initfld(Avars["dP"],Itmi),
+TMIfields = Dict("ΔPO₄" => initfld(Avars["dP"],Itmi),
                 "θ" => initfld(tracervars["Tobs"],Itmi),
                 "σθ" => initfld(tracervars["Terr"],Itmi),
-                "sp" => initfld(tracervars["Sobs"],Itmi),
-                "σsp" => initfld(tracervars["Serr"],Itmi),
-                "δ18ow" => initfld(tracervars["O18obs"],Itmi),
-                "σδ18ow" => initfld(tracervars["O18err"],Itmi),
-                "po4" => initfld(tracervars["Pobs"],Itmi),
-                "σpo4" => initfld(tracervars["Perr"],Itmi),
-                "no3" => initfld(tracervars["Nobs"],Itmi),
-                "σno3" => initfld(tracervars["Nerr"],Itmi),
-                "o2" => initfld(tracervars["Oobs"],Itmi),
-                "σo2" => initfld(tracervars["Oerr"],Itmi),
-                "δ13c" => initfld(tracervars["C13obs"],Itmi),
-                "σδ13c" => initfld(tracervars["C13err"],Itmi))
+                "Sp" => initfld(tracervars["Sobs"],Itmi),
+                "σSp" => initfld(tracervars["Serr"],Itmi),
+                "δ¹⁸Ow" => initfld(tracervars["O18obs"],Itmi),
+                "σδ¹⁸Ow" => initfld(tracervars["O18err"],Itmi),
+                "PO₄" => initfld(tracervars["Pobs"],Itmi),
+                "σPO₄" => initfld(tracervars["Perr"],Itmi),
+                "NO₃" => initfld(tracervars["Nobs"],Itmi),
+                "σNO₃" => initfld(tracervars["Nerr"],Itmi),
+                "O₂" => initfld(tracervars["Oobs"],Itmi),
+                "σO₂" => initfld(tracervars["Oerr"],Itmi),
+                "δ¹³C" => initfld(tracervars["C13obs"],Itmi),
+                "σδ¹³C" => initfld(tracervars["C13err"],Itmi))
 
 ## write to NetCDF
 filenetcdf = "TMI_4deg_2010.nc"
 
-TMIgridsatts = Dict("lon" => Dict("longname" => "Longitude", "units" => "degrees east"),
-                    "lat" => Dict("longname" => "Latitude", "units" => "degrees north"),
+TMIgridsatts = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
+                    "lat" => Dict("longname" => "Latitude", "units" => "°N"),
                     "depth" => Dict("longname" => "depth", "units" => "m"))
 
 TMIfieldsatts = Dict("θ" => Dict("longname" => "potential temperature", "units" => "°C"),
                      "σθ" => Dict("longname" => "1σ standard error in potential temperature", "units" => "°C"),
-                     "sp" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
-                     "σsp" => Dict("longname" => "1σ standard error in practical salinity", "units" => "PSS-78"),
-                     "δ18ow" => Dict("longname" => "oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
-                     "σδ18ow" => Dict("longname" => "1σ standard error in oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
-                     "po4" => Dict("longname" => "phosphate", "units" => "μmol/kg"),
-                     "σpo4" => Dict("longname" => "1σ standard error in phosphate", "units" => "μmol/kg"),
-                     "qpo4" => Dict("longname" => "local source of phosphate", "units" => "μmol/kg"),
-                     "no3" => Dict("longname" => "nitrate", "units" => "μmol/kg"),
-                     "σno3" => Dict("longname" => "1σ standard error in nitrate", "units" => "μmol/kg"),
-                     "o2" => Dict("longname" => "dissolved oxygen", "units" => "μmol/kg"),
-                     "σo2" => Dict("longname" => "1σ standard error in dissolved oxygen", "units" => "μmol/kg"),
-                     "δ13c" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
-                     "σδ13c" => Dict("longname" => "1σ standard error in carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"))
+                     "Sp" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
+                     "σSp" => Dict("longname" => "1σ standard error in practical salinity", "units" => "PSS-78"),
+                     "δ¹⁸Ow" => Dict("longname" => "oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
+                     "σδ¹⁸Ow" => Dict("longname" => "1σ standard error in oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
+                     "PO₄" => Dict("longname" => "phosphate", "units" => "μmol/kg"),
+                     "σPO₄" => Dict("longname" => "1σ standard error in phosphate", "units" => "μmol/kg"),
+                     "qPO₄" => Dict("longname" => "local source of phosphate", "units" => "μmol/kg"),
+                     "NO₃" => Dict("longname" => "nitrate", "units" => "μmol/kg"),
+                     "σNO₃" => Dict("longname" => "1σ standard error in nitrate", "units" => "μmol/kg"),
+                     "O₂" => Dict("longname" => "dissolved oxygen", "units" => "μmol/kg"),
+                     "σO₂" => Dict("longname" => "1σ standard error in dissolved oxygen", "units" => "μmol/kg"),
+                     "δ¹³C" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
+                     "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"))
             
 
 # make new netcdf file.
@@ -214,19 +214,5 @@ nfield = size(A,1)
     #stringer = $key=value
 #    eval($key=value)
 #end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
