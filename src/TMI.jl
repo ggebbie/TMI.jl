@@ -76,8 +76,8 @@ function config(TMIversion)
     #- `url`: Google Drive URL for data
     url = gdriveurl(TMIversion)
     
-    TMIfile = datadir(TMIversion*".nc")
-    !isdir(datadir()) ? mkpath(datadir()) : nothing
+    TMIfile = datadir("TMI_"*TMIversion*".nc")
+    !isdir(datadir()) ? mkpoath(datadir()) : nothing
     !isfile(TMIfile) ? download(url,datadir()) : nothing
 
     ncdata = NetCDF.open(TMIfile)
@@ -125,10 +125,14 @@ function config_from_mat(TMIversion)
     #- `url`: Google Drive URL for data
     url = maturl(TMIversion)
     TMIfile = datadir("TMI_"*TMIversion*".mat")
-    
+    println(TMIfile)
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfile) ? download(url,datadir()) : nothing
+    !isfile(TMIfile) ? out = download(url,datadir()) : nothing
 
+    # Not sure why Google Drive downloads to wrong destination
+    # fix it.
+    mv(out,TMIfile)
+    
     # ncdata = NetCDF.open(TMIfile)
     # #println(ncdata)
     

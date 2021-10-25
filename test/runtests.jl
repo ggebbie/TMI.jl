@@ -2,7 +2,7 @@ using Revise, TMI, Test
 
 @testset "TMI.jl" begin
 
-    TMIversion = "TMI_2010_2012_4x4x33"
+    TMIversion = "modern_4x4x33_GH10_GH12"
     A, Alu, γ, TMIfile = config(TMIversion)
     
     ############################
