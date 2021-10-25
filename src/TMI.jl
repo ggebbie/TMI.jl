@@ -1171,11 +1171,13 @@ function sample_observations(TMIversion,variable,N)
     # sample the true field at these random locations
     ytrue = Vector{Float64}(undef,N)
     replace!(θtrue,NaN=>0.0)
-    [ytrue[i] = θtrue[wis[i]...]/sumwis[i] for i in 1:N]
+    θwrap = view(θtrue,list,:,:)
+    [ytrue[i] = θwrap[wis[i]...]/sumwis[i] for i in 1:N]
 
     # interpolate the standard deviation of expected error
     σtrue = Vector{Float64}(undef,N)
-    [σtrue[i] = σθ[wis[i]...]/sumwis[i] for i in 1:N]
+    σwrap = view(σθ,list,:,:)
+    [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
 
     ntrue = rand(Normal(),N) .* σtrue
     y = ytrue .+ ntrue
