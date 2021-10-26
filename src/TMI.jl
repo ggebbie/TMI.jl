@@ -4,7 +4,7 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches
+    Interpolations, LineSearches, MAT
 
 export config, config_from_mat, download,
     vec2fld, fld2vec, depthindex, surfaceindex,
@@ -77,7 +77,7 @@ function config(TMIversion)
     url = gdriveurl(TMIversion)
     
     TMIfile = datadir("TMI_"*TMIversion*".nc")
-    !isdir(datadir()) ? mkpoath(datadir()) : nothing
+    !isdir(datadir()) ? mkpath(datadir()) : nothing
     !isfile(TMIfile) ? download(url,datadir()) : nothing
 
     ncdata = NetCDF.open(TMIfile)
@@ -125,14 +125,14 @@ function config_from_mat(TMIversion)
     #- `url`: Google Drive URL for data
     url = maturl(TMIversion)
     TMIfile = datadir("TMI_"*TMIversion*".mat")
+    TMIfilegz = TMIfile*".gz"
     println(TMIfile)
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfile) ? out = download(url,datadir()) : nothing
+    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+    # cloak mat file in gz to get Google Drive spam filter to shut down
+    isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing 
+    matvars = matread(TMIfile)
 
-    # Not sure why Google Drive downloads to wrong destination
-    # fix it.
-    mv(out,TMIfile)
-    
     # ncdata = NetCDF.open(TMIfile)
     # #println(ncdata)
     
@@ -923,6 +923,9 @@ end
 function maturl(TMIname)
     if TMIname == "modern_4x4x33_GH10_GH12" 
         url = "https://docs.google.com/uc?export=download&id=15O3QBzeSUIsuF7lZMbUixzZuEwDiaAdo"
+    elseif TMIname == "modern_90x45x33_GH10_GH12"
+        #url = "https://docs.google.com/uc?export=download&id=182vbIaXpssF3-ZlkqupPAUSoSiU8BCi7"
+        url = "https://docs.google.com/uc?export=download&id=1b9fVSUdrV-bGyZnRlGfwFmAM7jVjjw4j"
     else
         url = nothing
     end
