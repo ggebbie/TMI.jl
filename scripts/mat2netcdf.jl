@@ -1,21 +1,15 @@
 # TMI solutions were originally saved in mat format. Here convert to NetCDF using 
 using Revise, MAT, LinearAlgebra, SparseArrays, TMI, DrWatson
 
-TMIversion = "modern_4x4x33_GH10_GH12"
+TMIversion = "modern_90x45x33_GH10_GH12"
 
 A, Alu, γ, TMIfile = config(TMIversion)
 
 TMIfile = config_from_mat(TMIversion)
 
-on download(url,inputdir)
- 
 # load circulation file
 Afile = "/home/gebbie/Dropbox/mcode/TMI_v8/A_4deg_2010.mat"
 Avars = matread(Afile)
-
-# TMI_modern_4x4x33_GH2010_GH2012.mat
-https://drive.google.com/file/d/15O3QBzeSUIsuF7lZMbUixzZuEwDiaAdo/view?usp=sharing
-
 
 tracerfile = "/home/gebbie/Dropbox/mcode/TMI_v8/tracerobs_4deg_33lev_TMI.mat"
 tracervars = matread(tracerfile)

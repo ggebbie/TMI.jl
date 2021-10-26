@@ -6,7 +6,7 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     PyPlot, PyCall, Distributions, Optim,
     Interpolations, LineSearches, MAT
 
-export config, config_from_mat, download,
+export config, config_from_mat, 
     vec2fld, fld2vec, depthindex, surfaceindex,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
@@ -129,6 +129,7 @@ function config_from_mat(TMIversion)
     println(TMIfile)
     !isdir(datadir()) ? mkpath(datadir()) : nothing
     !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+
     # cloak mat file in gz to get Google Drive spam filter to shut down
     isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing 
     matvars = matread(TMIfile)
@@ -167,7 +168,7 @@ function config_from_mat(TMIversion)
     # γ = grid(lon,lat,depth,I,R,wet)
 
     # return  A, Alu, γ, TMIfile
-    return TMIfile
+    return TMIfile, matvars
 end
 
 """
@@ -243,10 +244,16 @@ end
 - `A`: water-mass matrix
 """
 function watermassmatrixZYX(file)
-    i = ncread(file,"i")
-    j = ncread(file,"j")
-    m = ncread(file,"m")
-    A = sparse(i,j,m)
+    if file[end-1:end] == "nc"
+        i = ncread(file,"i")
+        j = ncread(file,"j")
+        m = ncread(file,"m")
+        A = sparse(i,j,m)
+    elseif file[end-2:end] == "mat"
+        fname = matopen(file)
+        A = read(fname,"A")
+        close(fname)
+    end
     return A
 end
 
@@ -463,27 +470,27 @@ function zonalgriddist(γ::grid)
     return dx
 end
 
-"""
-    function download(url,inputdir)
-    Read and assemble all TMI inputs.
-# Arguments
-- `url`: Google Drive location of TMI input
-- `inputdir`: input directory location to store file
-# Output
-- none
-"""
-function download(url,inputdir)
-    # later include options and move these settings to arguments.
+# """
+#     function download(url,inputdir)
+#     Read and assemble all TMI inputs.
+# # Arguments
+# - `url`: Google Drive location of TMI input
+# - `inputdir`: input directory location to store file
+# # Output
+# - none
+# """
+# function download(url,inputdir)
+#     # later include options and move these settings to arguments.
 
-    # make sure input dir exists
-    !isdir(inputdir) ? mkdir(inputdir) : nothing
+#     # make sure input dir exists
+#     !isdir(inputdir) ? mkdir(inputdir) : nothing
 
-    # two ways to download
-    # 1. Use `run` for a shell command (less portable). Also difficult for Google Drive. See downloadTMIfromGoogleDrive.sh.
+#     # two ways to download
+#     # 1. Use `run` for a shell command (less portable). Also difficult for Google Drive. See downloadTMIfromGoogleDrive.sh.
 
-    # 2. Use GoogleDrive.jl package
-    google_download(url,inputdir)
-end
+#     # 2. Use GoogleDrive.jl package
+#     google_download(url,inputdir)
+# end
 
 """
     function vec2fld
