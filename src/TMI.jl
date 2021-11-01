@@ -20,7 +20,7 @@ export config, config_from_mat, config_from_nc,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, sample_observations, filterdata,
+    surfaceorigin, sample_observations, steadyclimatology,
     steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
@@ -62,75 +62,6 @@ struct grid
 end
 
 """
-function config
-Configure the TMI environment. Call NetCDF or MATLAB version.
-"""
-function config()
-
-end
-
-"""
-    function config_from_nc_orig(TMIversion)
-    Save this artifact of loading nc file that approximated mat file.
-# Arguments
-- `TMIversion`: TMI version for water-mass/circulation model
-# Output
-- `A`: TMI steady-state water-mass matrix
-- `Alu`: LU decomposition of A
-- `γ`: TMI grid properties
-- `TMIfile`: TMI file name
-"""
-function config_from_nc_orig(TMIversion)
-
-    #- `url`: Google Drive URL for data
-    url = gdriveurl(TMIversion)
-    
-    TMIfile = datadir("TMI_"*TMIversion*".nc")
-    println(url)
-    println(TMIfile)
-    !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfile) ? google_download(url,datadir()) : nothing
-
-    ncdata = NetCDF.open(TMIfile)
-    #println(ncdata)
-    
-    # move this to runtests.jl to see if it is read correctly
-    # Azyx = watermassmatrix(TMIfile)
-
-    # make a sample field from zyx cartesian indices
-    Izyx = cartesianindex(TMIfile)
-
-    # make a mask
-    wet = BitArray{3}(undef,maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
-    fill!(wet,0)
-    wet[Izyx] .= 1
-
-    # if a tracer is available, should be consistent with this definition
-    #wet = .!isnan.(c)
-
-    # go to xyz coordinate system to conform with convention
-    # this puts a whole level (i.e., sfc) in contiguous memory
-    # profiles are not contiguous like zyx format
-    # Performance considerations unknown.
-    I = cartesianindex(wet)
-
-    R = linearindex(wet)
-
-    A = Azyx2xyz(TMIfile,R)
-
-    # LU factorization for efficient matrix inversions
-    Alu = lu(A)
-    
-    # get properties of grid
-    lat,lon,depth = gridprops(TMIfile)
-    γ = grid(lon,lat,depth,I,R,wet)
-
-    return  A, Alu, γ, TMIfile
-
-end
-
-
-"""
     function config_from_nc(TMIversion)
     Configure TMI environment from NetCDF input file.
 # Arguments
@@ -144,7 +75,7 @@ end
 function config_from_nc(TMIversion)
 
     #- `url`: Google Drive URL for data
-    url = gdriveurl(TMIversion)
+    url = ncurl(TMIversion)
     
     TMIfile = datadir("TMI_"*TMIversion*".nc")
     println(url)
@@ -165,18 +96,23 @@ function config_from_nc(TMIversion)
 
     R = linearindex(wet)
 
-    A = watermassmatrix(TMIfile)
+    println("A")
+    @time A = watermassmatrix(TMIfile)
 
     # LU factorization for efficient matrix inversions
-    Alu = lu(A)
+    println("Alu")
+    @time Alu = lu(A)
     
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
     γ = grid(lon,lat,depth,I,R,wet)
 
     # would be good to make this optional
-    L = circulationmatrix(TMIfile,A,γ)
-    B = boundarymatrix(TMIfile,γ)
+    println("L=")
+    @time L = circulationmatrix(TMIfile,A,γ)
+
+    println("B=")
+    @time B = boundarymatrix(TMIfile,γ)
 
     return  A, Alu, γ, TMIfile, L, B
 
@@ -434,12 +370,14 @@ function circulationmatrix(file,A,γ)
 
     # based on function arguments, read F₀ to efficiently reproduce L matrix.
     F₀ = ncread(file,"F₀")
-
+    F₀vec = F₀[γ.wet]
+    
     # For each row of A, multiply by F₀
     i, j, F = findnz(A)
 
-    for nn = eachindex(i)
-        F[nn] *= F₀[γ.wet][i[nn]]
+    # careful, this loop can be really slow
+    for nn in eachindex(i)
+        F[nn] *= F₀vec[i[nn]]
     end
 
     L = sparse(i,j,F)
@@ -1036,17 +974,16 @@ function trackpathways(Alu,latbox,lonbox,γ)
 end
 
 """ 
-    function gdriveurl(TMIversion)
-    placeholder function to give location (URL) of Google Drive input
+    function ncurl(TMIversion)
+    placeholder function to give location (URL) of NetCDF Google Drive input
     in the future, consider a struct or Dict that describes all TMI versions.
 # Arguments
 - `TMIversion`: version of TMI water-mass/circulation model
 # Output
 - `url`: location (URL) for download
 """
-function gdriveurl(TMIname)
+function ncurl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
-        #        url = "https://docs.google.com/uc?export=download&id=1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7"
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
     else
         url = nothing
@@ -1064,11 +1001,8 @@ end
 - `url`: location (URL) for download
 """
 function maturl(TMIname)
-    if TMIname == "modern_4x4x33_GH10_GH12" 
-        url = "https://docs.google.com/uc?export=download&id=15O3QBzeSUIsuF7lZMbUixzZuEwDiaAdo"
-    elseif TMIname == "modern_90x45x33_GH10_GH12"
-        #url = "https://docs.google.com/uc?export=download&id=182vbIaXpssF3-ZlkqupPAUSoSiU8BCi7"
-        url = "https://docs.google.com/uc?export=download&id=1b9fVSUdrV-bGyZnRlGfwFmAM7jVjjw4j"
+    if TMIname == "modern_90x45x33_GH10_GH12"
+        url = "https://docs.google.com/uc?export=download&id=1qPRq7sonwdjkPhpMcAnvuv67OMZSBqgh"
     else
         url = nothing
     end
@@ -1253,7 +1187,7 @@ function interpweights(loc,γ)
 end
 
 """
-function filterdata(u₀,Alu,y,d₀,W⁻,γ)
+function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1273,7 +1207,7 @@ function filterdata(u₀,Alu,y,d₀,W⁻,γ)
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function filterdata(u₀,Alu,d₀,y,W⁻,fg!,γ)
+function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1788,6 +1722,11 @@ end
 function iswet(loc,γ)
     # two approaches
     # approach 1
+
+    # 1 = very strict
+    # 0 = all points
+    wetness = 0.5
+    
     wis = interpindex(loc,γ)
 
     # handle wraparound
@@ -1800,7 +1739,7 @@ function iswet(loc,γ)
     # will be greater than 0.
     # this criterion only requires on land point nearby,
     # where nearby is one of the 8 corners of the cube that contains loc
-    return wetwrap[wis...] > 0.9
+    return wetwrap[wis...] > wetness
 end
 
 """ 
