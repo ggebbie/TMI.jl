@@ -2,8 +2,8 @@ using Revise, TMI, Test
 
 @testset "TMI.jl" begin
 
-    TMIversion = "modern_4x4x33_GH10_GH12"
-    A, Alu, γ, TMIfile = config(TMIversion)
+    TMIversion = "modern_90x45x33_GH10_GH12"
+    A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
     
     ############################
     ## trackpathways
@@ -13,12 +13,12 @@ using Revise, TMI, Test
         @test minimum(sum(A,dims=2))> -1e-14
         
         #- define the surface patch by the bounding latitude and longitude.
-        latbox = [50,60]; # 50 N -> 60 N, for example.
+        latbox = [50. , 60.]; # 50 N -> 60 N, for example.
 
         # mutable due to wraparound: don't use an immutable tuple
-        lonbox = [-50,0]; # 50 W -> prime meridian
+        lonbox = [-50. , 0.]; # 50 W -> prime meridian
 
-        c,γ = trackpathways(TMIversion,latbox,lonbox)
+        c = trackpathways(Alu,latbox,lonbox,γ)
 
         @test maximum(c[γ.wet]) ≤ 1.0
         @test minimum(c[γ.wet]) ≥ 0.0
@@ -28,7 +28,7 @@ using Revise, TMI, Test
     ## example: regeneration
     @testset "regeneration" begin
 
-        PO₄ᴿ, γ = regeneratedphosphate(TMIversion)
+        PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
         @test maximum(PO₄ᴿ[γ.wet]) < 10
         @test minimum(PO₄ᴿ[γ.wet]) ≥ 0
     end
@@ -46,7 +46,7 @@ using Revise, TMI, Test
         dVdd = tracerinit(γ.wet); # pre-allocate c
         dVdd[γ.wet] = Alu'\v[γ.wet]
 
-        volume = volumefilled(TMIversion)
+        volume = volumefilled(TMIversion,Alu,γ)
 
         # volumefill positive at surface?
         @test sum(volume .< 0) == 0
@@ -60,11 +60,7 @@ using Revise, TMI, Test
         # choose linear or nearest neighbor interpolation
         linearinterp = true #true
         
-        # would be better to randomize location.
-        # xlon = 125.26; # deg E.
-        # xlat = -6.38;  # deg N.
-        # xdepth = 2578.2;  # meters.
-        # loc = (xlon,xlat,xdepth)
+        # randomized location.
         loc = wetlocation(γ)
 
         # choose linear or nearest neighbor interpolation
@@ -80,7 +76,7 @@ using Revise, TMI, Test
 
         @test isapprox(sum(filter(!isnan,δ)),1.0) 
 
-        origin, γ = surfaceorigin(TMIversion,loc)
+        origin = surfaceorigin(loc, Alu, γ)
         
         @test isapprox(sum(filter(!isnan,origin)),1)
         @test isapprox(sum(filter(!isnan,origin)),1)
@@ -97,7 +93,7 @@ using Revise, TMI, Test
         u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻, ctrue = sample_observations(TMIversion,"θ")
+        y, W⁻, ctrue = sample_observations(TMIversion,"θ",γ)
 
         # a first guess: observed surface boundary conditions are perfect.
         # set surface boundary condition to the observations.
@@ -149,7 +145,7 @@ using Revise, TMI, Test
         u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",N)
+        y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",γ,N)
 
         # does this help optimization stay stable?
         #W⁻ *= 1.0/100.0
@@ -157,7 +153,8 @@ using Revise, TMI, Test
         # make a silly first guess for surface
         d₀ = tracerinit(γ.wet)
         [d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-                
+
+        # permit surface deviations on order of 5°C
         Q⁻ = 1.0/(5.0^2)
         #Q⁻ = 10.0
         
