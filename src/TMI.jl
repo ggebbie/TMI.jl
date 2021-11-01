@@ -1012,6 +1012,8 @@ end
 function ncurl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
+    elseif TMIname == "modern_180x90x33_GH10_GH12"
+        url = "https://docs.google.com/uc?export=download&id=1-YEkB_YeQGqPRH6kauhBb2bi_BjVGt9b"
     else
         url = nothing
     end
@@ -1030,6 +1032,8 @@ end
 function maturl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=1qPRq7sonwdjkPhpMcAnvuv67OMZSBqgh"
+    elseif TMIname == "modern_180x90x33_GH10_GH12"
+        url = "https://docs.google.com/uc?export=download&id=11zD1nOfT6V7G0qIHdjK2pDGHFk-ExXwU"
     else
         url = nothing
     end
@@ -1893,19 +1897,20 @@ function regions2nc(TMIversion,γ)
 
     # region names
     # didn't figure out how to use an ordered dict, instead use a tuple
-    list = ("GLOBAL","ANT","NATL","SUBANT","NPAC","ARC",
-            "MED","TROP","ROSS","WED","LAB","GIN",
+    list = ("GLOBAL","ANT","SUBANT",
+            "NATL","NPAC","TROP","ARC",
+            "MED","ROSS","WED","LAB","GIN",
             "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
             "TROPATL","TROPPAC","TROPIND")
 
     regionname = Dict("GLOBAL" => "globally uniform",
                       "ANT" => "Antarctic",
-                      "NATL" => "North Atlantic",
                       "SUBANT" => "Subantarctic",
+                      "NATL" => "North Atlantic",
                       "NPAC" => "North Pacific",
+                      "TROP" => "tropical and subtropical",
                       "ARC" => "Arctic",
                       "MED" => "Mediterranean",
-                      "TROP" => "tropical and subtropical",
                       "ROSS" => "Ross Sea sector",
                       "WED" => "Weddell Sea sector",
                       "LAB" => "Labrador and Irminger Seas",

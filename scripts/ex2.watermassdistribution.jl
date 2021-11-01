@@ -12,18 +12,26 @@ using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
+TMIversion = "modern_180x90x33_GH10_GH12"
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+
 # choose water mass (i.e., surface patch) of interest
 # Enhancement: provide list of choices
-region = "NATL"
-TMIversion = "modern_180x90x33_GH10_GH12"
+list = ("GLOBAL","ANT","SUBANT",
+            "NATL","NPAC","TROP","ARC",
+            "MED","ROSS","WED","LAB","GIN",
+            "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
+            "TROPATL","TROPPAC","TROPIND")
 
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+region = list[2]
 
 # do numerical analysis
 g = watermassdistribution(TMIversion,Alu,region,γ);
 
 # plot a section at 330 east longitude (i.e., 30 west)
-lon_section = 329;
+#lon_section = 329;
+lon_section = 330;
 gsection = section(g,lon_section,γ)
 lims = 0:5:100
 
