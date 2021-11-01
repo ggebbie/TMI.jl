@@ -2,6 +2,7 @@
 using Revise, MAT, LinearAlgebra, SparseArrays, TMI, DrWatson, NCDatasets, Test
 
 TMIversion = "modern_90x45x33_GH10_GH12"
+TMIversion = "modern_180x90x33_GH10_GH12"
 
 # original NetCDF version
 #A, Alu, γ, TMIfile = config(TMIversion)

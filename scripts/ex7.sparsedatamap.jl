@@ -19,8 +19,8 @@
 =#
 using Revise, TMI, Interpolations
 
-TMIversion = "TMI_2010_2012_4x4x33"
-A, Alu, γ, TMIfile = config(TMIversion)
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # first guess of change to surface boundary conditions
 # how many randomly sampled observations?
@@ -30,7 +30,7 @@ N = 20
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
-y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",N)
+y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
 d₀ = tracerinit(γ.wet)

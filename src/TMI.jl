@@ -12,7 +12,7 @@ export config, config_from_mat, config_from_nc,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
     planview, dyeplot, plotextent, tracerinit,
-    watermassmatrix, 
+    watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrixXYZ,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
@@ -113,7 +113,7 @@ function config_from_nc(TMIversion)
 
     println("B=")
     @time B = boundarymatrix(TMIfile,γ)
-
+    
     return  A, Alu, γ, TMIfile, L, B
 
 end
@@ -168,7 +168,7 @@ function config_from_mat(TMIversion)
     L = circulationmatrix(TMIfile,γ)
     
     B = boundarymatrix(TMIfile,γ)
-
+    
     # consider re-ordering this.
     # some output should be optional
     # return Izyx or I or neither?
@@ -974,6 +974,33 @@ function trackpathways(Alu,latbox,lonbox,γ)
 end
 
 """ 
+    function watermassdistribution(TMIversion,latbox,lonbox)
+    Track the pathways of a user-defined water mass.
+     Steps: (a) define the water mass by an oceanographically-relevant surface patch dyed with passive tracer concentration of one
+         (b) propagate the dye with the matrix A, with the result being the fraction of water originating from the surface region.
+     See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `region`: name of pre-defined surface region
+- `γ`: TMI grid
+# Output
+- `g`: water-mass fraction
+"""
+function watermassdistribution(TMIversion,Alu,region,γ)
+
+    d = surfaceregion(TMIversion,region,γ)
+
+    # do matrix inversion to get quantity of dyed water throughout ocean:
+    g = tracerinit(γ.wet); # pre-allocate c
+
+    # make methods that make the "wet" index unnecessary
+    g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
+
+    return g
+end
+
+""" 
     function ncurl(TMIversion)
     placeholder function to give location (URL) of NetCDF Google Drive input
     in the future, consider a struct or Dict that describes all TMI versions.
@@ -1761,6 +1788,8 @@ function config2nc(TMIversion,A,γ,L,B)
 
     boundarymatrix2nc(TMIversion,B)
     
+    regions2nc(TMIversion,γ)
+
 end
 
 """
@@ -1781,6 +1810,9 @@ function griddicts(γ)
 
 end
 
+"""
+Read 3D fields from mat file and save to NetCDF file.
+"""
 function matfields2nc(TMIversion,γ)
 
     filenetcdf = datadir("TMI_"*TMIversion*".nc")
@@ -1848,6 +1880,80 @@ fieldsatts() =
          "δ¹³C" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/s)/(kg gridcell)"))
+
+
+"""
+Read vectors from mat file, translate to 3D,
+ and save surface field to NetCDF file.
+"""
+function regions2nc(TMIversion,γ)
+
+    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filemat = datadir("TMI_"*TMIversion*".mat")
+
+    # region names
+    # didn't figure out how to use an ordered dict, instead use a tuple
+    list = ("GLOBAL","ANT","NATL","SUBANT","NPAC","ARC",
+            "MED","TROP","ROSS","WED","LAB","GIN",
+            "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
+            "TROPATL","TROPPAC","TROPIND")
+
+    regionname = Dict("GLOBAL" => "globally uniform",
+                      "ANT" => "Antarctic",
+                      "NATL" => "North Atlantic",
+                      "SUBANT" => "Subantarctic",
+                      "NPAC" => "North Pacific",
+                      "ARC" => "Arctic",
+                      "MED" => "Mediterranean",
+                      "TROP" => "tropical and subtropical",
+                      "ROSS" => "Ross Sea sector",
+                      "WED" => "Weddell Sea sector",
+                      "LAB" => "Labrador and Irminger Seas",
+                      "GIN" => "Greenland-Iceland-Norwegian Seas",
+                      "ADEL" => "Adélie Land sector",
+                      "SUBANTATL" => "Atlantic-sector Subantarctic",
+                      "SUBANTPAC" => "Pacific-sector Subantarctic",
+                      "SUBANTIND" => "Indian-sector Subantarctic",
+                      "TROPATL" => "tropical and subtropical Atlantic",
+                      "TROPPAC" => "tropical and subtropical Pacific",
+                      "TROPIND" => "tropical and subtropical Indian")
+    
+    matobj = matopen(filemat)
+    d_all = read(matobj,"d_all")
+    close(matobj)
+
+    # a kludge for now
+    T = eltype(γ.lon)
+    
+    # iterate over all regions in d_all
+    Izyx = cartesianindex(filemat)
+    regions = Dict{String,Array{T,2}}()
+    regionatts = Dict{String,Dict{String,String}}()
+    
+    for rr = 1:size(d_all,2)
+        # 3D fields in zyx vector format
+        # are changed to 3D xyz format
+        d = tracerinit(d_all[:,rr],Izyx,γ.wet)
+
+        # just save the surface 2D field
+        push!(regions, list[rr] => d[:,:,1])
+        
+        push!(regionatts, list[rr] =>
+         Dict("longname" => regionname[list[rr]]*" surface region", "units" => "[]"))
+    end
+
+    TMIgrids, TMIgridsatts = griddicts(γ)
+
+    # iterate in regions Dictionary to write to NetCDF.
+    for (varname,varvals) in regions
+        dvarname = "d_"*varname
+        nccreate(filenetcdf,dvarname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],atts=regionatts[varname])
+        println("write ",dvarname)
+        ncwrite(varvals,filenetcdf,dvarname)
+
+    end
+end
+
 
 function watermassmatrix2nc(TMIversion,A)
 
@@ -1984,6 +2090,33 @@ function grid2nc(TMIversion,γ)
     nccreate(filenetcdf,varname,"linearindex",1:nfld,linearindexatts,atts=katts)
     ncwrite(depthindex(γ.I),filenetcdf,varname)
     
+end
+
+"""
+Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+"""
+function surfaceregion(TMIversion,region,γ)
+
+    file = datadir("TMI_"*TMIversion*".nc")
+    T = eltype(γ.lon)
+    tracername = "d_"*region
+    dsfc = ncread(file,tracername)
+    println("sumdsfc",sum(filter(!isnan,dsfc)))
+    println("maxdsfc",maximum(filter(!isnan,dsfc)))
+    # expand dsfc to cover 3D.
+    # will not use control2state, because the control
+    # make include non-surface regions in future.
+
+    # preallocate
+    d = Array{T}(undef,size(γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    d[γ.wet] .= zero(T)
+    d[.!γ.wet] .= zero(T)/zero(T)
+    d[:,:,1] = dsfc
+    println(count(!isnan,d))
+    return d
 end
 
 end

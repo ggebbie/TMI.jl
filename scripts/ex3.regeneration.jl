@@ -9,12 +9,13 @@ pygui(true) #needed for Atom, not sure what it will do in other places
 
 # A, Alu, γ, inputfile = config(url,inputdir)
 # ΔPO₄ = readtracer(inputfile,"qpo4")
-TMIversion = "TMI_2010_2012_4x4x33"
-PO₄ᴿ, γ = regeneratedphosphate(TMIversion)
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
 
 
 # plot a section at 330 east longitude (i.e., 30 west)
-lon_section = 330;
+lon_section = 330; # only works if exact
 Psection = section(PO₄ᴿ,lon_section,γ)
 lims = 0:0.1:2.0
 

@@ -13,7 +13,8 @@ using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-TMIversion = "TMI_2010_2012_4x4x33"
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 #- define the surface patch by the bounding latitude and longitude.
 latbox = [50,60]; # 50 N -> 60 N, for example.
@@ -22,7 +23,7 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 lonbox = [-50,0]; # 50 W -> prime meridian
 
 # do numerical analysis
-c,γ = trackpathways(TMIversion,latbox,lonbox)
+c = trackpathways(Alu,latbox,lonbox,γ)
 
 # do plotting (could be a function)
 plotextent(latbox, lonbox)

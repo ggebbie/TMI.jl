@@ -85,8 +85,8 @@ using Revise, TMI, Test
     end
     
     #########################################
-    ## filterdata
-    @testset "filterdata" begin
+    ## formerly filterdata
+    @testset "steadyclimatology" begin
 
         # first guess of change to surface boundary conditions
         # ocean values are 0
@@ -109,7 +109,7 @@ using Revise, TMI, Test
         #fg!(J̃₀,gJ₀,u₀)
         # filter the data with an Optim.jl method
 
-        out = filterdata(u₀,Alu,y,d₀,W⁻,fg!,γ)
+        out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
         # check with forward differences
         ϵ = 1e-5
