@@ -977,7 +977,9 @@ function state2obs(cvec,wis,γ)
     c̃ = tracerinit(γ.wet)
     c̃[γ.wet] = cvec
     replace!(c̃,NaN=>0.0)
-    [ỹ[i] = c̃[wis[i]...]/sumwis[i] for i in 1:N]
+    cwrap = view(c̃,list,:,:)
+
+    [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
     
