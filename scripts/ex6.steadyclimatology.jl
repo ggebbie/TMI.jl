@@ -25,15 +25,15 @@ using Revise, TMI, GoogleDrive
 using PyPlot, PyCall, Test
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
-TMIversion = "TMI_2010_2012_4x4x33"
-A, Alu, γ, inputfile = config(TMIversion) 
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
-y, W⁻, ctrue = sample_observations(TMIversion,"θ")
+y, W⁻, ctrue = sample_observations(TMIversion,"θ",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
@@ -44,7 +44,7 @@ d₀[:,:,1] = y[:,:,1]
 fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
 
 # filter the data with an Optim.jl method
-out = filterdata(u₀,Alu,y,d₀,W⁻,fg!,γ)
+out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
 # reconstruct by hand to double-check.
 ũ = out.minimizer

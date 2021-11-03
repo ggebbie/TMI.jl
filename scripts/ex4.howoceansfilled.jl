@@ -14,8 +14,10 @@
 using Revise
 using TMI, PyPlot, PyCall
 
-TMIversion = "TMI_2010_2012_4x4x33"
-volume = volumefilled(TMIversion)
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+
+volume = volumefilled(TMIversion,Alu,γ)
 
 # view the surface
 cntrs = 1:0.25:6

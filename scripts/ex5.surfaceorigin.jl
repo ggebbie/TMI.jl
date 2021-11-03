@@ -22,7 +22,10 @@ xlat = -6.38;  # deg N.
 xdepth = 3000;  # meters.
 loc = (xlon,xlat,xdepth)
 
-origin, γ = surfaceorigin(TMIversion,loc)
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+
+origin = surfaceorigin(loc, Alu, γ)
 
 # units: effective thickness in log10(meters)
 contourf(γ.lon,γ.lat,log10.(origin'))
