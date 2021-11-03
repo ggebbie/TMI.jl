@@ -10,7 +10,7 @@ Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu
 
 * See the function list in the documentation linked through the badge above
 
-* The MATLAB version of the code is in maintenance mode and is available at https://github.com/ggebbie/TMI .
+* The MATLAB version of the code is in maintenance mode and is available at https://github.com/ggebbie/TMI 
 
 * After setting up the environment (instructions below), check that all tests pass via the following shell command in the repository base directory:
 `julia --project=@. test/runtests.jl`
@@ -68,7 +68,7 @@ An example:\
 
 # Data files
 
-The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing . Available TMI versions include:
+The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method or download manually at: https://drive.google.com/drive/folders/1nFDSINbst84pK68aWwRGBVfYZkfN1mUR?usp=sharing . Available TMI versions include:
 
 `modern_90x45x33_GH10_GH12` : TMI version with 4x4 degree horizontal
                   resolution and 33 levels  (G & H 2010), \
@@ -102,9 +102,9 @@ Steps:
 1. Use PkgTemplates to make git repo.\
 	2. new empty repository on GitHub.\
     3. Then push an existing repository from the command line:
-    `git remote add origin git@github.com:ggebbie/TMI.jl.git`
-    `git branch -M main`
-    `git push -u origin main`
+    `git remote add origin git@github.com:ggebbie/TMI.jl.git`\
+    `git branch -M main`\
+    `git push -u origin main`\
 
 4. Run the following Julia code
 
@@ -123,9 +123,9 @@ Steps:
         Documenter{GitHubActions}(),
         Develop(),
     ],
-             )`
+             )`\
 
-`t("TMI.jl")`
+`t("TMI.jl")`\
 
 # MATLAB version of code
 
