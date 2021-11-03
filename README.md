@@ -6,17 +6,14 @@
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
 
 * Total Matrix Intercomparison codes for Julia\
-G Jake Gebbie, WHOI, ggebbie@whoi.edu 
+Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu 
 
-# References 
+* See the function list in the documentation linked through the badge above
 
-Gebbie, G., and P. Huybers:  "Total matrix intercomparison: A method for resolving the geometry of water mass pathways", J. Phys. Oceanogr., 40(8), doi:10.1175/2010JPO4272.1, 1710-1728, 2010. 
+* The MATLAB version of the code is in maintenance mode and is available at https://github.com/ggebbie/TMI .
 
-Gebbie, G., and P. Huybers. "How is the ocean filled?", Geophys. Res. Lett., 38, L06604, doi:10.1029/2011GL046769, 2011 
-
-Gebbie, G., and P. Huybers, "The mean age of ocean waters inferred from radiocarbon observations", 2012, JPO.
-
-Gebbie, G., "How much did Glacial North Atlantic Water shoal?", 2014, Paleoceanography.
+* After setting up the environment (instructions below), check that all tests pass via the following shell command in the repository base directory:
+`julia --project=@. test/runtests.jl`
 
 # Requirements
 
@@ -34,7 +31,7 @@ Restart the REPL.\
 `Conda.add("shapely",channel="conda-forge")`\
 `Conda.add("cartopy",channel="conda-forge")`\
 
-This should set up cartopy v. 0.20.0 which can download coastlines from Amazon Web Services.
+This should set up cartopy v0.20.0 which can download coastlines from Amazon Web Services.
 
 # Setting up project environment
 
@@ -71,15 +68,23 @@ An example:\
 
 # Data files
 
-The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method, such as the script `readTMIfromGoogleDrive.sh` at a bash shell prompt. 
+The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing . Available TMI versions include:
 
-`/bin/sh readTMIfromGoogleDrive.sh`
-
-Or download manually at: https://drive.google.com/file/d/1Zycnx6_nifRrJo8XWMdlCFv4ODBpi-i7/view?usp=sharing .
-
-TMI_4deg_2010.mat : TMI version with 4x4 degree horizontal
+`modern_90x45x33_GH10_GH12` : TMI version with 4x4 degree horizontal
                   resolution and 33 levels  (G & H 2010), \
-				  Includes TMI climatology of ocean properties 
+				  Includes the input data from the WGHC (Gouretski & Koltermann 2005) 
+ 
+`modern_180x90x33_GH10_GH12` : TMI version with 2x2 degree horizontal
+                  resolution and 33 levels  (G & H 2010), \
+				  Includes the input data from the WGHC (Gouretski & Koltermann 2005) 
+
+`modern_90x45x33_unpub12` : TMI version with 4x4 degree horizontal
+                  resolution and 33 levels  (unpublished 2012), \
+				  Includes a steady-state climatology of global tracers
+
+`modern_90x45x33_G14` : TMI version with 4x4 degree horizontal
+                  resolution and 33 levels  (Gebbie 2014), \
+				  Doesn't rely upon a bottom spreading parameterization and solves for mixed-layer depth
 
 # Functions
 
@@ -141,3 +146,13 @@ Version 6.2, July 2015, added sq.m function,
                         fixed d_all to properly divide Atlantic/Pacific and put White Sea into Arctic.\
 Version 7, Sept. 2016, major improvements to transient run: 2 types of initial conditions and boundary conditions.\
 Version 8, Jan. 2021, bug fixes, especially those found by Elaine McDonagh
+
+# References 
+
+Gebbie, G., and P. Huybers:  "Total matrix intercomparison: A method for resolving the geometry of water mass pathways", J. Phys. Oceanogr., 40(8), doi:10.1175/2010JPO4272.1, 1710-1728, 2010. 
+
+Gebbie, G., and P. Huybers. "How is the ocean filled?", Geophys. Res. Lett., 38, L06604, doi:10.1029/2011GL046769, 2011 
+
+Gebbie, G., and P. Huybers, "The mean age of ocean waters inferred from radiocarbon observations", 2012, JPO.
+
+Gebbie, G., "How much did Glacial North Atlantic Water shoal?", 2014, Paleoceanography.

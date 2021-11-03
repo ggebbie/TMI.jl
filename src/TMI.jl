@@ -4,7 +4,7 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT
+    Interpolations, LineSearches, MAT, NCDatasets
 
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
@@ -274,6 +274,9 @@ end
 - `A`: water-mass matrix
 """
 function watermassmatrix(file)
+
+    # consider adding a catch if A doesn't exist in file.
+
     if file[end-1:end] == "nc"
         # Int or Integer?
         i = convert(Vector{Int},ncread(file,"Arow"))
@@ -282,8 +285,13 @@ function watermassmatrix(file)
         A = sparse(i,j,m)
     elseif file[end-2:end] == "mat"
         matobj = matopen(file)
-        A=read(matobj,"A")
-        close(matobj)
+        if haskey(matobj,"A")
+            A=read(matobj,"A")
+            close(matobj)
+        else
+            close(matobj)
+            return nothing
+        end
 
         # But MATLAB had zyx format and we need xyz format.
         # linearindices R not available so will do conversion in higher scope
@@ -331,24 +339,35 @@ function circulationmatrix(file,γ)
     if file[end-2:end] == "mat" 
 
         matobj = matopen(file)
-        # Matlab output in zyx format
-        Lzyx=read(matobj,"L")
-        close(matobj)
+        if haskey(matobj,"L")
+            # Matlab output in zyx format
+            Lzyx=read(matobj,"L")
+            close(matobj)
 
-        Izyx = cartesianindex(file)
-        izyx, jzyx, Fzyx = findnz(Lzyx)
-        # Julia accounting x,y,z
-        ixyz = updatelinearindex(izyx,Izyx,γ.R)
-        jxyz = updatelinearindex(jzyx,Izyx,γ.R)
-        L = sparse(ixyz,jxyz,Fzyx)
+            Izyx = cartesianindex(file)
+            izyx, jzyx, Fzyx = findnz(Lzyx)
+            # Julia accounting x,y,z
+            ixyz = updatelinearindex(izyx,Izyx,γ.R)
+            jxyz = updatelinearindex(jzyx,Izyx,γ.R)
+            L = sparse(ixyz,jxyz,Fzyx)
+
+        else
+            close(matobj)
+            return nothing
+        end
 
     elseif file[end-1:end] == "nc"
 
         # based on function arguments, read from inefficient storage of L matrix.
-        i = convert(Vector{Int},ncread(file,"Lrow"))
-        j = convert(Vector{Int},ncread(file,"Lcol"))
-        F = ncread(file,"F")
-        L = sparse(i,j,F)
+        if haskey(NCDataset(file),"F")
+
+            i = convert(Vector{Int},ncread(file,"Lrow"))
+            j = convert(Vector{Int},ncread(file,"Lcol"))
+            F = ncread(file,"F")
+            L = sparse(i,j,F)
+        else
+            return nothing
+        end
     end
     
     return L
@@ -369,20 +388,25 @@ function circulationmatrix(file,A,γ)
     file[end-1:end] !== "nc" && error("not a NetCDF file")
 
     # based on function arguments, read F₀ to efficiently reproduce L matrix.
-    F₀ = ncread(file,"F₀")
-    F₀vec = F₀[γ.wet]
-    
-    # For each row of A, multiply by F₀
-    i, j, F = findnz(A)
 
-    # careful, this loop can be really slow
-    for nn in eachindex(i)
-        F[nn] *= F₀vec[i[nn]]
+    if haskey(NCDataset(file),"F₀")
+        F₀ = ncread(file,"F₀")
+        F₀vec = F₀[γ.wet]
+    
+        # For each row of A, multiply by F₀
+        i, j, F = findnz(A)
+
+        # careful, this loop can be really slow
+        for nn in eachindex(i)
+            F[nn] *= F₀vec[i[nn]]
+        end
+
+        L = sparse(i,j,F)
+        return L
+    else
+        return nothing
     end
-
-    L = sparse(i,j,F)
     
-    return L
 end
 
 """
@@ -400,32 +424,42 @@ function boundarymatrix(file,γ)
     if file[end-2:end] == "mat"
 
         matobj = matopen(file)
-        Bzyx=read(matobj,"B")
-        close(matobj)
+        if haskey(matobj,"B")
+            Bzyx=read(matobj,"B")
+            close(matobj)
 
-        # matlab in zyx format.
-        # consider using Azyx2xyz here.
-        Izyx = cartesianindex(file)
-        izyx, jzyx, Fzyx = findnz(Bzyx)
-        # for B, rows are 3D grid space, columns are for the surface index. 
-        # Julia accounting x,y,z
-        Isfc = surfaceindex(Izyx)
-        ixyz = updatelinearindex(izyx,Izyx,γ.R)
-        jxyz = updatelinearindex(Isfc[jzyx],Izyx,γ.R)
+            # matlab in zyx format.
+            # consider using Azyx2xyz here.
+            Izyx = cartesianindex(file)
+            izyx, jzyx, Fzyx = findnz(Bzyx)
+            # for B, rows are 3D grid space, columns are for the surface index. 
+            # Julia accounting x,y,z
+            Isfc = surfaceindex(Izyx)
+            ixyz = updatelinearindex(izyx,Izyx,γ.R)
+            jxyz = updatelinearindex(Isfc[jzyx],Izyx,γ.R)
 
-        # assume surface at k = 1 (revisit for LGM problem)
-        # give the full dimension of sparse matrix
-        B = sparse(ixyz,jxyz,Fzyx,sum(γ.wet),sum(γ.wet[:,:,1]))
+            # assume surface at k = 1 (revisit for LGM problem)
+            # give the full dimension of sparse matrix
+            B = sparse(ixyz,jxyz,Fzyx,sum(γ.wet),sum(γ.wet[:,:,1]))
+        else
+            close(matobj)
+            return nothing
+        end
 
     elseif file[end-1:end] == "nc"
 
         # based on function arguments, read from inefficient storage of L matrix.
-        i = convert(Vector{Int},ncread(file,"Brow"))
-        j = convert(Vector{Int},ncread(file,"Bcol"))
-        b = ncread(file,"b")
-        B = sparse(i,j,b,sum(γ.wet),sum(γ.wet[:,:,1]))
-    end
+        if haskey(NCDataset(file),"b")
 
+            i = convert(Vector{Int},ncread(file,"Brow"))
+            j = convert(Vector{Int},ncread(file,"Bcol"))
+            b = ncread(file,"b")
+            B = sparse(i,j,b,sum(γ.wet),sum(γ.wet[:,:,1]))
+
+        else
+            return nothing
+        end
+    end
     return B
 end
 
@@ -1014,6 +1048,10 @@ function ncurl(TMIname)
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
     elseif TMIname == "modern_180x90x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=1-YEkB_YeQGqPRH6kauhBb2bi_BjVGt9b"
+    elseif TMIname == "modern_90x45x33_unpub12"
+        url = "https://docs.google.com/uc?export=download&id=1Kw_Mr7fiKqan0nx0dKvGHnSInP0hQ7AV"
+    elseif TMIname == "modern_90x45x33_G14"
+        url = "https://docs.google.com/uc?export=download&id=1aeE7EXA-vy3Cm_drt4qCFw4AlpYrdudk"
     else
         url = nothing
     end
@@ -1034,6 +1072,10 @@ function maturl(TMIname)
         url = "https://docs.google.com/uc?export=download&id=1qPRq7sonwdjkPhpMcAnvuv67OMZSBqgh"
     elseif TMIname == "modern_180x90x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=11zD1nOfT6V7G0qIHdjK2pDGHFk-ExXwU"
+    elseif TMIname == "modern_90x45x33_unpub12"
+        url = "https://docs.google.com/uc?export=download&id=1sqkjFCPxZT_2Bm9rsp0acyxxkBri9YAT"
+    elseif TMIname == "modern_90x45x33_G14"
+        url = "https://docs.google.com/uc?export=download&id=1dCrDe5VXrsXiOf04mbuHID7xc5Ymm8-z"
     else
         url = nothing
     end
@@ -1786,12 +1828,14 @@ function config2nc(TMIversion,A,γ,L,B)
     
     matfields2nc(TMIversion,γ)
 
-    watermassmatrix2nc(TMIversion,A)
+    !isnothing(A) && watermassmatrix2nc(TMIversion,A)
 
-    circulationmatrix2nc(TMIversion,L,γ)
+    !isnothing(L) && circulationmatrix2nc(TMIversion,L,γ)
 
-    boundarymatrix2nc(TMIversion,B)
-    
+    !isnothing(B) && boundarymatrix2nc(TMIversion,B)
+
+    #= is this part of the config? Or should it go to
+     a separate output? It is similar to the output fields above. Probably should be considered part of the config. =#
     regions2nc(TMIversion,γ)
 
 end
@@ -1924,8 +1968,12 @@ function regions2nc(TMIversion,γ)
                       "TROPIND" => "tropical and subtropical Indian")
     
     matobj = matopen(filemat)
-    d_all = read(matobj,"d_all")
-    close(matobj)
+    if haskey(matobj,"d_all")
+        d_all = read(matobj,"d_all")
+        close(matobj)
+    else
+        return
+    end
 
     # a kludge for now
     T = eltype(γ.lon)
