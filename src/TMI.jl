@@ -1819,12 +1819,12 @@ function iswet(loc,γ,neighbors)
 end
 
 function iswet(loc,γ)
-    # two approaches
-    # approach 1
 
+    # wetness bounded by 0 and 1
+    # should be an argument
     # 1 = very strict
     # 0 = all points
-    wetness = 0.5
+    wetness = 0.2
     
     wis = interpindex(loc,γ)
 

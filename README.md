@@ -26,6 +26,7 @@ Or use a Julia-specific python environment built from scratch following these di
 `ENV["PYTHON"]=""` \
 `import Pkg; Pkg.add("PyCall")`\
 `import Pkg; Pkg.build("PyCall")`\
+
 Restart the REPL.\
 `import Pkg; Pkg.add("Conda")`\
 `import Conda`\
@@ -123,7 +124,7 @@ Steps:
     3. Then push an existing repository from the command line:
     `git remote add origin git@github.com:ggebbie/TMI.jl.git`\
     `git branch -M main`\
-    `git push -u origin main`\
+    `git push -u origin main`
 
 4. Run the following Julia code
 
@@ -142,9 +143,9 @@ Steps:
         Documenter{GitHubActions}(),
         Develop(),
     ],
-             )`\
+             )`
 
-`t("TMI.jl")`\
+`t("TMI.jl")`
 
 # MATLAB version of code
 
