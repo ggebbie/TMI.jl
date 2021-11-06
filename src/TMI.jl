@@ -13,7 +13,7 @@ export config, config_from_mat, config_from_nc,
     layerthickness, cellarea, cellvolume,
     planview, dyeplot, plotextent, tracerinit,
     watermassmatrix, watermassdistribution,
-    circulationmatrix, boundarymatrixXYZ,
+    circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
     readtracer, cartesianindex, Γ,
@@ -25,7 +25,8 @@ export config, config_from_mat, config_from_nc,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
-    sparsedatamap, config2nc
+    sparsedatamap, config2nc, gridprops,
+    matrix_zyx2xyz
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -141,8 +142,7 @@ function config_from_mat(TMIversion)
     Izyx = cartesianindex(TMIfile)
 
     # # make a mask
-    wet = BitArray{3}(undef,maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
-    fill!(wet,0)
+    wet = falses(maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
     wet[Izyx] .= 1
 
     # # consistent with tracer definition?
@@ -153,7 +153,7 @@ function config_from_mat(TMIversion)
     R = linearindex(wet)
 
     Azyx = watermassmatrix(TMIfile)
-    A = Azyx2xyz(TMIfile,Azyx,R)
+    A = matrix_zyx2xyz(TMIfile,Azyx,R)
     # #R = R[ wet ] # eliminate land points
 
     # # LU factorization for efficient matrix inversions
@@ -301,7 +301,7 @@ function watermassmatrix(file)
 end
 
 """
-        function Azyx2xyz(TMIfile,Azyx,γ)
+        function matrix_zyx2xyz(TMIfile,Azyx,γ)
    
     Transfer zyx format water-mass matrix A to xyz format
 # Arguments
@@ -310,7 +310,7 @@ end
 # Output
 - `Axyz`: water-mass matrix in xyz format
 """
-function Azyx2xyz(file,Azyx,R)
+function matrix_zyx2xyz(file,Azyx,R)
 
     izyx, jzyx, mzyx = findnz(Azyx)
     Izyx = cartesianindex(file)
@@ -1048,12 +1048,24 @@ end
 function ncurl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
-    elseif TMIname == "modern_180x90x33_GH10_GH12"
+    elseif TMIname == "modern_180x90x33_GH11_GH12"
         url = "https://docs.google.com/uc?export=download&id=1-YEkB_YeQGqPRH6kauhBb2bi_BjVGt9b"
     elseif TMIname == "modern_90x45x33_unpub12"
         url = "https://docs.google.com/uc?export=download&id=1Kw_Mr7fiKqan0nx0dKvGHnSInP0hQ7AV"
     elseif TMIname == "modern_90x45x33_G14"
         url = "https://docs.google.com/uc?export=download&id=1aeE7EXA-vy3Cm_drt4qCFw4AlpYrdudk"
+    elseif TMIname == "modern_90x45x33_G14_v2"
+        url = "https://docs.google.com/uc?export=download&id=1Mwhv70soBX6-pYijU0ElNl0TZw0vSbXN"
+    elseif TMIname == "LGM_90x45x33_G14"
+        url = "https://docs.google.com/uc?export=download&id=1yoDi7_foBt3TVULCstlWnNLHFc2G47Fz"  
+    elseif TMIname == "LGM_90x45x33_G14A"
+        url = "https://docs.google.com/uc?export=download&id=1ADkDI3Fc3z4Vm75K5u6hx0Yu1P0iVnW1"
+    elseif TMIname == "LGM_90x45x33_GPLS1"
+        url = "https://docs.google.com/uc?export=download&id=1VOrZGUsO7lp21qw6Yw0dBqGlIy_ImdRW"
+    elseif TMIname == "LGM_90x45x33_GPLS2"
+        url = "https://docs.google.com/uc?export=download&id=1cOCrty9kvA2s3NoD1QZjnNehlVbP0rHP"
+    elseif TMIname == "LGM_90x45x33_OG18"
+        url = "https://docs.google.com/uc?export=download&id=19zccG1BSdspD9rti2OttsF2Dm4P2OLjt"
     else
         url = nothing
     end
@@ -1071,13 +1083,25 @@ end
 """
 function maturl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
-        url = "https://docs.google.com/uc?export=download&id=1qPRq7sonwdjkPhpMcAnvuv67OMZSBqgh"
-    elseif TMIname == "modern_180x90x33_GH10_GH12"
+        url = "https://docs.google.com/uc?export=download&id=1Z2knDctAmZHO2lcWTBCdR8zjkmbcyCGg"
+    elseif TMIname == "modern_180x90x33_GH11_GH12"
         url = "https://docs.google.com/uc?export=download&id=11zD1nOfT6V7G0qIHdjK2pDGHFk-ExXwU"
     elseif TMIname == "modern_90x45x33_unpub12"
         url = "https://docs.google.com/uc?export=download&id=1sqkjFCPxZT_2Bm9rsp0acyxxkBri9YAT"
     elseif TMIname == "modern_90x45x33_G14"
         url = "https://docs.google.com/uc?export=download&id=1dCrDe5VXrsXiOf04mbuHID7xc5Ymm8-z"
+    elseif TMIname == "modern_90x45x33_G14_v2"
+        url = "https://docs.google.com/uc?export=download&id=1Axaqn88HZv3i4rYn0g5dUztVXlx_TmGt"
+    elseif TMIname == "LGM_90x45x33_G14"
+                url = "https://docs.google.com/uc?export=download&id=1qWnL9SrcjFRt4TUQ0k7v0jEFrKtUYpev"
+    elseif TMIname == "LGM_90x45x33_G14A"
+                url = "https://docs.google.com/uc?export=download&id=1E7qYWdAnoz4YXFvJ0AkVcqpHDq8aFP4R"
+    elseif TMIname == "LGM_90x45x33_GPLS1"
+                url = "https://docs.google.com/uc?export=download&id=1nF5KjWE3n--NkOTgIymIhP6pkafJ7jl3"
+    elseif TMIname == "LGM_90x45x33_GPLS2"
+                url = "https://docs.google.com/uc?export=download&id=1CHiR2J60HPRrxXTvJupyWEHmggMkgnxV"
+    elseif TMIname == "LGM_90x45x33_OG18"
+                url = "https://docs.google.com/uc?export=download&id=1WKAWxDYDFls6C5YzO1sMLDlUhC8_tKV2"
     else
         url = nothing
     end
@@ -1795,12 +1819,12 @@ function iswet(loc,γ,neighbors)
 end
 
 function iswet(loc,γ)
-    # two approaches
-    # approach 1
 
+    # wetness bounded by 0 and 1
+    # should be an argument
     # 1 = very strict
     # 0 = all points
-    wetness = 0.5
+    wetness = 0.2
     
     wis = interpindex(loc,γ)
 
@@ -1840,6 +1864,8 @@ function config2nc(TMIversion,A,γ,L,B)
      a separate output? It is similar to the output fields above. Probably should be considered part of the config. =#
     regions2nc(TMIversion,γ)
 
+    optim2nc(TMIversion)
+
 end
 
 """
@@ -1874,20 +1900,20 @@ function matfields2nc(TMIversion,γ)
     T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
     #T =  Float64
 
-    varlist = Dict("dP" => "qPO₄",
-                   "Tobs" => "θ",
-                   "Terr" => "σθ",
-                   "Sobs" => "Sp",
-                   "Serr" => "σSp",
-                   "O18obs" => "δ¹⁸Ow",
-                   "O18err" => "σδ¹⁸Ow",
-                   "Pobs" => "PO₄",
+    varlist = Dict("dP"=>"qPO₄","q"=>"qPO₄",
+                   "Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
+                   "Terr"=>"σθ",
+                   "Sobs"=>"Sp","Smod"=>"Sp","Slgm"=>"Sp",
+                   "Serr"=>"σSp",
+                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+                   "O18err"=>"σδ¹⁸Ow",
+                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄",
                    "Perr" => "σPO₄",
-                   "Nobs" => "NO₃",
+                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃",
                    "Nerr" => "σNO₃",
-                   "Oobs" =>  "O₂",
-                   "Oerr" =>  "σO₂",
-                   "C13obs" =>  "δ¹³C",
+                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂",
+                   "Oerr"=>"σO₂",
+                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
                    "C13err" =>  "σδ¹³C")
 
     # iterate over all possible variables listed above
@@ -1897,6 +1923,13 @@ function matfields2nc(TMIversion,γ)
         haskey(vars,kk) ? push!(TMIfields, vv => tracerinit(vars[kk], Izyx, γ.wet)) : nothing
     end
 
+    # also save fields that are stored in the x struct, if they exist
+    if haskey(vars,"x")
+        for (kk,vv) in varlist
+            haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
+        end
+    end
+    
     TMIfieldsatts = fieldsatts()
 
     # iterate in TMIgrids Dictionary to write to NetCDF.
@@ -2009,7 +2042,6 @@ function regions2nc(TMIversion,γ)
     end
 end
 
-
 function watermassmatrix2nc(TMIversion,A)
 
     filenetcdf = datadir("TMI_"*TMIversion*".nc")
@@ -2035,6 +2067,41 @@ function watermassmatrix2nc(TMIversion,A)
     nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=sourceatts)
     println("write ",varname)
     ncwrite(j, filenetcdf,varname)
+
+end
+
+"""
+Save optimization parameters to NetCDF file)
+
+Future considerations: split into 2 functions
+1) read from mat
+2) save to nc
+"""
+function optim2nc(TMIversion)
+
+    filemat = datadir("TMI_"*TMIversion*".mat")
+    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+
+    matobj = matopen(filemat)
+    if haskey(matobj,"fval")
+        J̃ = read(matobj,"fval")
+        iteratts = Dict("longname" => "iteration number")
+        Jatts =  Dict("longname" => "cost function value", "units" => "[]")
+
+        varname = "J" # J̃ not output to screen properly
+        println("write ",varname)
+        nccreate(filenetcdf,varname,"iter",1:length(J̃),iteratts,atts=Jatts)
+    end
+    if haskey(matobj,"u")
+        ũ = read(matobj,"u")
+        iteratts = Dict("longname" => "control element number")
+        uatts =  Dict("longname" => "control vector", "units" => "[]")
+
+        varname = "ũ"
+        println("write ",varname)
+        nccreate(filenetcdf,varname,"control_element",1:length(ũ),iteratts,atts=uatts)
+    end
+    close(matobj)
 
 end
 

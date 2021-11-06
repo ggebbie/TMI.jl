@@ -5,7 +5,6 @@ using Revise, TMI, Test
     TMIversion = "modern_90x45x33_GH10_GH12"
     #TMIversion = "modern_180x90x33_GH10_GH12"
     #TMIversion = "modern_90x45x33_unpub12"
-    #TMIversion = "modern_90x45x33_G14"
     
     A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
     
@@ -116,17 +115,20 @@ using Revise, TMI, Test
         out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
         # check with forward differences
-        ϵ = 1e-5
+        ϵ = 1e-3
         ii = rand(1:sum(γ.wet[:,:,1]))
+        println("Location for test =",ii)
         δu = copy(u₀); δu[ii] += ϵ
-        ∇f_finite = (f(δu) - f(u₀))/ϵ 
+        ∇f_finite = (f(δu) - f(u₀))/ϵ
+        println(∇f_finite)
 
         fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
         ∇f = gJ₀[ii]
+        println(∇f)
         
         # error less than 10 percent?
-        println("Percent error ",100*(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-        @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+        println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
         # was cost function decreased?
         @test out.minimum < J̃₀
@@ -169,17 +171,24 @@ using Revise, TMI, Test
         J̃₀,gJ₀ = fg(u₀)
         fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
-        ϵ = 1e-5
+        ϵ = 1e-3 # size of finite perturbation
+        # Note: ϵ=1e-5 fails tests sometimes due to no finite difference at all
+        # Problem with types or rounding or precision?
+        
         ii = rand(1:sum(γ.wet[:,:,1]))
+        ii = 1804
+        println("gradient check location=",ii)
         δu = copy(u₀); δu[ii] += ϵ
-        ∇f_finite = (f(δu) - f(u₀))/ϵ 
+        ∇f_finite = (f(δu) - f(u₀))/ϵ
+        println("∇f_finite=",∇f_finite)
 
         fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
         ∇f = gJ₀[ii]
+        println("∇f=",∇f)
 
         # error less than 10 percent?
-        println("Percent error ",100*(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-        @test (∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+        println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
         # optimize the sparse data map with an Optim.jl method
         out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
@@ -189,7 +198,6 @@ using Revise, TMI, Test
 
         # reconstruct by hand to double-check.
         ũ = out.minimizer
-        # problem, some of the hidden arguments have changed, gives NaNs in gJ̃
         J̃,gJ̃ = fg(ũ)
         @test J̃ < J̃₀
 

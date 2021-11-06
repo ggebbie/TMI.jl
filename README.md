@@ -17,6 +17,8 @@ Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu
 
 # Requirements
 
+Compatibility with the built-in tests requires Julia 1.6.x. 
+
 TMI.jl uses matplotlib and cartopy. Direct the python environment to an existing system-wide version of python with these already installed:
 `ENV["PYTHON"]="python/directory/on/your/machine"`
 
@@ -24,12 +26,13 @@ Or use a Julia-specific python environment built from scratch following these di
 `ENV["PYTHON"]=""` \
 `import Pkg; Pkg.add("PyCall")`\
 `import Pkg; Pkg.build("PyCall")`\
+
 Restart the REPL.\
 `import Pkg; Pkg.add("Conda")`\
 `import Conda`\
 `Conda.add("matplotlib",channel="conda-forge")`\
 `Conda.add("shapely",channel="conda-forge")`\
-`Conda.add("cartopy",channel="conda-forge")`\
+`Conda.add("cartopy",channel="conda-forge")`
 
 This should set up cartopy v0.20.0 which can download coastlines from Amazon Web Services.
 
@@ -74,8 +77,8 @@ The Julia code is designed to download input files from Google Drive and to plac
                   resolution and 33 levels  (G & H 2010), \
 				  Includes the input data from the WGHC (Gouretski & Koltermann 2005) 
  
-`modern_180x90x33_GH10_GH12` : TMI version with 2x2 degree horizontal
-                  resolution and 33 levels  (G & H 2010), \
+`modern_180x90x33_GH11_GH12` : TMI version with 2x2 degree horizontal
+                  resolution and 33 levels  (G & H 2011), \
 				  Includes the input data from the WGHC (Gouretski & Koltermann 2005) 
 
 `modern_90x45x33_unpub12` : TMI version with 4x4 degree horizontal
@@ -85,6 +88,23 @@ The Julia code is designed to download input files from Google Drive and to plac
 `modern_90x45x33_G14` : TMI version with 4x4 degree horizontal
                   resolution and 33 levels  (Gebbie 2014), \
 				  Doesn't rely upon a bottom spreading parameterization and solves for mixed-layer depth
+
+`modern_90x45x33_G14_v2` : TMI version with 4x4 degree horizontal
+                  resolution and 33 levels  (Gebbie 2014), \
+				  Doesn't rely upon a bottom spreading parameterization and solves for mixed-layer depth\
+				  Includes optimization information
+				  
+`LGM_90x45x33_G14` : Last Glacial Maximum version with 4x4 degree horizontal
+                  resolution and 33 levels  (Gebbie 2014)
+				  
+`LGM_90x45x33_G14A` : Alternate solution, Last Glacial Maximum version with 4x4 degree horizontal
+                  resolution and 33 levels  (Gebbie 2014)
+				  
+`LGM_90x45x33_GPLS1`: Solution #1 (Gebbie, Peterson, Lisiecki, and Spero, 2015), Last Glacial Maximum version with 4x4 degree horizontal resolution and 33 levels 
+				  
+`LGM_90x45x33_GPLS2`: Solution #2 (Gebbie, Peterson, Lisiecki, and Spero, 2015), Last Glacial Maximum version with 4x4 degree horizontal resolution and 33 levels 
+				  
+`LGM_90x45x33_OG18`: Last Glacial Maximum version with 4x4 degree horizontal resolution and 33 levels (Oppo, Gebbie et al. 2018)
 
 # Functions
 
@@ -104,7 +124,7 @@ Steps:
     3. Then push an existing repository from the command line:
     `git remote add origin git@github.com:ggebbie/TMI.jl.git`\
     `git branch -M main`\
-    `git push -u origin main`\
+    `git push -u origin main`
 
 4. Run the following Julia code
 
@@ -123,9 +143,9 @@ Steps:
         Documenter{GitHubActions}(),
         Develop(),
     ],
-             )`\
+             )`
 
-`t("TMI.jl")`\
+`t("TMI.jl")`
 
 # MATLAB version of code
 

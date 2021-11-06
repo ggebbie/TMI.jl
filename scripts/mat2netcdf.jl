@@ -5,12 +5,19 @@ using Revise, MAT, LinearAlgebra, SparseArrays, TMI, DrWatson, NCDatasets, Test
 TMIversion = "modern_90x45x33_GH10_GH12"
 TMIversion = "modern_180x90x33_GH10_GH12"
 TMIversion = "modern_90x45x33_unpub12"
+TMIversion = "modern_90x45x33_G14_v2"
 TMIversion = "modern_90x45x33_G14"
+TMIversion = "LGM_90x45x33_G14"
+TMIversion = "LGM_90x45x33_G14A"
+TMIversion = "LGM_90x45x33_GPLS1"
+TMIversion = "LGM_90x45x33_GPLS2"
+TMIversion = "LGM_90x45x33_OG18"
 
 # original NetCDF version
 #A, Alu, γ, TMIfile = config(TMIversion)
 
 @time A, Alu, γ, TMIfile, L, B = config_from_mat(TMIversion);
+#@time A2, Alu2, γ2, TMIfile2, L2, B2 = config_from_mat(TMIversion2);
 
 config2nc(TMIversion,A,γ,L,B)
 
