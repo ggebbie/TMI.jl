@@ -7,9 +7,9 @@
  % and c is the fraction of volume from a given source which         %
  % satisfies the equation A c = δ.                                   %
  % Next, dV/d(δ) = A^(-T) v, and dV/d(δ) is exactly the volume       %
- % originating from each source.      
+ % originating from each source.
  % Very similar mathematically to determining how the ocean is filled.                         %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 =#
 using Revise
 using TMI, PyPlot, PyCall
@@ -28,4 +28,4 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 origin = surfaceorigin(loc, Alu, γ)
 
 # units: effective thickness in log10(meters)
-contourf(γ.lon,γ.lat,log10.(origin'))
+surfacedensity(γ.lon,γ.lat,log10.(origin'), xlon, xlat, "images/cf5_1.png")

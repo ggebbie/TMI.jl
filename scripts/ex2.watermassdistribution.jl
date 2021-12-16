@@ -24,7 +24,7 @@ list = ("GLOBAL","ANT","SUBANT",
             "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
             "TROPATL","TROPPAC","TROPIND")
 
-region = list[2]
+region = list[4]
 
 # do numerical analysis
 g = watermassdistribution(TMIversion,Alu,region,γ);
@@ -36,4 +36,4 @@ gsection = section(g,lon_section,γ)
 lims = 0:5:100
 
 # make a plot of dye in the ocean
-dyeplot(γ.lat,-γ.depth[33:-1:1],100 * gsection[:,33:-1:1]', lims)
+dyeplot(γ.lat,-γ.depth[33:-1:1],100 * gsection[:,33:-1:1]', lims, "images/dp2")

@@ -2,7 +2,7 @@ module TMI
 
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
-    GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
+    GoogleDrive, Distances, DrWatson, GibbsSeaWater,
     PyPlot, PyCall, Distributions, Optim,
     Interpolations, LineSearches, MAT, NCDatasets
 
@@ -11,7 +11,7 @@ export config, config_from_mat, config_from_nc,
     lonindex, latindex, depthindex,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
-    planview, dyeplot, plotextent, tracerinit,
+    planview, dyeplot, plotextent, surfacedensity, tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
@@ -58,7 +58,7 @@ struct grid
     depth::Vector{Float64}
     I::Vector{CartesianIndex{3}} # index
     R::Array{Int,3}
-#    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
+#    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}}
     wet::BitArray{3}
 end
 
@@ -77,7 +77,7 @@ function config_from_nc(TMIversion)
 
     #- `url`: Google Drive URL for data
     url = ncurl(TMIversion)
-    
+
     TMIfile = datadir("TMI_"*TMIversion*".nc")
     println(url)
     println(TMIfile)
@@ -103,7 +103,7 @@ function config_from_nc(TMIversion)
     # LU factorization for efficient matrix inversions
     println("Alu")
     @time Alu = lu(A)
-    
+
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
     γ = grid(lon,lat,depth,I,R,wet)
@@ -114,7 +114,7 @@ function config_from_nc(TMIversion)
 
     println("B=")
     @time B = boundarymatrix(TMIfile,γ)
-    
+
     return  A, Alu, γ, TMIfile, L, B
 
 end
@@ -134,9 +134,9 @@ function config_from_mat(TMIversion)
 
     # cloak mat file in gz to get Google Drive spam filter to shut down
     isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing
-    
+
     # move this to runtests.jl to see if it is read correctly?
-    # Azyx = watermassmatrix(TMIfile) 
+    # Azyx = watermassmatrix(TMIfile)
 
     # # make a sample field from zyx cartesian indices
     Izyx = cartesianindex(TMIfile)
@@ -166,9 +166,9 @@ function config_from_mat(TMIversion)
 
     # need to make this optional
     L = circulationmatrix(TMIfile,γ)
-    
+
     B = boundarymatrix(TMIfile,γ)
-    
+
     # consider re-ordering this.
     # some output should be optional
     # return Izyx or I or neither?
@@ -247,13 +247,13 @@ end
 """
 function gridprops(file)
     if file[end-1:end] == "nc"
-        
+
         lat = convert(Vector{Float64},ncread(file,"lat"))
         lon = convert(Vector{Float64},ncread(file,"lon"))
         depth = convert(Vector{Float64},ncread(file,"depth"))
 
     elseif file[end-2:end] == "mat"
-        
+
         matobj = matopen(file)
         lon=convert(Vector{Float64},vec(read(matobj,"LON")))
         lat=convert(Vector{Float64},vec(read(matobj,"LAT")))
@@ -261,7 +261,7 @@ function gridprops(file)
         close(matobj)
 
     end
-    
+
     return lat,lon,depth
 end
 
@@ -302,7 +302,7 @@ end
 
 """
         function matrix_zyx2xyz(TMIfile,Azyx,γ)
-   
+
     Transfer zyx format water-mass matrix A to xyz format
 # Arguments
 - `Azyx`: water-mass matrix in zyx format
@@ -314,11 +314,11 @@ function matrix_zyx2xyz(file,Azyx,R)
 
     izyx, jzyx, mzyx = findnz(Azyx)
     Izyx = cartesianindex(file)
-        
+
     # Julia accounting x,y,z
     ixyz = updatelinearindex(izyx,Izyx,R)
     jxyz = updatelinearindex(jzyx,Izyx,R)
-    
+
     # use grid indices to switch i,j values
     Axyz = sparse(ixyz,jxyz,mzyx)
     return Axyz
@@ -336,7 +336,7 @@ end
 """
 function circulationmatrix(file,γ)
 
-    if file[end-2:end] == "mat" 
+    if file[end-2:end] == "mat"
 
         matobj = matopen(file)
         if haskey(matobj,"L")
@@ -369,13 +369,13 @@ function circulationmatrix(file,γ)
             return nothing
         end
     end
-    
+
     return L
 end
 
 """
     function circulationmatrix(file,A,γ)
-    Read and assemble the circulation matrix from the efficient storage of A and F₀ variables. 
+    Read and assemble the circulation matrix from the efficient storage of A and F₀ variables.
 # Arguments
 - `file`: TMI MATLAB file name
 - `A`: TMI water-mass matrix
@@ -392,7 +392,7 @@ function circulationmatrix(file,A,γ)
     if haskey(NCDataset(file),"F₀")
         F₀ = ncread(file,"F₀")
         F₀vec = F₀[γ.wet]
-    
+
         # For each row of A, multiply by F₀
         i, j, F = findnz(A)
 
@@ -406,7 +406,7 @@ function circulationmatrix(file,A,γ)
     else
         return nothing
     end
-    
+
 end
 
 """
@@ -432,7 +432,7 @@ function boundarymatrix(file,γ)
             # consider using Azyx2xyz here.
             Izyx = cartesianindex(file)
             izyx, jzyx, Fzyx = findnz(Bzyx)
-            # for B, rows are 3D grid space, columns are for the surface index. 
+            # for B, rows are 3D grid space, columns are for the surface index.
             # Julia accounting x,y,z
             Isfc = surfaceindex(Izyx)
             ixyz = updatelinearindex(izyx,Izyx,γ.R)
@@ -469,7 +469,7 @@ end
 # Arguments
 - `izyx`: index of interest in z,y,x accounting
 - `Izyx`: wet Cartesian Index for z,y,x
-- `R`: Linear indices for x,y,z 
+- `R`: Linear indices for x,y,z
 # Output
 - `ixyz`: index of interest in x,y,z accounting
 """
@@ -478,7 +478,7 @@ function updatelinearindex(izyx,Izyx,R)
     ixyz = R[Izyx[izyx]]
     return ixyz
 end
-                                                  
+
 """
     function readtracer(file,tracername)
     Read a tracer field from NetCDF.
@@ -614,7 +614,7 @@ function surfacepatch(lonbox,latbox,γ::grid)
     d = tracerinit(γ.wet,Float64)
 
     # can you add a logical to a Float64? yes, it's 1.0
-    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)]
 
     # old method for vectors
         #nfield = length(γ.I) # number of ocean points
@@ -626,7 +626,7 @@ end
 
 """
     function nearestneighbormask
-    Make a 3D tracer field that is 1 at location 
+    Make a 3D tracer field that is 1 at location
     of nearest neighbor, 0 elsewhere
 # Arguments
 - `loc`: location in a 3-tuple (lon,lat,depth)
@@ -642,13 +642,13 @@ function nearestneighbormask(loc,γ::grid,N=1)
     δ = falses(size(γ.wet))
     #Array{BitArray,3}(undef,size(γ.wet))
     #fill!(δ,zero(Bool))
-    δ[Inn] = 1 
+    δ[Inn] = 1
     return δ
 end
 
 """
     function nearestneighbor(loc,γ)
-    return the Cartesian index and linear index 
+    return the Cartesian index and linear index
     of the nearest N neighbors
 # Arguments
 - `loc`: 3-tuple of lon,lat,depth location
@@ -680,15 +680,15 @@ function nearestneighbor(loc,γ,N=1)
         end
         for ii in 1:floor(Integer,N/2)
             Inn[cN2+ii] = CartesianIndex.(γ.I[ijmin[ii]][1],γ.I[ijmin[ii]][2],kmin[2])
-        end        
+        end
     end
-    
+
     return Inn
 end
 
 """
     function horizontaldistance(loc,γ)
-    return the Cartesian index and linear index 
+    return the Cartesian index and linear index
     of the nearest N neighbors
 # Arguments
 - `loc`: 3-tuple of lon,lat,depth location
@@ -700,12 +700,12 @@ function horizontaldistance(loc,γ::grid)
 
     # hordist will have same type as lon,lat,depth
     T = eltype(γ.lon)
-    
+
     # pre-allocate horizontal distance
     hordist = Matrix{T}(undef,length(γ.lon),length(γ.lat))
     # will give NaN with appropriate precision
     fill!(hordist,zero(T)/zero(T))
-    
+
     # calculate haversine horizontal distance on sphere
     [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),                  (γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
        for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
@@ -750,8 +750,8 @@ end
 - `lonbox`: in format [lon_start, lon_stop]
 
 """
-function plotextent(latbox, lonbox)
-    
+function plotextent(latbox, lonbox, savestr)
+
 #    ccrs = pyimport("cartopy.crs")
     lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
 
@@ -786,6 +786,42 @@ function plotextent(latbox, lonbox)
     gl.right_labels = false
 
     ax.set_title("User-defined surface patch")
+    savefig(savestr)
+end
+
+"""
+    function plotextent
+    Generate plot showing
+# Arguments
+- `latbox`: in format [lat_start, lat_stop]
+- `lonbox`: in format [lon_start, lon_stop]
+
+"""
+function surfacedensity(lon, lat, values, xpos, ypos, savestr)
+
+    #init GeoAxes
+    fig = figure()
+    ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
+
+    # using cartopy 0.18 and NaturalEarth is missing
+    ax.coastlines() #show coastlines
+
+    cf = contourf(lon, lat, values, cmap = "plasma", vmax = 0, vmin = -10, levels = 50,
+                    transform = TMI.cartopy.crs.PlateCarree())
+    cb = colorbar(cf,fraction = 0.018)
+    scatter(xpos, ypos, 30, c = "green", marker = ".", transform = TMI.cartopy.crs.PlateCarree())
+    cb.set_label("Effective Thickness [log10(m)]")
+
+    #add gridlines
+    gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
+    gl.top_labels = false
+    gl.right_labels = false
+    title(savestr)
+
+    ax.set_extent([330, 20, 50, 90])
+
+
+    savefig(savestr)
 end
 
 """
@@ -797,16 +833,23 @@ end
 - `vals`: lat x depth value array
 - `lims`: contour levels
 """
-function dyeplot(lat, depth, vals, lims)
+function dyeplot(lat, depth, vals, lims, savestr)
 
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, depth, vals, lims) 
+    cf = contourf(lat, depth, vals, lims, cmap = "plasma")
+    cb = colorbar(cf)
+    cb.set_label("% surface region")
     gca().set_title("Meridional dye concentration")
+    xlim([20,80])
+    ylim([-1000,0])
+    xlabel("latitude [°]")
+    ylabel("depth [m]")
+    savefig(savestr)
 end
 
 """
-    function depthindex(I) 
+    function depthindex(I)
     Get the k-index (depth level) from the Cartesian index
 """
 function depthindex(I)
@@ -817,7 +860,7 @@ function depthindex(I)
 end
 
 """
-    function lonindex(I) 
+    function lonindex(I)
     Get the i-index (lon index) from the Cartesian index
 """
 function lonindex(I)
@@ -828,7 +871,7 @@ function lonindex(I)
 end
 
 """
-    function latindex(I) 
+    function latindex(I)
     Get the j-index (latitude index) from the Cartesian index
 """
 function latindex(I)
@@ -839,7 +882,7 @@ function latindex(I)
 end
 
 """
-    function surfaceindex(I) 
+    function surfaceindex(I)
     Get the vector-index where depth level == 1 and it is ocean.
 """
 function surfaceindex(I)
@@ -847,7 +890,7 @@ function surfaceindex(I)
     return Isfc
 end
 
-""" 
+"""
     function tracerinit(wet,ltype=Float64)
       initialize tracer field on TMI grid
     perhaps better to have a tracer struct and constructor
@@ -868,7 +911,7 @@ function tracerinit(wet,ltype=Float64)
     return d
 end
 
-""" 
+"""
     function tracerinit(wet,vec,I)
           initialize tracer field on TMI grid
         perhaps better to have a tracer struct and constructor
@@ -884,16 +927,16 @@ function tracerinit(vec,I,wet)
     # preallocate
     T = eltype(vec)
     field = Array{T}(undef,size(wet))
-    fill!(field,zero(T)/zero(T))    
+    fill!(field,zero(T)/zero(T))
 
     #- a comprehension
     [field[I[n]]=vec[n] for n ∈ eachindex(I)]
     return field
 end
 
-""" 
+"""
     function control2state(tracer2D,γ)
-    turn 2D surface field into 3D field with zeroes below surface    
+    turn 2D surface field into 3D field with zeroes below surface
 # Arguments
 - `tracer2D`:: 2D surface tracer field
 - `wet`::BitArray mask of ocean points
@@ -912,9 +955,9 @@ function control2state(tracer2D::Matrix{T},wet) where T<: Real
     return tracer3D
 end
 
-""" 
+"""
     function control2state(u,γ)
-    turn surface control vector into 3D field with zeroes below surface    
+    turn surface control vector into 3D field with zeroes below surface
 # Arguments
 - `u`:: surface control vector
 - `wet`::BitArray mask of ocean points
@@ -933,9 +976,9 @@ function control2state(u::Vector{T},wet) where T<: Real
     return tracer3D
 end
 
-""" 
+"""
     function control2state!(c,u,γ)
-    Add surface control vector to existing 3D field 
+    Add surface control vector to existing 3D field
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
 - `u`:: surface control vector
@@ -948,9 +991,9 @@ function control2state!(c::Array{T,3},u::Vector{T},γ) where T<: Real
     [c[γ.I[ii]] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
-""" 
+"""
     function control2state!(c,u,γ)
-    Add surface control vector to existing 3D field 
+    Add surface control vector to existing 3D field
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
 - `u`:: surface control vector
@@ -982,8 +1025,8 @@ function state2obs(cvec,wis,γ)
     [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
-    
-""" 
+
+"""
     function trackpathways(TMIversion,latbox,lonbox)
     Track the pathways of a user-defined water mass.
      Steps: (a) define the water mass by a rectangular surface patch dyed with passive tracer concentration of         (b) propagate the dye with the matrix A, with the result being the fraction of water originating from the surface region.
@@ -1009,7 +1052,7 @@ function trackpathways(Alu,latbox,lonbox,γ)
     return c
 end
 
-""" 
+"""
     function watermassdistribution(TMIversion,latbox,lonbox)
     Track the pathways of a user-defined water mass.
      Steps: (a) define the water mass by an oceanographically-relevant surface patch dyed with passive tracer concentration of one
@@ -1036,7 +1079,7 @@ function watermassdistribution(TMIversion,Alu,region,γ)
     return g
 end
 
-""" 
+"""
     function ncurl(TMIversion)
     placeholder function to give location (URL) of NetCDF Google Drive input
     in the future, consider a struct or Dict that describes all TMI versions.
@@ -1057,7 +1100,7 @@ function ncurl(TMIname)
     elseif TMIname == "modern_90x45x33_G14_v2"
         url = "https://docs.google.com/uc?export=download&id=1Mwhv70soBX6-pYijU0ElNl0TZw0vSbXN"
     elseif TMIname == "LGM_90x45x33_G14"
-        url = "https://docs.google.com/uc?export=download&id=1yoDi7_foBt3TVULCstlWnNLHFc2G47Fz"  
+        url = "https://docs.google.com/uc?export=download&id=1yoDi7_foBt3TVULCstlWnNLHFc2G47Fz"
     elseif TMIname == "LGM_90x45x33_G14A"
         url = "https://docs.google.com/uc?export=download&id=1ADkDI3Fc3z4Vm75K5u6hx0Yu1P0iVnW1"
     elseif TMIname == "LGM_90x45x33_GPLS1"
@@ -1071,7 +1114,7 @@ function ncurl(TMIname)
     end
 end
 
-""" 
+"""
     function maturl(TMIversion)
     Find *mat file here.
     placeholder function to give location (URL) of Google Drive input
@@ -1108,7 +1151,7 @@ function maturl(TMIname)
     return url
 end
 
-""" 
+"""
     function regeneratedphosphate(TMIversion,Alu,γ)
     Regenerated (i.e., accumulated, remineralized) phosphate
 # Arguments
@@ -1121,26 +1164,26 @@ end
 function regeneratedphosphate(TMIversion,Alu,γ)
 
     inputfile = datadir("TMI_"*TMIversion*".nc")
-        
+
     #A, Alu, γ, inputfile = config(TMIversion)
     qPO₄ = readtracer(inputfile,"qPO₄")
 
     # PO₄ᴿ = cumulative regenerated phosphate
-    PO₄ᴿ = tracerinit(γ.wet); # pre-allocate 
+    PO₄ᴿ = tracerinit(γ.wet); # pre-allocate
     PO₄ᴿ[γ.wet] = -(Alu\qPO₄[γ.wet])
     return PO₄ᴿ
 end
 
-""" 
+"""
     function volumefilled(TMIversion)
     Find the ocean volume that has originated from each surface box.
      This is equivalent to solving a sensitivity problem:
-     The total volume is V = vᵀ c , where v is the volume of each box 
+     The total volume is V = vᵀ c , where v is the volume of each box
      and c is the fraction of volume from a given source which
-     satisfies the equation A c = d.                     
+     satisfies the equation A c = d.
      Next, dV/d(d) = A⁻ᵀ v, and dV/d(d) is exactly the volume originating from each source.
 
-     See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
+     See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011.
 # Arguments
 - `TMIversion`: version of TMI water-mass/circulation model
 - `Alu`: LU decomposition of water-mass matrix A
@@ -1151,10 +1194,10 @@ end
 function volumefilled(TMIversion,Alu,γ)
 
     #A, Alu, γ = config(TMIversion)
-    
+
     v = cellvolume(γ)
     area = cellarea(γ)
-    
+
     # effectively take inverse of transpose A matrix.
     dVdd = tracerinit(γ.wet); # pre-allocate c
     dVdd[γ.wet] = Alu'\v[γ.wet]
@@ -1171,15 +1214,15 @@ function volumefilled(TMIversion,Alu,γ)
     return volume
 end
 
-""" 
+"""
     function surfaceorigin(TMIversion,loc)
-     Find the surface origin of water for some interior box 
+     Find the surface origin of water for some interior box
      This is equivalent to solving a sensitivity problem:
-     The mass fraction at a location `loc` of interest is 
+     The mass fraction at a location `loc` of interest is
     `c[loc] = δᵀ c`, where `δ` samples the location of the global mass-fraction variable, c.
     Then the sensitivity of `c[loc]` is: d(c[loc])/d(d) = A⁻ᵀ δ.
     The derivative is solved using the constraint: Ac = d.
-    The sensitivity is exactly the mass fraction originating from each source.      
+    The sensitivity is exactly the mass fraction originating from each source.
     This problem is mathematically similar to determining how the ocean is filled.
 # Arguments
 - `loc`: location (lon,lat,depth) of location of interest
@@ -1194,7 +1237,7 @@ function surfaceorigin(loc,Alu,γ)
 
     ctmp = tracerinit(γ.wet)
     δ = interpweights(loc,γ)
-    
+
     # Find nearest neighbor on grid
     # set δ = 1 at grid cell of interest
     #δ = nearestneighbormask(loc,γ)
@@ -1281,7 +1324,7 @@ function interpweights(loc,γ)
     elseif sum(filter(!isnan,δ)) < 1.0
         δ ./= sum(filter(!isnan,δ))
     end
-    
+
     return δ
 end
 
@@ -1294,7 +1337,7 @@ function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
     that best fits observations, y,
     according to the cost function,
     J = (ỹ - y)ᵀ W⁻¹ (ỹ - y)
-    subject to Aỹ = d₀ + Γ u₀.                 
+    subject to Aỹ = d₀ + Γ u₀.
     W⁻ is a (sparse) weighting matrix.
     See Supplementary Section 2, Gebbie & Huybers 2011.
 # Arguments
@@ -1312,7 +1355,7 @@ function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
     # set surface boundary condition to the observations.
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
 
-    return out    
+    return out
 end
 
 """
@@ -1324,7 +1367,7 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
     that best fits observations, y,
     according to the cost function,
     J = (ỹ - y)ᵀ W⁻¹ (ỹ - y)
-    subject to Aỹ = d₀ + Γ u₀.                 
+    subject to Aỹ = d₀ + Γ u₀.
     W⁻ is a (sparse) weighting matrix.
     See Supplementary Section 2, Gebbie & Huybers 2011.
 # Arguments
@@ -1341,16 +1384,16 @@ function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 
     # ### added this
      fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
-    
+
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 5))
 #    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
-    return out    
+    return out
 end
 
-""" 
+"""
     function sample_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
     This version: gridded observations
@@ -1384,8 +1427,8 @@ function sample_observations(TMIversion,variable,γ)
     W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ[γ.wet].^2)
     return y, W⁻, θtrue
 end
- 
-""" 
+
+"""
     function sample_observations(TMIversion,variable,locs)
     Synthetic observations that are a contaminated version of real observations
     This version: observations with random (uniform) spatial sampling
@@ -1406,7 +1449,7 @@ function sample_observations(TMIversion,variable,γ,N)
 
     # take synthetic observations
     # get observational uncertainty
-    
+
     θtrue = readtracer(inputfile,variable)
     replace!(θtrue,NaN=>0.0)
     σθ = readtracer(inputfile,"σ"*variable)
@@ -1445,8 +1488,8 @@ function sample_observations(TMIversion,variable,γ,N)
     W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
     return y, W⁻, ytrue, locs, wis
 end
- 
-""" 
+
+"""
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -1470,12 +1513,12 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
 
     d = dfld[γ.wet]
     y = view(yfld,γ.wet)
-    
+
     #ỹ = tracerinit(γ.wet,T)
     #n = tracerinit(γ.wet,T)
     #dJdn = tracerinit(γ.wet,T)
     dJdd = tracerinit(γ.wet,T)
-    
+
     # first-guess reconstruction of observations
     #Δd = d + Γ(u,wet)
     #ỹ[wet] =  Alu\Δd[wet]
@@ -1501,7 +1544,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
     return J, gJ
 end
 
-""" 
+"""
     function costfunction_obs(u,Alu,y,d,Wⁱ,wet)
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -1536,13 +1579,13 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,
         #pick out I[3]==1
         #gJ = -dJdd[:,:,1][γ.wet[:,:,1]]
     end
-    
+
     if J !=nothing
-        return  d'* (Wⁱ * d)       
+        return  d'* (Wⁱ * d)
     end
 end
 
-""" 
+"""
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
@@ -1552,7 +1595,7 @@ end
 - `y`: pointwise observations
 - `d`: model constraints
 - `Wⁱ`: inverse of W weighting matrix for observations
-- `wis`: weights for interpolation 
+- `wis`: weights for interpolation
 - `locs`: data locations
 - `γ`: grid
 # Output
@@ -1576,13 +1619,13 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     #gd = Array{T,3}(undef,size(dfld))
     #gd = Vector{T}(undef,sum(γ.wet))
     gd = zeros(T,sum(γ.wet))
-    
+
     # transpose of "E" operation in state2obs
     for ii in eachindex(y)
         # interpweights repeats some calculations
         gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
     end
-    # do Eᵀ gỹ 
+    # do Eᵀ gỹ
     ldiv!(Alu',gd)
     list = surfaceindex(γ.I)
     gJ = Vector{T}(undef,sum(γ.wet[:,:,1]))
@@ -1590,7 +1633,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     return J, gJ
 end
 
-""" 
+"""
     function costfunction_obs!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,locs,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
@@ -1617,7 +1660,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
     ỹ = state2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
-    if gJ != nothing    
+    if gJ != nothing
         gỹ = 2*(Wⁱ*ỹ)
 
         #gd = Array{T,3}(undef,size(dfld))
@@ -1627,7 +1670,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
             # interpweights repeats some calculations
             gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
         end
-        # do Eᵀ gỹ 
+        # do Eᵀ gỹ
         ldiv!(Alu',gd)
         list = surfaceindex(γ.I)
         [gJ[ii] = gd[list[ii]] for ii in eachindex(list)]
@@ -1639,7 +1682,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
     end
 end
 
-""" 
+"""
     function costfunction(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
@@ -1682,7 +1725,7 @@ function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diago
         # interpweights repeats some calculations
         gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
     end
-    # do Eᵀ gỹ 
+    # do Eᵀ gỹ
     ldiv!(Alu',gd)
     list = surfaceindex(γ.I)
     #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
@@ -1692,7 +1735,7 @@ function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diago
     return J, gJ
 end
 
-""" 
+"""
     function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
@@ -1728,7 +1771,7 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
     ỹ = state2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
-    if gJ != nothing    
+    if gJ != nothing
         gỹ = 2*(Wⁱ*ỹ)
 
         gd = zeros(T,sum(γ.wet))
@@ -1736,7 +1779,7 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
             # interpweights repeats some calculations
             gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
         end
-        # do Eᵀ gỹ 
+        # do Eᵀ gỹ
         ldiv!(Alu',gd)
         list = surfaceindex(γ.I)
 
@@ -1751,7 +1794,7 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
     end
 end
 
-""" 
+"""
     function steady_inversion(u,Alu,d,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
@@ -1771,7 +1814,7 @@ function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) wh
 
     c = tracerinit(wet,T)
     n = tracerinit(wet,T)
-    
+
     # first-guess reconstruction of observations
     Δd = d + control2state(u,wet)
     c[wet] =  Alu\Δd[wet]
@@ -1825,7 +1868,7 @@ function iswet(loc,γ)
     # 1 = very strict
     # 0 = all points
     wetness = 0.2
-    
+
     wis = interpindex(loc,γ)
 
     # handle wraparound
@@ -1841,7 +1884,7 @@ function iswet(loc,γ)
     return wetwrap[wis...] > wetness
 end
 
-""" 
+"""
 Save TMI configuration to NetCDF format for non-proprietary access
 """
 function config2nc(TMIversion,A,γ,L,B)
@@ -1851,7 +1894,7 @@ function config2nc(TMIversion,A,γ,L,B)
     isfile(filenetcdf) && rm(filenetcdf)
 
     grid2nc(TMIversion,γ)
-    
+
     matfields2nc(TMIversion,γ)
 
     !isnothing(A) && watermassmatrix2nc(TMIversion,A)
@@ -1873,11 +1916,11 @@ Save grid dictionaries of attributes for writing to NetCDF file
 """
 function griddicts(γ)
     # update names and types in dictionary
-    
+
     TMIgrids = Dict("lon" => γ.lon,
                     "lat" => γ.lat,
                     "depth" => γ.depth)
-    
+
     TMIgridsatts = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
                         "lat" => Dict("longname" => "Latitude", "units" => "°N"),
                         "depth" => Dict("longname" => "depth", "units" => "m"))
@@ -1929,12 +1972,12 @@ function matfields2nc(TMIversion,γ)
             haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
         end
     end
-    
+
     TMIfieldsatts = fieldsatts()
 
     # iterate in TMIgrids Dictionary to write to NetCDF.
     for (varname,varvals) in TMIfields
-        
+
         nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[varname])
         println("write ",varname)
         ncwrite(varvals,filenetcdf,varname)
@@ -1946,7 +1989,7 @@ end
 All variable names and attributes.
 Useful for writing NetCDF files.
 """
-fieldsatts() = 
+fieldsatts() =
     Dict("θ" => Dict("longname" => "potential temperature", "units" => "°C"),
          "σθ" => Dict("longname" => "1σ standard error in potential temperature", "units" => "°C"),
          "Sp" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
@@ -2001,7 +2044,7 @@ function regions2nc(TMIversion,γ)
                       "TROPATL" => "tropical and subtropical Atlantic",
                       "TROPPAC" => "tropical and subtropical Pacific",
                       "TROPIND" => "tropical and subtropical Indian")
-    
+
     matobj = matopen(filemat)
     if haskey(matobj,"d_all")
         d_all = read(matobj,"d_all")
@@ -2012,12 +2055,12 @@ function regions2nc(TMIversion,γ)
 
     # a kludge for now
     T = eltype(γ.lon)
-    
+
     # iterate over all regions in d_all
     Izyx = cartesianindex(filemat)
     regions = Dict{String,Array{T,2}}()
     regionatts = Dict{String,Dict{String,String}}()
-    
+
     for rr = 1:size(d_all,2)
         # 3D fields in zyx vector format
         # are changed to 3D xyz format
@@ -2025,7 +2068,7 @@ function regions2nc(TMIversion,γ)
 
         # just save the surface 2D field
         push!(regions, list[rr] => d[:,:,1])
-        
+
         push!(regionatts, list[rr] =>
          Dict("longname" => regionname[list[rr]]*" surface region", "units" => "[]"))
     end
@@ -2055,7 +2098,7 @@ function watermassmatrix2nc(TMIversion,A)
     nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=matts)
     println("write ",varname)
     ncwrite(m, filenetcdf,varname)
-    
+
      varname= "Arow"
      destatts = Dict("longname" => "gridcell number of destination (row value)")
      nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=destatts)
@@ -2111,7 +2154,7 @@ Save circulation matrix `L` to NetCDF file.
 function circulationmatrix2nc(TMIversion,L,γ)
 
     T = eltype(L)
-    fullmatrix = false # more efficient to just save F₀, then modify A to get L 
+    fullmatrix = false # more efficient to just save F₀, then modify A to get L
     filenetcdf = datadir("TMI_"*TMIversion*".nc")
     if !fullmatrix
         F₀ = tracerinit(γ.wet,T)
@@ -2139,7 +2182,7 @@ function circulationmatrix2nc(TMIversion,L,γ)
         nccreate(filenetcdf,varname,"L_element",1:nelements,elementatts,atts=Fatts)
         println("write ",varname)
         ncwrite(F, filenetcdf,varname)
-        
+
         varname= "Lrow"
         destatts = Dict("longname" => "gridcell number of destination (row value)")
         nccreate(filenetcdf,varname,"L_element",1:nelements,elementatts,atts=destatts)
@@ -2152,7 +2195,7 @@ function circulationmatrix2nc(TMIversion,L,γ)
         println("write ",varname)
         ncwrite(j, filenetcdf,varname)
     end
-    
+
 end
 
 """
@@ -2203,15 +2246,15 @@ function grid2nc(TMIversion,γ)
     varname = "i"
     nccreate(filenetcdf,varname,"linearindex",1:nfld,linearindexatts,atts=iatts)
     ncwrite(lonindex(γ.I),filenetcdf,varname)
-    
+
     varname = "j"
     nccreate(filenetcdf,varname,"linearindex",1:nfld,linearindexatts,atts=jatts)
     ncwrite(latindex(γ.I),filenetcdf,varname)
-    
+
     varname = "k"
     nccreate(filenetcdf,varname,"linearindex",1:nfld,linearindexatts,atts=katts)
     ncwrite(depthindex(γ.I),filenetcdf,varname)
-    
+
 end
 
 """
