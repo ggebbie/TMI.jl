@@ -30,13 +30,16 @@ N = 20
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
+# wis : weight for interpolation "s"?
 y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
 d₀ = tracerinit(γ.wet)
 [d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 
-Q⁻ = 1.0/(5.0^2)
+# assume temperature known ± 5°C
+σd = 5.0
+Q⁻ = 1.0/(σd^2)
 
 # optimize the sparse data map with an Optim.jl method
 out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)

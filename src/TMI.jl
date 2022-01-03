@@ -971,6 +971,8 @@ function state2obs(cvec,wis,γ)
     # perhaps the most clever line in TMI.jl?
     wetwrap = view(γ.wet,list,:,:)
 
+    # some interpolation weights on land, oh no
+    # sum up all weights in ocean
     [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # reconstruct the observations
@@ -980,6 +982,7 @@ function state2obs(cvec,wis,γ)
     replace!(c̃,NaN=>0.0)
     cwrap = view(c̃,list,:,:)
 
+    # divide by sum of all ocean weights so that this is still a true average
     [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
@@ -1346,7 +1349,7 @@ function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 50))
 #    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
     return out    
@@ -1411,6 +1414,7 @@ function sample_observations(TMIversion,variable,γ,N)
     
     θtrue = readtracer(inputfile,variable)
     replace!(θtrue,NaN=>0.0)
+    
     σθ = readtracer(inputfile,"σ"*variable)
     replace!(σθ,NaN=>0.0)
 
@@ -1423,6 +1427,7 @@ function sample_observations(TMIversion,variable,γ,N)
 
     # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
+    # put this paragraph into a function or find an existing function
     sumwis = Vector{Float64}(undef,N)
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
@@ -1439,7 +1444,8 @@ function sample_observations(TMIversion,variable,γ,N)
     σwrap = view(σθ,list,:,:)
     [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
 
-    ntrue = rand(Normal(),N) .* σtrue
+    #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+    ntrue = rand(Normal(),N).*σtrue
     y = ytrue .+ ntrue
 
     # weighting matrix
