@@ -130,7 +130,8 @@ function config_from_mat(TMIversion)
     TMIfilegz = TMIfile*".gz"
     println(TMIfile)
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+#    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+    !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,datadir())
 
     # cloak mat file in gz to get Google Drive spam filter to shut down
     isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing
@@ -1306,11 +1307,12 @@ function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+function steadyclimatology(u₀,fg!)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 50))
 
     return out    
 end

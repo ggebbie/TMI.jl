@@ -44,7 +44,7 @@ d₀[:,:,1] = y[:,:,1]
 fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
 
 # filter the data with an Optim.jl method
-out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
+out = steadyclimatology(u₀,fg!)
 
 # reconstruct by hand to double-check.
 ũ = out.minimizer
