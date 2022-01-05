@@ -36,19 +36,20 @@ export config, config_from_mat, config_from_nc,
 const mpl = PyNULL()
 const plt = PyNULL()
 const cmocean = PyNULL()
-const cartopy = PyNULL()
+const ccrs = PyNULL()
+const iris = PyNULL()
+const patch = PyNULL()
 
 #Initialize all Python packages - install with conda through Julia
 function __init__()
-    #copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
-    #copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
+    copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
+    copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
 
     # following ClimatePlots.jl
-    copy!(mpl, pyimport_conda("matplotlib", "matplotlib", "conda-forge"))
+    #copy!(mpl, pyimport_conda("matplotlib", "matplotlib", "conda-forge"))
     #copy!(plt, pyimport_conda("matplotlib.pyplot", "matplotlib", "conda-forge"))
-    #copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge"))
-    copy!(cartopy, pyimport_conda("cartopy", "cartopy", "conda-forge"))
-
+    #copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge")) copy!(cartopy, pyimport_conda("cartopy", "cartopy", "conda-forge"))
+    #copy!(iris, pyimport_conda("iris", "iris", "conda-forge"))
     println("Python libraries installed")
  end
 
@@ -760,11 +761,11 @@ function plotextent(latbox, lonbox, savestr)
     h = maximum(latbox) - minimum(latbox)
 
     #init GeoAxes
-    fig = figure()
-    ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
+    fig = PyPlot.figure()
+    ax = fig.add_subplot(projection = ccrs.PlateCarree())
 
     #plot rectangle
-    ax.add_patch(TMI.mpl.patches.Rectangle(xy=lower_left,
+    ax.add_patch(patch.Rectangle(xy=lower_left,
                                  width=w, height=h,
                                  facecolor="blue",
                                  alpha=0.2,
@@ -806,7 +807,7 @@ function surfacedensity(lon, lat, values, xpos, ypos, savestr)
     # using cartopy 0.18 and NaturalEarth is missing
     ax.coastlines() #show coastlines
 
-    cf = contourf(lon, lat, values, cmap = "plasma", vmax = 0, vmin = -10, levels = 50,
+    cf = contourf(lon, lat, values, cmap = "plasma", levels = 50, vmax = 0, vmin = -10,
                     transform = TMI.cartopy.crs.PlateCarree())
     cb = colorbar(cf,fraction = 0.018)
     scatter(xpos, ypos, 30, c = "green", marker = ".", transform = TMI.cartopy.crs.PlateCarree())
@@ -818,7 +819,7 @@ function surfacedensity(lon, lat, values, xpos, ypos, savestr)
     gl.right_labels = false
     title(savestr)
 
-    ax.set_extent([330, 20, 50, 90])
+    ax.set_extent([290, 350, 50, 70])
 
 
     savefig(savestr)
@@ -835,14 +836,13 @@ end
 """
 function dyeplot(lat, depth, vals, lims, savestr)
 
-    #calc fignum - based on current number of figures
     figure()
     cf = contourf(lat, depth, vals, lims, cmap = "plasma")
     cb = colorbar(cf)
     cb.set_label("% surface region")
-    gca().set_title("Meridional dye concentration")
-    xlim([20,80])
-    ylim([-1000,0])
+    gca().set_title("Meridional dye concentration: "*savestr)
+    # xlim([20,80])
+    # ylim([-1000,0])
     xlabel("latitude [°]")
     ylabel("depth [m]")
     savefig(savestr)
@@ -1353,8 +1353,11 @@ function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 20))
 
+    #updates u0, stores in out
+    #really takes a couple hundred iterations, 5 for short
+    #LBFGS - actual optimization function
     return out
 end
 
@@ -1545,7 +1548,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},W�
 end
 
 """
-    function costfunction_obs(u,Alu,y,d,Wⁱ,wet)
+    function costfunction_obs!(J,gJ,u,Alu,y,d,Wⁱ,wet)
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
 # Arguments

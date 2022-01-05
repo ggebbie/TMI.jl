@@ -10,7 +10,7 @@
 using Revise
 using TMI, BenchmarkTools, PyPlot, PyCall
 
-pygui(true) #needed for Atom, not sure what it will do in other places
+# pygui(true) #needed for Atom, not sure what it will do in other places
 
 TMIversion = "modern_180x90x33_GH10_GH12"
 TMIversion = "modern_90x45x33_GH10_GH12"
@@ -24,16 +24,18 @@ list = ("GLOBAL","ANT","SUBANT",
             "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
             "TROPATL","TROPPAC","TROPIND")
 
-region = list[4]
+# region = list[12]
+for region in list
 
-# do numerical analysis
-g = watermassdistribution(TMIversion,Alu,region,γ);
+    # do numerical analysis
+    g = watermassdistribution(TMIversion,Alu,region,γ);
 
-# plot a section at 330 east longitude (i.e., 30 west)
-#lon_section = 329;
-lon_section = 330;
-gsection = section(g,lon_section,γ)
-lims = 0:5:100
+    # plot a section at 330 east longitude (i.e., 30 west)
+    #lon_section = 329;
+    lon_section = 338;
+    gsection = section(g,lon_section,γ)
+    lims = 0:5:100
 
-# make a plot of dye in the ocean
-dyeplot(γ.lat,-γ.depth[33:-1:1],100 * gsection[:,33:-1:1]', lims, "images/dp2")
+    # make a plot of dye in the ocean
+    dyeplot(γ.lat,-γ.depth[33:-1:1],100 * gsection[:,33:-1:1]', lims, "images/" *region*".png")
+end

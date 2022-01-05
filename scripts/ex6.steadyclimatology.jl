@@ -1,15 +1,9 @@
 #=%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example : Find the distribution of a tracer given:              %
 %       (a) the pathways described by A,                          %
-%       (b) interior sources and sinks given by dC,               % 
+%       (b) interior sources and sinks given by dC,               %
 %           that best fits observations, Cobs,                    %
-%   and (c) inequality constraints on the tracer concentration.   %
-%                                                                  %
-% Mathematically, minimize J = (C-Cobs)^T W (C-Cobs) subject to    %
-%                         AC = d + Gamma u                         %
-%  where u is the estimated change in surface concentration.    % 
-%
-% See Supplementary Section 2, Gebbie & Huybers 2011.
+%   and (c) inequality constraints on the tracer concentration.   % %                                                                  % % Mathematically, minimize J = (C-Cobs)^T W (C-Cobs) subject to    % %                         AC = d + Gamma u                         % %  where u is the estimated change in surface concentration.    % % % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
 # using Random, Statistics, LinearAlgebra, Dates #Shipped with Julia
 # using Distributions, StatsBase #Core statistics
@@ -42,12 +36,15 @@ d₀ = tracerinit(γ.wet)
 d₀[:,:,1] = y[:,:,1]
 
 fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
+#F is J - cost function (scalar)
+#G is dJ/du
+#x is u
 
 # filter the data with an Optim.jl method
-out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
+out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ) #could probably get rid of these arguments
 
 # reconstruct by hand to double-check.
-ũ = out.minimizer
+ũ = out.minimizer #updated u_0
 
 # reconstruct tracer map
 c₀ = steady_inversion(u₀,Alu,d₀,γ.wet)
@@ -61,6 +58,7 @@ level = 15
 Δc̃ = c̃[:,:,level] .- ctrue[:,:,level]
 Δc₀ = c₀[:,:,level] .- ctrue[:,:,level]
 
+pygui(true)
 figure()
 contourf(γ.lon,γ.lat,Δc̃',cntrs)
 #contour(γ.lon,γ.lat,Δc̃',cntrs)
