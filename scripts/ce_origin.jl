@@ -1,5 +1,11 @@
-using TMI
+#=
+Create maps of origin of specified core locations and take difference. 
+Following ex5
+Uses data from Common Era proposal - brynn currently has these csvs 
+=#
 
+
+using TMI
 using Revise
 using PyPlot, PyCall, CSV, DataFrames, NaNMath
 
@@ -44,6 +50,8 @@ end
 
 #take mean of 1,5 and 3,4 and take diff
 
+
+#helper function: calculates surface origin of given indexed core location 
 function returnorigin(i)
     xlon = lons[i]
     xlat = lats[i]
@@ -53,7 +61,7 @@ function returnorigin(i)
     return origin
 end
 
-
+#helper function - takes a temporal mean, ignoring NaNs 
 function tempmean(array1,array2)
    avg = similar(array1)
 
@@ -65,11 +73,15 @@ function tempmean(array1,array2)
    return avg
 end
 
+#Average core locations 1,5 
 origin1 = tempmean(returnorigin(1), returnorigin(5))
+#Average core locations 3,4 
 origin2 = tempmean(returnorigin(3), returnorigin(4))
 println(origin1)
+#Make surface density maps and save 
 surfacedensity(γ.lon,γ.lat,log10.(origin1'), 0, 0, "images/ce_origin_largerbbox/mean1.png")
 surfacedensity(γ.lon,γ.lat,log10.(origin2'), 0, 0, "images/ce_origin_largerbbox/mean2.png")
+#take difference between the two - some nonsense with TMI.jl to make this work 
 difference = origin1 .- origin2
 difference = log10.(abs.(difference))
 surfacedensity(γ.lon,γ.lat,difference', 0, 0, "images/ce_origin_largerbbox/diff.png")
