@@ -2,7 +2,7 @@
 #how does a patch of tracer (concentration = 1) evolve throughout time?
 =#
 
-using Revise, TMI, Interpolations, DifferentialEquations
+using Revise, TMI, Interpolations, DifferentialEquations, PyPlot, NaNMath
 
 #load TMI data
 TMIversion = "modern_90x45x33_GH10_GH12"
@@ -22,7 +22,6 @@ latbox = [50,60]
 lonbox = [-50,0]
 d = surfacepatch(lonbox, latbox, γ) #vector(same dims as γ, global)  describing surface patch in terms of γ
 
-
 #γ.wet tells us, at each depth, which points are wet (binary mapping)
 #we'll make the first level of γ.wet into a bit array, and access the first level at d at each index. this essentially flattens it into the same format as B 
 dsfc =  d[:,:,1][γ.wet[:,:,1]]
@@ -32,7 +31,6 @@ dsfc =  d[:,:,1][γ.wet[:,:,1]]
 c0 = B * dsfc 
 
 #make_boundary_conditions - assume fixed boundary conditions (for now) so we don't need to do anything
-
 
 #Fixed euler timestep approximation
 c = c0
@@ -44,12 +42,13 @@ for tt = 1:20
 end
 
 #Solving differential equation
+#NOTE: for DifferentialEquations.jl to work, follow naming conventions 
 f(u,p,t) = L*u
 u0 = c0
-tspan = (0.0,1.0)
-func = ODEFunction(f, jac = L)
+tspan = (0.0,10.0)
+func = ODEFunction(f, jac_prototype = L)
 prob = ODEProblem(func, u0, tspan)
-sol = solve(prob)
+sol = solve(prob,TRBDF2(),abstol = 1e-4,reltol=1e-4)
 
 #put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t), 90,45,33))
@@ -60,37 +59,31 @@ for i in 1:length(sol.t)
     sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
 end 
 
-using PyPlot, NaNMath
-
-#surface plots - don't look very different 
+#surface plots
+lev = 15
 figure()
 subplot(2,1,1)
-contourf(γ.lon,γ.lat, sol_array[begin, :, :, 1]')
-subplot(2,1,2)
-contourf(γ.lon,γ.lat, sol_array[end, :, :, 1]')
-
-figure()
-cf = contourf(γ.lon,γ.lat,sol_array[end, :, :, 1]'.-sol_array[begin, :, :, 1]', cmap = "Reds")
+cf = contourf(γ.lon,γ.lat, sol_array[begin, :, :, lev]', levels = 0:0.05:1)
+contour(γ.lon, γ.lat, sol_array[begin, :, :, lev]',levels = 0:0.05:1, colors = "black", linewidths = 1)
 colorbar(cf)
-title("END - BEGINNING: Gain") 
- 
+subplot(2,1,2)
+cf = contourf(γ.lon,γ.lat, sol_array[end, :, :, lev]', levels = 0:0.05:1)
+contour(γ.lon, γ.lat, sol_array[end, :, :, lev]', colors = "black", linewidths = 1, levels = 0:0.05:1)
+colorbar(cf)
 
 #longitudinal plots
 lon_index = 85
 figure()
 subplot(2,1,1)
-cf = contourf(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]')
+cf = contourf(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1)
+contour(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1, linewidths = 1, colors = "black")
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 subplot(2,1,2)
-cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]')
+cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels = 0:0.05:1)
+contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:1, linewidths = 1, colors = "black")
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 
 println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
 
-figure()
-cf = contourf(γ.lat, γ.depth,sol_array[end, lon_index, :, :]' .-sol_array[begin, lon_index, :, :]', cmap = "Reds")
-colorbar(cf)
-title("END - BEGINNING: Gain") 
-ylim(maximum(γ.depth), minimum(γ.depth))
