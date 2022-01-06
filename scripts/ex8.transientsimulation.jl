@@ -44,10 +44,11 @@ for tt = 1:20
 end
 
 #Solving differential equation
-c = c0 
-odefunc(A,t) = A*t
-func = ODEFunction(odefunc, jac = L)
-prob = ODEProblem(func, c0, (years[begin],years[end]))
+f(u,p,t) = L*u
+u0 = c0
+tspan = (0.0,1.0)
+func = ODEFunction(f, jac = L)
+prob = ODEProblem(func, u0, tspan)
 sol = solve(prob)
 
 #put sol into time x lon x lat x depth 
