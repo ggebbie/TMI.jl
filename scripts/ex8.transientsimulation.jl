@@ -2,7 +2,7 @@
 #how does a patch of tracer (concentration = 1) evolve throughout time?
 =#
 
-using Revise, TMI, Interpolations, DifferentialEquations, PyPlot, NaNMath
+using Revise, TMI, Interpolations, PyPlot, NaNMath, BenchmarkTools, DifferentialEquations
 
 #load TMI data
 TMIversion = "modern_90x45x33_GH10_GH12"
@@ -42,22 +42,44 @@ for tt = 1:20
 end
 
 #Solving differential equation
-#NOTE: for DifferentialEquations.jl to work, follow naming conventions 
-f(u,p,t) = L*u
+#NOTE: for DifferentialEquations.jl to work, follow naming conventions
+using LinearAlgebra
+#f(u,p,t) = L*u
 u0 = c0
-tspan = (0.0,10.0)
+du = similar(u0)
+#mul! cuts time from 6m to 45s (245GiB->6.71GiB) for 0:5
+f(du,u,p,t) = mul!(du, L, u) 
+tspan = (0.0,5000.0)
 func = ODEFunction(f, jac_prototype = L)
 prob = ODEProblem(func, u0, tspan)
-sol = solve(prob,TRBDF2(),abstol = 1e-4,reltol=1e-4)
+println("Solving ode")
+
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+#solver choice
+#TRBDF, Rodas5 ~ 180s
+#QNDF ~ 130 seconds (on scale w
+println("ode solved")
 
 #put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t), 90,45,33))
+
+#stability check
+stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
+println("stable: " *string(stable))
+println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
+    
 
 #everything in sol.u is size 74064 which is all points within the ocean
 #we want to make a global map, so we need to use γ to get it back 
 for i in 1:length(sol.t)
     sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
 end 
+
+#time plot
+figure()
+plot(1:length(sol.t), sol.t, ".")
+xlabel("time index [integer]")
+ylabel("time [?yrs?]")
 
 #surface plots
 lev = 15
@@ -85,5 +107,5 @@ contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:1, l
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 
-println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
+
 
