@@ -802,7 +802,8 @@ function dyeplot(lat, depth, vals, lims)
 
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, depth, vals, lims) 
+    contourf(lat, depth, vals, lims)
+    contour(lat, depth, vals, lims, colors = "black", linewidths = 1)
     gca().set_title("Meridional dye concentration")
 end
 

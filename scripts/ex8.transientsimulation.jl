@@ -2,7 +2,7 @@
 #how does a patch of tracer (concentration = 1) evolve throughout time?
 =#
 
-using Revise, TMI, Interpolations, PyPlot, NaNMath, BenchmarkTools, DifferentialEquations
+using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra
 
 #load TMI data
 TMIversion = "modern_90x45x33_GH10_GH12"
@@ -11,10 +11,6 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 #γ: corresponding lat/lon values for L 
 #L: tendency matrix, essentially A (pathway matrix) scaled by residence time (tau) 
 #each entry of L tells us how each point in the ocean is connected to its neighbors
-
-#define years to determine global tracer output for
-years = range(1,3)
-NY = length(years)
 
 #In MATLAB code: make_initial_condition - either rectangle or predefined region
 #here we'll assume rectangle 
@@ -42,22 +38,18 @@ for tt = 1:20
 end
 
 #Solving differential equation
-#NOTE: for DifferentialEquations.jl to work, follow naming conventions
-using LinearAlgebra
-#f(u,p,t) = L*u
+#NOTE: for DifferentialEquations.jl to work, follow naming conventions in docs
 u0 = c0
 du = similar(u0)
-#mul! cuts time from 6m to 45s (245GiB->6.71GiB) for 0:5
-f(du,u,p,t) = mul!(du, L, u) 
+f(du,u,p,t) = mul!(du, L, u) #this avoids allocating a new array for each iteration
 tspan = (0.0,5000.0)
-func = ODEFunction(f, jac_prototype = L)
+func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
 prob = ODEProblem(func, u0, tspan)
 println("Solving ode")
-
-@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
 #solver choice
 #TRBDF, Rodas5 ~ 180s
-#QNDF ~ 130 seconds (on scale w
+#QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
 println("ode solved")
 
 #put sol into time x lon x lat x depth 
@@ -68,13 +60,14 @@ stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_ar
 println("stable: " *string(stable))
 println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
     
-
 #everything in sol.u is size 74064 which is all points within the ocean
-#we want to make a global map, so we need to use γ to get it back 
+#we want to make a global map, so we need to use γ to get it back to a matrix
 for i in 1:length(sol.t)
     sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
 end 
 
+
+#____PLOTTING____
 #time plot
 figure()
 plot(1:length(sol.t), sol.t, ".")
