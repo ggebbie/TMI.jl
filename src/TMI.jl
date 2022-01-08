@@ -1291,7 +1291,7 @@ function interpweights(loc,γ)
 end
 
 """
-function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
+function steadyclimatology(u₀,fg!,iterations)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1304,19 +1304,15 @@ function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
     See Supplementary Section 2, Gebbie & Huybers 2011.
 # Arguments
 - `u₀`:
-- `Alu`:
-- `d₀`: first guess of boundary conditions and interior sources
-- `y`: observations on 3D grid
-- `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `fg!`: compute cost function and gradient in place
-- `γ`: grid
+- `iterations`: number of optimization iterations
 """
-function steadyclimatology(u₀,fg!)
+function steadyclimatology(u₀,fg!,iterations)
 #function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 50))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
 end
@@ -1343,14 +1339,13 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 - `γ`: grid
 """
 #function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
-
+function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
     # ### added this
      fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 50))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 #    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
     return out    

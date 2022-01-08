@@ -112,7 +112,9 @@ using Revise, TMI, Test
         #fg!(J̃₀,gJ₀,u₀)
         # filter the data with an Optim.jl method
 
-        out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
+        iterations = 5
+        out = steadyclimatology(u₀,fg!,iterations)
+        # out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
         # check with forward differences
         ϵ = 1e-3
@@ -190,8 +192,9 @@ using Revise, TMI, Test
         println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
 
+        iterations = 5
         # optimize the sparse data map with an Optim.jl method
-        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
 
         # was cost function decreased?
         @test out.minimum < J̃₀
