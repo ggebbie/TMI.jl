@@ -205,5 +205,65 @@ using Revise, TMI, Test
         @test J̃ < J̃₀
 
     end
+
+    @testset "transientsimulation" begin
+        using Interpolations, NaNMath, DifferentialEquations, LinearAlgebra
+
+        latbox = [50,60]
+        lonbox = [-50,0]
+        d = surfacepatch(lonbox, latbox, γ) 
+        dsfc =  d[:,:,1][γ.wet[:,:,1]]
+
+        #following make_initial_conditions.m
+        c0 = B * dsfc 
+
+        #Fixed euler timestep approximation
+        c = c0
+        Δt = 1e-3 #this becomes unstable if you go any lower
+        Nt = 1/Δt
+        for tt = 1:Nt
+            # forward Euler timestep
+            c += L*c*Δt
+            println("Sum c = " *string(sum(c)) *", initial c = " *string(sum(c0)))
+        end
+        gain_euler = sum(c .- c0)
+        
+        #Solving differential equation
+        u0 = c0
+        du = similar(u0)
+        f(du,u,p,t) = mul!(du, L, u) #this avoids allocating a new array for each iteration
+        tspan = (0.0,1.0)
+        func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
+        prob = ODEProblem(func, u0, tspan)
+        println("Solving ode")
+        #solver choice
+        #TRBDF, Rodas5 ~ 180s
+        #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
+        @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+        println("ode solved")
+
+        #put sol into time x lon x lat x depth 
+        sol_array = zeros((length(sol.t), 90,45,33))
+
+        #stability check
+        stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
+        @test stable
+        println("stable: " *string(stable))
+        
+        #everything in sol.u is size 74064 which is all points within the ocean
+        for i in 1:length(sol.t)
+            sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
+        end 
+
+        println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
+        gain_ode = NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])
+        @test gain_ode ≥ 0.0
+
+        gain_error = abs(gain_ode - gain_euler)/(abs(gain_ode) + abs(gain_euler))
+        @test gain_error  < 0.1
+        
+        println("Gain percent error ",200gain_error,"%")
+       
+    end
     
 end
