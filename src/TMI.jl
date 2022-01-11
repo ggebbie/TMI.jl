@@ -26,7 +26,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz
+    matrix_zyx2xyz, varying
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1791,8 +1791,7 @@ end
 # Arguments
 - `γ`: TMI.grid
 # Output
-- `loc`: lon,lat,depth tuple
-"""
+- `loc`: lon,lat,depth """
 function wetlocation(γ)
 
     confirmwet = false
@@ -1807,6 +1806,49 @@ function wetlocation(γ)
     end # if not, then start over.
 end
 
+"""
+    function varying(du, u, p, t)
+    ODE function for varying boundary cond
+    Solves dc/dt = L*C + B*f
+# Arguments
+- `du`: dc/dt (must have this name for DifferentialEquations.jl to work
+- `u`: C, what we are solving for 
+- `p`: parameters for diffeq (not used here_ 
+- `t`: time we are solving for (automatically determined by DE.jl)
+- `tsfc`: time values at each index of Csfc - 1D array of length T 
+- `Csfc`: surface values at each time index - should be T x 2806 for 4° TMI
+- `γ`
+- `τ`: restoring timescale in yr^-1
+- `L`
+- `B`
+# Output
+- `du`: numerical value of LC+Bf, vector of size 74064 for 4°
+"""
+function varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+    LC = similar(du)
+    BF = similar(du)
+    
+    #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
+    li = LinearInterpolation(tsfc, 1:length(tsfc))
+    li_t = convert(Float64, li[t]) #li is in SimpleRatio form
+    println("time = ", li_t, " out of ", convert(Float64, li[tsfc[end]]))
+    Cb = (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] + (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
+
+    #From get_restoring_flux.m 
+    u_arr = vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]#by far my most disgusting code :)
+    #calculate restoring flux - function of difference between forced surface condtions and current surface conditions, scaled by restoring timescale, τ
+    flux = -(u_arr.-Cb)/τ
+
+    #diff eq - use mul! and @. to avoid extra allocations 
+    mul!(LC, L, u)
+    mul!(BF, B, flux)
+    @. du = LC + BF
+    return du
+
+end
+
+
+    
 function iswet(loc,γ,neighbors)
     # two approaches
     # approach 2

@@ -45,15 +45,7 @@ tspan = (0.0, 50.0)
 #NOTE: for DifferentialEquations.jl to work, follow naming conventions in docs
 if bc == "fixed" 
     f(du,u,p,t) = mul!(du, L, u) #this avoids allocating a new array for each iteration
-    func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-    prob = ODEProblem(func, u0, tspan)
-    println("Solving ode")
-    #solver choice
-    #TRBDF, Rodas5 ~ 180s
-    #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
-    @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
-    println("ode solved")
-    
+
 elseif bc == "varying"
     #example conditions
     #at t = 0, surface = 1. at t = 50, surface = 0.
@@ -62,39 +54,18 @@ elseif bc == "varying"
     Csfc = zeros((2, length(dsfc)))
     Csfc[1, :] .= 1
     τ = 1 / 12 #monthly restoring timescale
-
-    function f(du, u, p, t)
-        LC = similar(du)
-        BF = similar(du)
-        #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
-        li = LinearInterpolation(tsfc, 1:length(tsfc))
-        li_t = convert(Float64, li[t]) #li is in SimpleRatio form, which we can't ceil()/floor()
-        println(li_t)
-        Cb = (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] + (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :] #2806 array 
-
-        #From get_restoring_flux.m 
-        u_arr = vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]#by far my most disgusting code :)
-        flux = -(u_arr.-Cb)/τ
-        mul!(LC, L, u)
-        mul!(BF, B, flux)
-        @. du = LC + BF
-        return du
-    end
-    
-    func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-    prob = ODEProblem(func, u0, tspan)
-    println("Solving ode")
-    #solver choice
-    #TRBDF, Rodas5 ~ 180s
-    #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
-    @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
-    println("ode solved")
-    
-
+    f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
 else
     println("invalid boundary condition, must be 'fixed' or 'varying'")
 end
 
+#Solve diff eq 
+func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
+prob = ODEProblem(func, u0, tspan)
+println("Solving ode")
+#solve using QNDF alg - tested against other alg and works fastest 
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+println("ode solved")
 
 #put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t), 90,45,33))
@@ -139,16 +110,7 @@ contour(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1,
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 subplot(2,1,2)
-cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:0.35)
-contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels =0:0.05:0.35, linewidths = 1, colors = "black")
+cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:1)
+contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels =0:0.05:1, linewidths = 1, colors = "black")
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
-
-
-function plotstuff()
-    figure()
-    cf = pcolormesh(γ.lat, γ.depth, sol_array[end, lon_index, :, :]')
-    ylim(maximum(γ.depth), minimum(γ.depth))
-    colorbar(cf)
-end
-plotstuff()
