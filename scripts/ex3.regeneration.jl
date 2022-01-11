@@ -20,4 +20,4 @@ Psection = section(PO₄ᴿ,lon_section,γ)
 lims = 0:0.1:2.0
 
 # make a plot of regenerated phosphate
-dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', lims)
+dyeplot(γ.lat,γ.depth[33:-1:1],Psection[:,33:-1:1], lims)

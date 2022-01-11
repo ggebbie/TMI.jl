@@ -36,4 +36,4 @@ gsection = section(g,lon_section,γ)
 lims = 0:5:100
 
 # make a plot of dye in the ocean
-dyeplot(γ.lat,-γ.depth[33:-1:1],100 * gsection[:,33:-1:1]', lims)
+dyeplot(γ.lat,γ.depth[33:-1:1],100 * gsection[:,33:-1:1], lims)
