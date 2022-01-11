@@ -802,8 +802,10 @@ function dyeplot(lat, depth, vals, lims)
 
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, depth, vals, lims)
+    cf = contourf(lat, depth, vals, lims)
+    colorbar(cf)
     contour(lat, depth, vals, lims, colors = "black", linewidths = 1)
+    ylim(maximum(depth), minimum(depth))
     gca().set_title("Meridional dye concentration")
 end
 
@@ -1846,8 +1848,6 @@ function varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
     return du
 
 end
-
-
     
 function iswet(loc,γ,neighbors)
     # two approaches

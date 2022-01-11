@@ -36,7 +36,7 @@ for tt = 1:20
 end
 
 #make_boundary_conditions: can be "fixed" or "varying"
-bc = "varying" #"fixed" or "varying"
+bc = "fixed" #"fixed" or "varying"
 u0 = c0
 du = similar(u0)
 tspan = (0.0, 50.0)
@@ -81,36 +81,14 @@ for i in 1:length(sol.t)
     sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
 end 
 
-
 #____PLOTTING____
 #time plot
 figure()
+title("Time distribution")
 plot(1:length(sol.t), sol.t, ".")
 xlabel("time index [integer]")
-ylabel("time [?yrs?]")
-
-#surface plots
-lev = 1
-figure()
-subplot(2,1,1)
-cf = contourf(γ.lon,γ.lat, sol_array[begin, :, :, lev]', levels = 0:0.05:1)
-contour(γ.lon, γ.lat, sol_array[begin, :, :, lev]',levels = 0:0.05:1, colors = "black", linewidths = 1)
-colorbar(cf)
-subplot(2,1,2)
-cf = contourf(γ.lon,γ.lat, sol_array[end, :, :, lev]', levels = 0:0.05:1)
-contour(γ.lon, γ.lat, sol_array[end, :, :, lev]', colors = "black", linewidths = 1, levels = 0:0.05:1)
-colorbar(cf)
+ylabel("time [yrs]")
 
 #longitudinal plots
 lon_index = 85
-figure()
-subplot(2,1,1)
-cf = contourf(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1)
-contour(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1, linewidths = 1, colors = "black")
-colorbar(cf)
-ylim(maximum(γ.depth), minimum(γ.depth))
-subplot(2,1,2)
-cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:1)
-contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels =0:0.05:1, linewidths = 1, colors = "black")
-colorbar(cf)
-ylim(maximum(γ.depth), minimum(γ.depth))
+dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', 0:0.05:1.05)
