@@ -26,8 +26,6 @@ dsfc =  d[:,:,1][γ.wet[:,:,1]]
 #initial conditions are the surface patch = 1, propagated down to the bottom of the mixed layer, which we get from B 
 c0 = B * dsfc 
 
-#make_boundary_conditions - assume fixed boundary conditions (for now) so we don't need to do anything
-
 #Fixed euler timestep approximation
 c = c0
 Δt = 1e-3 #this becomes unstable if you go any lower
@@ -37,20 +35,66 @@ for tt = 1:20
     println("Sum c = " *string(sum(c)) *", initial c = " *string(sum(c0)))
 end
 
-#Solving differential equation
-#NOTE: for DifferentialEquations.jl to work, follow naming conventions in docs
+#make_boundary_conditions: can be "fixed" or "varying"
+bc = "varying" #"fixed" or "varying"
 u0 = c0
 du = similar(u0)
-f(du,u,p,t) = mul!(du, L, u) #this avoids allocating a new array for each iteration
-tspan = (0.0,5000.0)
-func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-prob = ODEProblem(func, u0, tspan)
-println("Solving ode")
-#solver choice
-#TRBDF, Rodas5 ~ 180s
-#QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
-@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
-println("ode solved")
+tspan = (0.0, 50.0)
+
+#Solving differential equation
+#NOTE: for DifferentialEquations.jl to work, follow naming conventions in docs
+if bc == "fixed" 
+    f(du,u,p,t) = mul!(du, L, u) #this avoids allocating a new array for each iteration
+    func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
+    prob = ODEProblem(func, u0, tspan)
+    println("Solving ode")
+    #solver choice
+    #TRBDF, Rodas5 ~ 180s
+    #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
+    @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+    println("ode solved")
+    
+elseif bc == "varying"
+    #example conditions
+    #at t = 0, surface = 1. at t = 50, surface = 0.
+    #i.e., surface values linearly decrease from 1 to 0 over the span of 50 years 
+    tsfc = [0, 50]
+    Csfc = zeros((2, length(dsfc)))
+    Csfc[1, :] .= 1
+    τ = 1 / 12 #monthly restoring timescale
+
+    function f(du, u, p, t)
+        LC = similar(du)
+        BF = similar(du)
+        #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
+        li = LinearInterpolation(tsfc, 1:length(tsfc))
+        li_t = convert(Float64, li[t]) #li is in SimpleRatio form, which we can't ceil()/floor()
+        println(li_t)
+        Cb = (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] + (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :] #2806 array 
+
+        #From get_restoring_flux.m 
+        u_arr = vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]#by far my most disgusting code :)
+        flux = -(u_arr.-Cb)/τ
+        mul!(LC, L, u)
+        mul!(BF, B, flux)
+        @. du = LC + BF
+        return du
+    end
+    
+    func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
+    prob = ODEProblem(func, u0, tspan)
+    println("Solving ode")
+    #solver choice
+    #TRBDF, Rodas5 ~ 180s
+    #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
+    @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+    println("ode solved")
+    
+
+else
+    println("invalid boundary condition, must be 'fixed' or 'varying'")
+end
+
 
 #put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t), 90,45,33))
@@ -75,7 +119,7 @@ xlabel("time index [integer]")
 ylabel("time [?yrs?]")
 
 #surface plots
-lev = 15
+lev = 1
 figure()
 subplot(2,1,1)
 cf = contourf(γ.lon,γ.lat, sol_array[begin, :, :, lev]', levels = 0:0.05:1)
@@ -95,10 +139,16 @@ contour(γ.lat, γ.depth, sol_array[begin, lon_index, :, :]', levels = 0:0.05:1,
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 subplot(2,1,2)
-cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels = 0:0.05:1)
-contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:1, linewidths = 1, colors = "black")
+cf = contourf(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', levels = 0:0.05:0.35)
+contour(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',levels =0:0.05:0.35, linewidths = 1, colors = "black")
 colorbar(cf)
 ylim(maximum(γ.depth), minimum(γ.depth))
 
 
-
+function plotstuff()
+    figure()
+    cf = pcolormesh(γ.lat, γ.depth, sol_array[end, lon_index, :, :]')
+    ylim(maximum(γ.depth), minimum(γ.depth))
+    colorbar(cf)
+end
+plotstuff()
