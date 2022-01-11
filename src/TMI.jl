@@ -26,7 +26,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz
+    matrix_zyx2xyz, surface_oxygensaturation, oxygen
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -797,12 +797,29 @@ end
 - `vals`: lat x depth value array
 - `lims`: contour levels
 """
-function dyeplot(lat, depth, vals, lims)
+function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
 
+    println(size(vals))
+
+    valsview = view(vals,:,33:-1:1)
+    println(size(valsview))
+    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
+    cmap_seismic = get_cmap("seismic")
+
+    z = reverse(depth)/1000.
+        
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, depth, vals, lims) 
-    gca().set_title("Meridional dye concentration")
+    contourf(lat, z, valsview', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(lat, z, valsview', lims,colors="k")
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    xlabel("Latitude [°N]")
+    ylabel("Depth [km]")
+    gca().set_title(titlelabel)
+    gca().invert_yaxis()
+    colorbar(orientation="horizontal")
+    
 end
 
 """
@@ -1035,6 +1052,63 @@ function watermassdistribution(TMIversion,Alu,region,γ)
 
     return g
 end
+
+"""
+Surface oxygen saturation value and fraction of saturation value in field 
+"""
+function surface_oxygensaturation(file)
+    # read temperature and o2.
+    θ = readtracer(file,"θ")
+    θsurface = view(θ,:,:,1)
+
+    S = readtracer(file,"Sp")
+    Ssurface = view(S,:,:,1)
+
+    # GibbsSeaWater.jl for saturation value
+    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
+
+    O₂ = readtracer(file,"O₂")
+    O₂surface = view(O₂,:,:,1)
+    O₂fraction = O₂surface./O₂sol
+
+    return O₂sol, O₂fraction 
+end
+
+"""
+Reconstruct dissolved oxygen (that doesn't exist in TMI product)
+by assuming same oxygen saturation fraction as modern
+"""
+function oxygen(version,O₂fraction)
+
+    A, Alu, γ, file = config_from_nc(version)
+
+    o2po4ratio = 170
+    
+    # read temperature and o2.
+    θ = readtracer(file,"θ")
+    θsurface = view(θ,:,:,1)
+
+    S = readtracer(file,"Sp")
+    Ssurface = view(S,:,:,1)
+
+    # GibbsSeaWater.jl for saturation value
+    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
+
+    O₂surface = O₂sol.*O₂fraction
+
+    # invert with stoichiometric ratio
+    O₂ = tracerinit(γ.wet)
+    qPO₄ = readtracer(file,"qPO₄")
+    d = o2po4ratio*qPO₄
+
+    #d = qO₂lgm
+    d[:,:,1] = O₂surface;
+
+    O₂[γ.wet] =  Alu\d[γ.wet]
+
+    return O₂
+end
+
 
 """ 
     function ncurl(TMIversion)
