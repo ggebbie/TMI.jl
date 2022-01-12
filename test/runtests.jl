@@ -235,7 +235,7 @@ using Revise, TMI, Test
         tspan = (0.0,1.0)
         func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
         prob = ODEProblem(func, u0, tspan)
-        println("Solving ode")
+        println("Solving fixed  odeODE")
         #solver choice
         #TRBDF, Rodas5 ~ 180s
         #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
@@ -248,7 +248,7 @@ using Revise, TMI, Test
         #stability check
         stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
         @test stable
-        println("stable: " *string(stable))
+        println("fixed bc stable: " *string(stable))
         
         #everything in sol.u is size 74064 which is all points within the ocean
         for i in 1:length(sol.t)
@@ -263,7 +263,30 @@ using Revise, TMI, Test
         @test gain_error  < 0.1
         
         println("Gain percent error ",200gain_error,"%")
+
+        #varying case stability check
+        tsfc = [0, 10]
+        Csfc = zeros((2, length(dsfc)))
+        Csfc[1, :] .= 1
+        τ = 1/12
+        f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+        func = ODEFunction(f, jac_prototype=L)
+        prob = ODEProblem(func, u0, tspan)
+        println("Solving varying ODE")
+        @time sol = solve(prob, QNDF(),abstol=1e-4,reltol=1e-4,calck=false)
+        println("Varying ODE solved")
+        #put sol into time x lon x lat x depth 
+        sol_array = zeros((length(sol.t), 90,45,33))
+        
+        for i in 1:length(sol.t)
+            sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
+        end 
+        
+        #stability check
+        stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
+        @test stable
+        println("varying bc stable: " *string(stable))
        
     end
-    
+
 end
