@@ -26,7 +26,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, varying
+    matrix_zyx2xyz, varying, readopt
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -75,15 +75,17 @@ end
 """
 function config_from_nc(TMIversion)
 
-    #- `url`: Google Drive URL for data
-    url = ncurl(TMIversion)
-    
-    TMIfile = datadir("TMI_"*TMIversion*".nc")
-    println(url)
-    println(TMIfile)
+    #make datdir() if it doesn't exist 
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfile) ? google_download(url,datadir()) : nothing
-
+    TMIfile = datadir("TMI_"*TMIversion*".nc")
+    #if TMIfile doesn't exist, get GDrive url and download 
+    if !isfile(TMIfile) 
+        #- `url`: Google Drive URL for data
+        url = ncurl(TMIversion)
+        google_download(url,datadir())
+    end 
+    
+    
     #ncdata = NetCDF.open(TMIfile) # necessary?
 
     # read Cartesian Index from file.
@@ -2287,4 +2289,21 @@ function surfaceregion(TMIversion,region,γ)
     return d
 end
 
+#read surface layer
+function readopt(filename)
+    nc = NCDataset(filename)
+#    lat = nc["latitude"][:]
+#    lon = nc["longitude"][:]
+    time = nc["year"][:]
+#    depth = nc["depth"][:]
+    theta = nc["theta"][:, 1, :, :]
+
+    #flip to time descending order
+    reverse!(time)
+    time = convert(Vector{Int}, time)
+    reverse!(theta, dims = 1) 
+    return time, theta 
+end
+
+    
 end

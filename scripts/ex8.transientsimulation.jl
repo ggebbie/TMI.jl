@@ -1,5 +1,5 @@
 #= placeholder for transient simulation
-#how does a patch of tracer (concentration = 1) evolve throughout time?
+#how does a patch of tracer (concentratio= 1) evolve throughout time?
 =#
 
 using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra
