@@ -24,7 +24,7 @@ dsfc = bc[end, :, :]'[γ.wet[:,:,1]]
 c0 = B * dsfc 
 u0 = c0
 du = similar(u0)
-tspan = (years[begin], years[10])#tspan must occur within tsfc 
+tspan = (years[begin], years[2])#tspan must occur within tsfc 
 
 #define varying boundary conditions 
 tsfc = years
