@@ -16,27 +16,27 @@ bc_file = "/home/brynn/Code/TMI.jl/data/Theta_anom_OPT-0015.nc"
 @time A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 #load boundary condition data
-years, bc = readopt(bc_file)
-dsfc = bc[begin, :, :]'[γ.wet[:,:,1]] 
+years, bc = readopt(bc_file,γ)
+dsfc = bc[begin,:, :, 1][γ.wet[:,:,1]] 
 
 #following make_initial_conditions.m
 #initial conditions are the surface patch = 1, propagated down to the bottom of the mixed layer, which we get from B 
-c0 = B * dsfc 
-u0 = c0
+#c0 = B * dsfc 
+#u0 = c0
 
 #make initial conditions be output of ex1
-#c0 = tracerinit(γ.wet)
-#c[γ.wet] = Alu\bc[begin, :, :]'[γ.wet]
+c0 = tracerinit(γ.wet)
+c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
+u0 = c0[γ.wet]
 
 du = similar(u0)
-tspan = (years[begin], years[2])#tspan must occur within tsfc 
-
+tspan = (years[begin], years[end])#tspan must occur within tsfc 
 #define varying boundary conditions 
 tsfc = years
 
 Csfc = zeros((length(years), length(dsfc)))
 for i in 1:length(years)
-    Csfc[i, :] = bc[i, :, :]'[γ.wet[:, :, 1]]
+    Csfc[i, :] = bc[i,:,:, 1][γ.wet[:, :, 1]]
 end
 
 τ = 1 / 12 #monthly restoring timescale
@@ -47,7 +47,7 @@ func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array
 prob = ODEProblem(func, u0, tspan)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest 
-@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false,save_everystep=false)
+@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,calck=false,saveat=years)
 println("ODE solved")
 
 #put sol into time x lon x lat x depth 
@@ -73,30 +73,25 @@ xlabel("time index [integer]")
 ylabel("time [yrs]")
 
 #longitudinal plots
-lon_index = 85
-dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', -0.08:0.05:1.05)
+lon_index = 5
+dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]',NaNMath.minimum(sol_array[end, lon_index, :, :]):0.01:NaNMath.maximum(sol_array[end,lon_index, :, :]))
 
-figure()
-subplot(3,1,1)
-contourf(γ.lon, γ.lat, sol_array[end,:,:,1]', -0.08:0.05:1.05)
-subplot(3,1,2)
-contourf(γ.lon, γ.lat, sol_array[end,:,:,15]', -0.08:0.05:1.05)
-subplot(3,1,3)
-
-
-#longitudinal plots
-lon_index = 85
-dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', -0.08:0.05:1.05)
+dyeplot(γ.lat, γ.depth, bc[5, lon_index, :, :]' ,NaNMath.minimum(sol_array[end, lon_index, :, :]):0.01:NaNMath.maximum(sol_array[end,lon_index, :, :]))
 
 #surface plots at 3 depths 
 figure()
+suptitle("values at time = "*string(sol.t[end]))
 subplot(3,1,1)
-contourf(γ.lon, γ.lat, sol_array[end,:,:,1]', -0.08:0.05:0.5,cmap="coolwarm")
+contourf(γ.lon, γ.lat, sol_array[end,:,:,1]',NaNMath.minimum(sol_array[end, :, :, :]):0.01:NaNMath.maximum(sol_array[end,:, :, :]),cmap="coolwarm")
 title("depth = "*string( γ.depth[1]))
 subplot(3,1,2)
-contourf(γ.lon, γ.lat, sol_array[end,:,:,15]', -0.08:0.05:0.5,cmap="coolwarm")
+contourf(γ.lon, γ.lat, sol_array[end,:,:,15]',NaNMath.minimum(sol_array[end, :, :, :]):0.01:NaNMath.maximum(sol_array[end,:, :, :]),cmap="coolwarm")
 title("depth = "*string( γ.depth[15]))
 subplot(3,1,3)
 title("depth = "*string(γ.depth[25]))
-cf = contourf(γ.lon, γ.lat, sol_array[end,:,:,25]', -0.08:0.05:0.5,cmap="coolwarm")
-colorbar(cf)
+cf = contourf(γ.lon, γ.lat, sol_array[end,:,:,25]',NaNMath.minimum(sol_array[end, :, :, :]):0.01:NaNMath.maximum(sol_array[end,:, :, :]),cmap="coolwarm")
+colorbar(cf,orientation="horizontal")
+
+figure()
+contourf(γ.lon, γ.lat, bc[10,:,:,1]',NaNMath.minimum(sol_array[end, :, :, :]):0.01:NaNMath.maximum(sol_array[end,:, :, :]),cmap="coolwarm")
+

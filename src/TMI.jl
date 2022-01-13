@@ -2290,19 +2290,21 @@ function surfaceregion(TMIversion,region,γ)
 end
 
 #read surface layer
-function readopt(filename)
+function readopt(filename,γ)
     nc = NCDataset(filename)
 #    lat = nc["latitude"][:]
 #    lon = nc["longitude"][:]
     time = nc["year"][:]
 #    depth = nc["depth"][:]
-    theta = nc["theta"][:, 1, :, :]
+    theta = nc["theta"][:, :, :, :]
 
     #flip to time descending order
     reverse!(time)
     time = convert(Vector{Int}, time)
-    reverse!(theta, dims = 1) 
-    return time, theta 
+    reverse!(theta, dims = 1)
+    theta_permuted = zeros((size(theta)[1], size(γ.wet)[1], size(γ.wet)[2], size(γ.wet)[3]))
+    permutedims!(theta_permuted, theta, [1,4,3,2])
+    return time, theta_permuted 
 end
 
     
