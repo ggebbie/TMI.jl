@@ -46,7 +46,7 @@ println("Solving ODE")
 println("ODE solved")
 
 #put sol into time x lon x lat x depth 
-sol_array = zeros((length(sol.t), 90,45,33))
+sol_array = zeros((length(sol.t),size(γ.wet)[1],size(γ.wet)[2],size(γ.wet)[3]))
 
 #stability check
 stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
@@ -69,4 +69,29 @@ ylabel("time [yrs]")
 
 #longitudinal plots
 lon_index = 85
-dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', 0:0.05:1.05)
+dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', -0.08:0.05:1.05)
+
+figure()
+subplot(3,1,1)
+contourf(γ.lon, γ.lat, sol_array[end,:,:,1]', -0.08:0.05:1.05)
+subplot(3,1,2)
+contourf(γ.lon, γ.lat, sol_array[end,:,:,15]', -0.08:0.05:1.05)
+subplot(3,1,3)
+
+
+#longitudinal plots
+lon_index = 85
+dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', -0.08:0.05:1.05)
+
+#surface plots at 3 depths 
+figure()
+subplot(3,1,1)
+contourf(γ.lon, γ.lat, sol_array[end,:,:,1]', -0.08:0.05:0.5,cmap="coolwarm")
+title("depth = "*string( γ.depth[1]))
+subplot(3,1,2)
+contourf(γ.lon, γ.lat, sol_array[end,:,:,15]', -0.08:0.05:0.5,cmap="coolwarm")
+title("depth = "*string( γ.depth[15]))
+subplot(3,1,3)
+title("depth = "*string(γ.depth[25]))
+cf = contourf(γ.lon, γ.lat, sol_array[end,:,:,25]', -0.08:0.05:0.5,cmap="coolwarm")
+colorbar(cf)
