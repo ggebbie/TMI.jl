@@ -13,16 +13,21 @@ using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, Linea
 TMIversion = "modern_180x90x33_GH11_GH12"
 bc_file = "/home/brynn/Code/TMI.jl/data/Theta_anom_OPT-0015.nc"
 
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+@time A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 #load boundary condition data
 years, bc = readopt(bc_file)
-dsfc = bc[end, :, :]'[γ.wet[:,:,1]] 
+dsfc = bc[begin, :, :]'[γ.wet[:,:,1]] 
 
 #following make_initial_conditions.m
 #initial conditions are the surface patch = 1, propagated down to the bottom of the mixed layer, which we get from B 
 c0 = B * dsfc 
 u0 = c0
+
+#make initial conditions be output of ex1
+#c0 = tracerinit(γ.wet)
+#c[γ.wet] = Alu\bc[begin, :, :]'[γ.wet]
+
 du = similar(u0)
 tspan = (years[begin], years[2])#tspan must occur within tsfc 
 
@@ -42,7 +47,7 @@ func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array
 prob = ODEProblem(func, u0, tspan)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest 
-@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false,save_everystep=false)
 println("ODE solved")
 
 #put sol into time x lon x lat x depth 
