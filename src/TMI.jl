@@ -707,7 +707,7 @@ function horizontaldistance(loc,γ::grid)
     fill!(hordist,zero(T)/zero(T))
     
     # calculate haversine horizontal distance on sphere
-    [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),                  (γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
+    [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),(γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
        for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
     return hordist
 end

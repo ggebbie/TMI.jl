@@ -13,7 +13,7 @@ using TMI, BenchmarkTools, PyPlot, PyCall
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-TMIversion = "modern_90x45x33_GH10_GH12"
+TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 #- define the surface patch by the bounding latitude and longitude.
