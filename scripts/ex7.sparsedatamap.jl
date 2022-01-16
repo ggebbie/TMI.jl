@@ -30,7 +30,7 @@ N = 20
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
-y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",γ,N)
+y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
 d₀ = tracerinit(γ.wet)

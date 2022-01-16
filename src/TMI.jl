@@ -20,7 +20,7 @@ export config, config_from_mat, config_from_nc,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, sample_observations, steadyclimatology,
+    surfaceorigin, synthetic_observations, sample_observations, steadyclimatology,
     steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
@@ -1425,7 +1425,7 @@ function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
 end
 
 """ 
-    function sample_observations(TMIversion,variable)
+    function synthetic_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
     This version: gridded observations
 # Arguments
@@ -1436,7 +1436,7 @@ end
 - `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
 - `θtrue`: real observations, 3D field
 """
-function sample_observations(TMIversion,variable,γ)
+function synthetic_observations(TMIversion,variable,γ)
 
     inputfile = datadir("TMI_"*TMIversion*".nc")
 
@@ -1460,7 +1460,7 @@ function sample_observations(TMIversion,variable,γ)
 end
  
 """ 
-    function sample_observations(TMIversion,variable,locs)
+    function synthetic_observations(TMIversion,variable,locs)
     Synthetic observations that are a contaminated version of real observations
     This version: observations with random (uniform) spatial sampling
 # Arguments
@@ -1474,7 +1474,7 @@ end
 - `locs`: 3-tuples of locations for observations
 - `wis`: weighted indices for interpolation to locs sites
 """
-function sample_observations(TMIversion,variable,γ,N)
+function synthetic_observations(TMIversion,variable,γ,N)
 
     inputfile = datadir("TMI_"*TMIversion*".nc")
 
@@ -1488,28 +1488,36 @@ function sample_observations(TMIversion,variable,γ,N)
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
-    [locs[i] = wetlocation(γ) for i in 1:N]
+    [locs[i] = wetlocation(γ) for i in eachindex(locs)]
 
+    # get weighted interpolation indices
+    N = length(locs)
     wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
     [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
-    # look at total weight, < 1 if there are land points
-    # later make sure total weight = 1 for proper average
-    sumwis = Vector{Float64}(undef,N)
-    list = vcat(1:length(γ.lon),1)
-    wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in 1:N]
+    ytrue = sample(θtrue,wis,γ)
+    σtrue = sample(σθ,wis,γ)
+    
+    # wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+    # [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
-    # sample the true field at these random locations
-    ytrue = Vector{Float64}(undef,N)
-    replace!(θtrue,NaN=>0.0)
-    θwrap = view(θtrue,list,:,:)
-    [ytrue[i] = θwrap[wis[i]...]/sumwis[i] for i in 1:N]
+    # # look at total weight, < 1 if there are land points
+    # # later make sure total weight = 1 for proper average
+    # sumwis = Vector{Float64}(undef,N)
+    # list = vcat(1:length(γ.lon),1)
+    # wetwrap = view(γ.wet,list,:,:)
+    # [sumwis[i] = wetwrap[wis[i]...] for i in 1:N]
+
+    # # sample the true field at these random locations
+    # ytrue = Vector{Float64}(undef,N)
+    # replace!(θtrue,NaN=>0.0)
+    # θwrap = view(θtrue,list,:,:)
+    # [ytrue[i] = θwrap[wis[i]...]/sumwis[i] for i in 1:N]
 
     # interpolate the standard deviation of expected error
-    σtrue = Vector{Float64}(undef,N)
-    σwrap = view(σθ,list,:,:)
-    [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
+    # σtrue = Vector{Float64}(undef,N)
+    # σwrap = view(σθ,list,:,:)
+    # [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
 
     ntrue = rand(Normal(),N) .* σtrue
     y = ytrue .+ ntrue
@@ -1519,7 +1527,26 @@ function sample_observations(TMIversion,variable,γ,N)
     W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
     return y, W⁻, ytrue, locs, wis
 end
- 
+
+function sample(field,wis,γ)
+
+    # look at total weight, < 1 if there are land points
+    # later make sure total weight = 1 for proper average
+    #N = length(wis)
+    sumwis = Vector{Float64}(undef,length(wis))
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+
+    # sample the true field at these random locations
+    field_sample = Vector{Float64}(undef,length(wis))
+    replace!(field,NaN=>0.0)
+    field_wrap = view(field,list,:,:)
+    [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+
+    return field_sample
+end
+
 """ 
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
     squared model-data misfit for gridded data
@@ -1771,6 +1798,7 @@ end
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue: couldn't figure out how to nest with costfunction_obs!
+    Issue: why are wis and locs both needed?
 # Arguments
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls

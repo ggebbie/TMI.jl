@@ -33,7 +33,7 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
 # take synthetic, noisy observations
-y, W⁻, ctrue = sample_observations(TMIversion,"θ",γ)
+y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
