@@ -20,7 +20,7 @@ export config, config_from_mat, config_from_nc,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, synthetic_observations, sample_observations, steadyclimatology,
+    surfaceorigin, synthetic_observations, observe, steadyclimatology,
     steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
@@ -1298,6 +1298,7 @@ function interpindex(loc,γ)
 function interpindex(loc,γ)
 
     # Handle longitudinal periodic condition (i.e., wraparound)
+    println("TMI interpindex")
     lon = vcat(copy(γ.lon),γ.lon[1]+360.)
     list = vcat(1:length(γ.lon),1)
     nodes = (lon,γ.lat,γ.depth)
@@ -1495,8 +1496,8 @@ function synthetic_observations(TMIversion,variable,γ,N)
     wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
     [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
-    ytrue = sample(θtrue,wis,γ)
-    σtrue = sample(σθ,wis,γ)
+    ytrue = observe(θtrue,wis,γ)
+    σtrue = observe(σθ,wis,γ)
     
     # wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
     # [wis[i] = interpindex(locs[i],γ) for i in 1:N]
@@ -1528,7 +1529,11 @@ function synthetic_observations(TMIversion,variable,γ,N)
     return y, W⁻, ytrue, locs, wis
 end
 
-function sample(field,wis,γ)
+"""
+    function observe
+    Take a observation at location given by weights wis
+"""
+function observe(field,wis,γ)
 
     # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
