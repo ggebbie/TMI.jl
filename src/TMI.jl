@@ -26,7 +26,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, varying, readopt
+    matrix_zyx2xyz, varying!, readopt
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1828,7 +1828,8 @@ end
 # Output
 - `du`: numerical value of LC+Bf, vector of size 74064 for 4°
 """
-function varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+function varying!(du, u, p,t)
+    tsfc, Csfc,γ,τ,L,B = p 
     LC = similar(du)
     BF = similar(du)
     
@@ -1838,17 +1839,12 @@ function varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
     println("time = ", li_t, " out of ", convert(Float64, li[tsfc[end]]))
     Cb = (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] + (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
 
-    #From get_restoring_flux.m 
-    u_arr = vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]#by far my most disgusting code :)
-    #calculate restoring flux - function of difference between forced surface condtions and current surface conditions, scaled by restoring timescale, τ
-    flux = -(u_arr.-Cb)/τ
+    flux = -(vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]].-Cb)/τ
 
     #diff eq - use mul! and @. to avoid extra allocations 
     mul!(LC, L, u)
     mul!(BF, B, flux)
     @. du = LC + BF
-    return du
-
 end
     
 function iswet(loc,γ,neighbors)

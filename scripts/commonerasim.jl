@@ -30,7 +30,7 @@ c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
 du = similar(u0)
-tspan = (years[begin], years[end])#tspan must occur within tsfc 
+tspan = (years[begin], years[2])#tspan must occur within tsfc 
 #define varying boundary conditions 
 tsfc = years
 
@@ -40,11 +40,12 @@ for i in 1:length(years)
 end
 
 τ = 1 / 12 #monthly restoring timescale
-f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+p = (tsfc, Csfc,γ,τ,L,B)
+f(du, u, p, t) = varying!(du, u, p, t)
 
 #Solve diff eq 
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-prob = ODEProblem(func, u0, tspan)
+prob = ODEProblem(func, u0, tspan,p)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest 
 @time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,calck=false,saveat=years)
