@@ -1298,7 +1298,7 @@ function interpindex(loc,γ)
 function interpindex(loc,γ)
 
     # Handle longitudinal periodic condition (i.e., wraparound)
-    println("TMI interpindex")
+
     lon = vcat(copy(γ.lon),γ.lon[1]+360.)
     list = vcat(1:length(γ.lon),1)
     nodes = (lon,γ.lat,γ.depth)

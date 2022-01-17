@@ -25,7 +25,7 @@ TMI.jl uses matplotlib and cartopy. Direct the python environment to an existing
 Or use a Julia-specific python environment built from scratch following these directions from the Julia REPL:
 `ENV["PYTHON"]=""` \
 `import Pkg; Pkg.add("PyCall")`\
-`import Pkg; Pkg.build("PyCall")`\
+`import Pkg; Pkg.build("PyCall")`
 
 Restart the REPL.\
 `import Pkg; Pkg.add("Conda")`\
