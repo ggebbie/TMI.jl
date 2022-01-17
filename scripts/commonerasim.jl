@@ -1,5 +1,5 @@
 #= 
-Simulate CE circulation 
+nSimulate CE circulation 
 Based on ex8.transientsimulation.jl 
 Data Input (both files in /data folder) 
   Uses 2° TMI grid
@@ -7,7 +7,7 @@ Data Input (both files in /data folder)
 
 =#
 
-using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra
+using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra, ForwardDiff,OrdinaryDiffEq
 
 #load TMI data
 TMIversion = "modern_180x90x33_GH11_GH12"
@@ -29,8 +29,7 @@ c0 = tracerinit(γ.wet)
 c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
-du = similar(u0)
-tspan = (years[begin], years[end])#tspan must occur within tsfc 
+tspan = (years[begin], years[2])#tspan must occur within tsfc 
 #define varying boundary conditions 
 tsfc = years
 
@@ -40,14 +39,32 @@ for i in 1:length(years)
 end
 
 τ = 1 / 12 #monthly restoring timescale
-f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+li= LinearInterpolation(tsfc, 1:length(tsfc))
+
+#case where u and du are of type Vector{Float64}
+du = similar(u0)
+LC = similar(du)
+BF = similar(du)
+Cb = similar(Csfc[1,:])
+u_arr = similar(vec2fld(u0, γ.I)[:,:,1][γ.wet[:,:,1]])
+flux = similar(u_arr)
+
+#case where u and du are of type ForwardDiff
+du_funky = Vector{ForwardDiff.Dual{ForwardDiff.Tag{OrdinaryDiffEq.OrdinaryDiffEqTag, Float64}, Float64, 12}}(undef, 291156)
+LC_funky = similar(du_funky)
+BF_funky = similar(du_funky)
+u_arr_funky = similar(vec2fld(similar(du_funky), γ.I)[:,:,1][γ.wet[:,:,:1]])
+flux_funky = similar(u_arr_funky) 
+
+p = (tsfc,Csfc,γ,τ,L,B,li,LC,BF,Cb,u_arr,flux,LC_funky,BF_funky,u_arr_funky,flux_funky) #parameters - "easier for compiler to handle local variables"
+f(du, u, p, t) = varying!(du, u, p, t)
 
 #Solve diff eq 
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-prob = ODEProblem(func, u0, tspan)
+prob = ODEProblem(func, u0, tspan,p)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest 
-@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,calck=false,saveat=years)
+@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,saveat=years)
 println("ODE solved")
 
 #put sol into time x lon x lat x depth 

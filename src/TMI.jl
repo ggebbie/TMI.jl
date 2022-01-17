@@ -4,7 +4,8 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT, NCDatasets
+    Interpolations, LineSearches, MAT, NCDatasets,
+    ForwardDiff, OrdinaryDiffEq
 
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
@@ -26,7 +27,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, varying, readopt
+    matrix_zyx2xyz, varying!, readopt
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1828,27 +1829,33 @@ end
 # Output
 - `du`: numerical value of LC+Bf, vector of size 74064 for 4°
 """
-function varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
-    LC = similar(du)
-    BF = similar(du)
-    
-    #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
-    li = LinearInterpolation(tsfc, 1:length(tsfc))
+function varying!(du, u, p, t)
+    #load parameters 
+    tsfc,Csfc,γ,τ,L,B,li,LC,BF,Cb,u_arr,flux,LC_funky,BF_funky,u_arr_funky,flux_funky = p
+
+        #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
     li_t = convert(Float64, li[t]) #li is in SimpleRatio form
     println("time = ", li_t, " out of ", convert(Float64, li[tsfc[end]]))
-    Cb = (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] + (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
+    Cb .= (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] .+ (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
+    
 
-    #From get_restoring_flux.m 
-    u_arr = vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]#by far my most disgusting code :)
-    #calculate restoring flux - function of difference between forced surface condtions and current surface conditions, scaled by restoring timescale, τ
-    flux = -(u_arr.-Cb)/τ
+    #sometimes du is in a weird format related to ForwardDiff.jl
+    if typeof(du) != Vector{Float64}
+        u_arr_funky .= vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]
+        flux_funky .= -(u_arr.-Cb)/τ
+        mul!(LC_funky, L, u)
+        mul!(BF_funky, B, flux_funky)
 
-    #diff eq - use mul! and @. to avoid extra allocations 
-    mul!(LC, L, u)
-    mul!(BF, B, flux)
+    else
+        u_arr .= vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]
+        flux .= -(u_arr.-Cb)/τ
+        mul!(LC, L, u)
+        mul!(BF, B, flux)
+
+    end
+
     @. du = LC + BF
-    return du
-
+    nothing
 end
     
 function iswet(loc,γ,neighbors)

@@ -73,7 +73,8 @@ sol_array = zeros((length(sol.t), 90,45,33))
 #stability check
 stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
 println("stable: " *string(stable))
-println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
+gain = NaNMath.sum(sol_array[end, :, :, :] .- sol_array[begin,:,:,:])
+println("Gain = "*string(gain))
     
 #everything in sol.u is size 74064 which is all points within the ocean
 #we want to make a global map, so we need to use γ to get it back to a matrix
