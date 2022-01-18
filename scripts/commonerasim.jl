@@ -1,5 +1,5 @@
 #= 
-Simulate CE circulation 
+nSimulate CE circulation 
 Based on ex8.transientsimulation.jl 
 Data Input (both files in /data folder) 
   Uses 2° TMI grid
@@ -7,7 +7,7 @@ Data Input (both files in /data folder)
 
 =#
 
-using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra
+using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra, ForwardDiff,OrdinaryDiffEq, PreallocationTools
 
 #load TMI data
 TMIversion = "modern_180x90x33_GH11_GH12"
@@ -29,8 +29,9 @@ c0 = tracerinit(γ.wet)
 c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
-du = similar(u0)
-tspan = (years[begin], years[2])#tspan must occur within tsfc 
+
+tspan = (years[begin], years[end])#tspan must occur within tsfc 
+
 #define varying boundary conditions 
 tsfc = years
 
@@ -40,7 +41,17 @@ for i in 1:length(years)
 end
 
 τ = 1 / 12 #monthly restoring timescale
-p = (tsfc, Csfc,γ,τ,L,B)
+
+li= LinearInterpolation(tsfc, 1:length(tsfc))
+
+#case where u and du are of type Vector{Float64}
+du = similar(u0)
+LC = DiffEqBase.dualcache(similar(du))
+BF = DiffEqBase.dualcache(similar(du))
+Cb = similar(Csfc[1,:])
+γwet = @view γ.wet[:,:,1]
+p = (Csfc,γwet,γ.I,τ,L,B,li,LC,BF,Cb) #parameters - "easier for compiler to handle local variables"
+>>>>>>> tmp
 f(du, u, p, t) = varying!(du, u, p, t)
 
 #Solve diff eq 
@@ -48,10 +59,11 @@ func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array
 prob = ODEProblem(func, u0, tspan,p)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest 
-@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,calck=false,saveat=years)
+@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,saveat=years)
 println("ODE solved")
+x = Vector{ForwardDiff.Dual{ForwardDiff.Tag{OrdinaryDiffEq.OrdinaryDiffEqTag, Float64}, Float64, 12}}(undef, 1000)
 
-#put sol into time x lon x lat x depth 
+x#put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t),size(γ.wet)[1],size(γ.wet)[2],size(γ.wet)[3]))
 
 #stability check
