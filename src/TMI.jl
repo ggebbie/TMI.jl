@@ -5,7 +5,7 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
     Interpolations, LineSearches, MAT, NCDatasets,
-    ForwardDiff, OrdinaryDiffEq
+    OrdinaryDiffEq, PreallocationTools
 
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
@@ -1831,28 +1831,18 @@ end
 """
 function varying!(du, u, p, t)
     #load parameters 
-    tsfc,Csfc,γ,τ,L,B,li,LC,BF,Cb,u_arr,flux,LC_funky,BF_funky,u_arr_funky,flux_funky = p
+    Csfc,γ_wet,γI,τ,L,B,li,LC,BF,Cb = p
 
-        #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
+    #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
     li_t = convert(Float64, li[t]) #li is in SimpleRatio form
-    println("time = ", li_t, " out of ", convert(Float64, li[tsfc[end]]))
+    println("timestep # = ", li_t)
     Cb .= (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] .+ (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
-    
-
-    #sometimes du is in a weird format related to ForwardDiff.jl
-    if typeof(du) != Vector{Float64}
-        u_arr_funky .= vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]
-        flux_funky .= -(u_arr.-Cb)/τ
-        mul!(LC_funky, L, u)
-        mul!(BF_funky, B, flux_funky)
-
-    else
-        u_arr .= vec2fld(u, γ.I)[:,:,1][γ.wet[:,:,1]]
-        flux .= -(u_arr.-Cb)/τ
-        mul!(LC, L, u)
-        mul!(BF, B, flux)
-
-    end
+    #use PreallocationTools.jl to handle Dual type in u 
+    LC = get_tmp(LC, first(u)*t)
+    BF = get_tmp(BF, first(u)*t) 
+    u_arr = @view vec2fld(u, γI)[:,:,1][γ_wet]
+    mul!(LC, L, u)
+    mul!(BF, B, -(u_arr.-Cb)./τ)
 
     @. du = LC + BF
     nothing

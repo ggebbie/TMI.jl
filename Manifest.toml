@@ -1056,9 +1056,9 @@ version = "0.2.4"
 
 [[PreallocationTools]]
 deps = ["Adapt", "ArrayInterface", "ForwardDiff", "LabelledArrays"]
-git-tree-sha1 = "435379f01c1e6f7ca65cf46fdd403226f1d36e37"
+git-tree-sha1 = "e4cb8d4a2edf9b3804c1fb2c2de57d634ff3f36e"
 uuid = "d236fae5-4411-538c-8e31-a6e3d9e00b46"
-version = "0.2.1"
+version = "0.2.3"
 
 [[Preferences]]
 deps = ["TOML"]
