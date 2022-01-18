@@ -235,10 +235,7 @@ using Revise, TMI, Test
         tspan = (0.0,1.0)
         func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
         prob = ODEProblem(func, u0, tspan)
-        println("Solving fixed  odeODE")
-        #solver choice
-        #TRBDF, Rodas5 ~ 180s
-        #QNDF ~ 130 seconds (on scale with MATLAB, possibly slightly faster)
+        println("Solving fixed ODE")
         @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
         println("ode solved")
 
@@ -269,11 +266,17 @@ using Revise, TMI, Test
         Csfc = zeros((2, length(dsfc)))
         Csfc[1, :] .= 1
         τ = 1/12
-        f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+        li = LinearInterpolation(tsfc, 1:length(tsfc))
+        LC = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl
+        BF = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl 
+        Cb = similar(Csfc[1,:])
+        p = (Csfc,γ.wet[:,:,1],γ.I,τ,L,B,li,LC,BF,Cb) #parameters
+        
+        f(du, u, p, t) = varying!(du, u, p, t)
         func = ODEFunction(f, jac_prototype=L)
-        prob = ODEProblem(func, u0, tspan)
+        prob = ODEProblem(func, u0, tspan,p)
         println("Solving varying ODE")
-        @time sol = solve(prob, QNDF(),abstol=1e-4,reltol=1e-4,calck=false)
+        @time sol = solve(prob, QNDF(),abstol=1e-2,reltol=1e-2,saveat=tsfc)
         println("Varying ODE solved")
         #put sol into time x lon x lat x depth 
         sol_array = zeros((length(sol.t), 90,45,33))
