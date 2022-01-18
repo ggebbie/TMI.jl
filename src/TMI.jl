@@ -1848,7 +1848,6 @@ function varying!(du, u, p, t)
 
     @. du = LC + BF
     nothing
->>>>>>> tmp
 end
     
 function iswet(loc,γ,neighbors)

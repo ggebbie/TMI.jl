@@ -51,7 +51,6 @@ BF = DiffEqBase.dualcache(similar(du))
 Cb = similar(Csfc[1,:])
 γwet = @view γ.wet[:,:,1]
 p = (Csfc,γwet,γ.I,τ,L,B,li,LC,BF,Cb) #parameters - "easier for compiler to handle local variables"
->>>>>>> tmp
 f(du, u, p, t) = varying!(du, u, p, t)
 
 #Solve diff eq 
