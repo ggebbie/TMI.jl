@@ -561,16 +561,15 @@ end
 - `field`: field in 3d form including land points (NaN)
 """
 function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
-
     # choose NaN for now, zero better? nothing better?
-    fillvalue = zero(T)/zero(T) # NaN32 or NaN64
-
+    fillvalue = zero(T)/zero(T)
+    
     nx = maximum(I)[1]
     ny = maximum(I)[2]
     nz = maximum(I)[3]
 
     # faster instead to allocate as undef and then fill! ?
-    field = fillvalue .* zeros(nx,ny,nz)
+    field = (NaN .* zero(T)) .* zeros(nx,ny,nz)
 
     # a comprehension
     [field[I[n]]=vector[n] for n ∈ eachindex(I)]
@@ -1814,39 +1813,37 @@ end
 """
     function varying(du, u, p, t)
     ODE function for varying boundary cond
-    Solves dc/dt = L*C + B*f
+    Sets up dc/dt = L*C + B*f to be solved 
 # Arguments
 - `du`: dc/dt (must have this name for DifferentialEquations.jl to work
 - `u`: C, what we are solving for 
-- `p`: parameters for diffeq (not used here_ 
+- `p`: parameters for diffeq - must hold specified vars  
 - `t`: time we are solving for (automatically determined by DE.jl)
-- `tsfc`: time values at each index of Csfc - 1D array of length T 
-- `Csfc`: surface values at each time index - should be T x 2806 for 4° TMI
-- `γ`
-- `τ`: restoring timescale in yr^-1
-- `L`
-- `B`
 # Output
 - `du`: numerical value of LC+Bf, vector of size 74064 for 4°
 """
 
 function varying!(du, u, p, t)
+    
     #load parameters 
-    Csfc,γ_wet,γI,τ,L,B,li,LC,BF,Cb = p
-
-    #From get_target.m: where is our current t within our tsfc range? What does our surface boundary condition (Cb) look like? 
-    li_t = convert(Float64, li[t]) #li is in SimpleRatio form
-
-    println("timestep # = ", li_t)
+    Csfc,surface_ind,τ,L,B,li,LC,BF,Cb = p #0.014s
+    println("time = ", t)
+    
+    #generate Cb - interpolated surface boundary condition  
+    li_t = convert(Float64, li[t])
     Cb .= (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] .+ (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
+    
     #use PreallocationTools.jl to handle Dual type in u 
-    LC = get_tmp(LC, first(u)*t)
+    LC = get_tmp(LC, first(u)*t) 
     BF = get_tmp(BF, first(u)*t) 
-    u_arr = @view vec2fld(u, γI)[:,:,1][γ_wet]
-    mul!(LC, L, u)
-    mul!(BF, B, -(u_arr.-Cb)./τ)
 
-    @. du = LC + BF
+    #Figure out what u is at surface - probably nex thing to optimize 
+    u_sfc = @view u[surface_ind]
+    
+    mul!(LC, L, u) #0.01s
+    mul!(BF, B, -(u_sfc.-Cb)./τ) #0.08s
+
+    @. du = LC + BF #0.03s
     nothing
 end
     
