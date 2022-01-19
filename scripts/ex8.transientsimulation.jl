@@ -36,7 +36,7 @@ for tt = 1:20
 end
 
 #make_boundary_conditions: can be "fixed" or "varying"
-bc = "fixed" #"fixed" or "varying"
+bc = "varying" #"fixed" or "varying"
 u0 = c0
 du = similar(u0)
 tspan = (0.0, 50.0)
@@ -54,14 +54,30 @@ elseif bc == "varying"
     Csfc = zeros((2, length(dsfc)))
     Csfc[1, :] .= 1
     τ = 1 / 12 #monthly restoring timescale
-    f(du, u, p, t) = varying(du, u, p, t, tsfc, Csfc, γ, τ, L, B)
+    li = LinearInterpolation(tsfc, 1:length(tsfc))
+
+    #Instantiate arrays that the diffeq solver will reallocate
+    LC = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl
+    BF = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl 
+    Cb = similar(Csfc[1,:])
+
+    #this is silly - but I just need to know which in γ.I are surface layer 
+    surface_ind = []
+    for i in 1:size(γ.I)[1]
+        if γ.I[i][3] == 1
+            push!(surface_ind, i)
+        end
+    end
+    p = (Csfc, surface_ind, τ,L,B, li, LC,BF, Cb)
+    
+    f(du, u, p, t) = varying!(du, u, p, t)
 else
     println("invalid boundary condition, must be 'fixed' or 'varying'")
 end
 
 #Solve diff eq 
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-prob = ODEProblem(func, u0, tspan)
+prob = ODEProblem(func, u0, tspan,p)
 println("Solving ode")
 #solve using QNDF alg - tested against other alg and works fastest 
 @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
