@@ -270,7 +270,16 @@ using Revise, TMI, Test
         LC = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl
         BF = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl 
         Cb = similar(Csfc[1,:])
-        p = (Csfc,γ.wet[:,:,1],γ.I,τ,L,B,li,LC,BF,Cb) #parameters
+
+        #this is silly - but I just need to know which in γ.I are surface layer 
+        surface_ind = []
+        for i in 1:size(γ.I)[1]
+            if γ.I[i][3] == 1
+                push!(surface_ind, i)
+            end
+        end
+
+        p = (Csfc,surface_ind,τ,L,B,li,LC,BF,Cb) #parameters
         
         f(du, u, p, t) = varying!(du, u, p, t)
         func = ODEFunction(f, jac_prototype=L)
