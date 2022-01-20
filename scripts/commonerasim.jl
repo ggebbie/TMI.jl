@@ -24,7 +24,7 @@ c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
 #Timespan that diffeq solver will solve for, must be within tsfc 
-tspan = (tsfc[begin], tsfc[end])
+tspan = (tsfc[begin], tsfc[2])
 
 #Get surface boundary conditions from Theta_anom_OPT 
 Csfc = zeros((length(tsfc), length(dsfc)))
@@ -59,7 +59,7 @@ prob = ODEProblem(func, u0, tspan, p)
 println("Solving ODE")
 #solve using QNDF alg - tested against other alg and works fastest
 #Solver will print out what time step it is on 
-@time sol = solve(prob,QNDF(),abstol = 1e-2,reltol=1e-2,saveat=tsfc)
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,saveat=tsfc)
 println("ODE solved")
 
 #put sol into time x lon x lat x depth 
@@ -79,10 +79,9 @@ println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :
 #____PLOTTING____
 #longitudinal plots
 lon_index = 5
-t_index = 5
+t_index = 2
 absmax = NaNMath.maximum([NaNMath.maximum(abs.(sol_array)), NaNMath.maximum(abs.(sol_array))])
 dyeplot(γ.lat, γ.depth, sol_array[t_index, lon_index, :, :]',-absmax:0.05:absmax)
-
 
 #surface plots at 3 depths 
 figure()
