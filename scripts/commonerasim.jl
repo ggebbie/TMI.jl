@@ -24,7 +24,7 @@ c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
 #Timespan that diffeq solver will solve for, must be within tsfc 
-tspan = (tsfc[begin], tsfc[2])
+tspan = (tsfc[begin], tsfc[end])
 
 #Get surface boundary conditions from Theta_anom_OPT 
 Csfc = zeros((length(tsfc), length(dsfc)))
@@ -99,3 +99,8 @@ subplot(3,1,3)
 title("depth = "*string(γ.depth[25]))
 cf = contourf(γ.lon, γ.lat, sol_array[t_index,:,:,25]',-absmax:0.05:absmax,cmap="coolwarm")
 colorbar(cf,orientation="horizontal")
+
+ces_ncwrite(γ,sol.t,sol_array)
+
+
+

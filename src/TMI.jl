@@ -27,7 +27,7 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, varying!, readopt
+    matrix_zyx2xyz, varying!, readopt, ces_ncwrite
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1811,7 +1811,7 @@ function wetlocation(γ)
 end
 
 """
-    function varying(du, u, p, t)
+    function varying!(du, u, p, t)
     ODE function for varying boundary cond
     Sets up dc/dt = L*C + B*f to be solved 
 # Arguments
@@ -1846,6 +1846,32 @@ function varying!(du, u, p, t)
     @. du = LC + BF #0.03s
     nothing
 end
+
+function ces_ncwrite(γ,time,sol_array)
+    file = datadir() * "/ces_output.nc"
+    ds = NCDataset(file,"c")
+
+    defDim(ds,"lon", size(γ.lon)[1])
+    defDim(ds,"lat",size(γ.lat)[1])
+    defDim(ds,"depth",size(γ.depth)[1])
+    defDim(ds,"time",size(time)[1])
+
+    v = defVar(ds,"theta",Float64, ("time","lon","lat","depth"))
+    v[:,:,:,:] = sol_array
+
+    vlon = defVar(ds,"lon",Float64, ("lon",))
+    vlon[:] = γ.lon
+    vlat = defVar(ds,"lat",Float64,("lat",))
+    vlat[:] = γ.lat
+    vtime = defVar(ds,"time",Float64,("time",))
+    vtime[:] = time
+    vdepth = defVar(ds,"depth",Float64,("depth",))
+    vdepth[:] = γ.depth
+    v.attrib["title"] = "output of commonerasim.jl" 
+    v.attrib["units"] = "potential temperature anomaly"
+    close(ds)
+end
+
     
 function iswet(loc,γ,neighbors)
     # two approaches

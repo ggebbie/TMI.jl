@@ -109,3 +109,4 @@ ylabel("time [yrs]")
 #longitudinal plots
 lon_index = 85
 dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', 0:0.05:1.05)
+
