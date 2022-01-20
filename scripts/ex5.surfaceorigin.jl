@@ -13,6 +13,7 @@
 =#
 using Revise
 using TMI, PyPlot, PyCall
+pygui(true)
 
 # % choose an interior location X (Xlon[lon], Xlat [lat], Xdepth [m depth]).
 #% -7.38, 115.26E
@@ -28,4 +29,5 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 origin = surfaceorigin(loc, Alu, γ)
 
 # units: effective thickness in log10(meters)
+figure()
 contourf(γ.lon,γ.lat,log10.(origin'))

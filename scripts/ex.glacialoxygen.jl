@@ -8,7 +8,7 @@
 =#
 using Revise
 using TMI, BenchmarkTools, PyPlot, PyCall, GibbsSeaWater
-
+pygui(true)
 modernversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, modernfile, L, B = config_from_nc(modernversion)
 

@@ -26,7 +26,8 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, surface_oxygensaturation, oxygen
+    matrix_zyx2xyz, surface_oxygensaturation, oxygen,
+    regeneratedδ¹³C, getRegion, getVar, identifywatermass
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1206,6 +1207,69 @@ function regeneratedphosphate(TMIversion,Alu,γ)
 end
 
 """ 
+    function regeneratedδ¹³C(TMIversion,Alu,γ)
+    delta 13C
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `γ`: TMI grid
+# Output
+- `δ¹³C`: carbon 13 fraction ?? 
+"""
+function regeneratedδ¹³C(TMIversion,Alu,γ)
+
+    inputfile = datadir("TMI_"*TMIversion*".nc")
+        
+    #A, Alu, γ, inputfile = config(TMIversion)
+    δ¹³C = readtracer(inputfile,"δ¹³C")
+
+    # PO₄ᴿ = cumulative regenerated phosphate
+
+    return δ¹³C
+end
+""" 
+    function getRegion(TMIversion,Alu,γ)
+    Mask corresponding to region of interest
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `γ`: TMI grid
+# Output
+- `region`: surface region mask 
+"""
+function getRegion(TMIversion,region)
+
+    inputfile = datadir("TMI_"*TMIversion*".nc")
+        
+    #A, Alu, γ, inputfile = config(TMIversion)
+    d_region = readtracer(inputfile,region)
+
+    # PO₄ᴿ = cumulative regenerated phosphate
+
+    return d_region
+end
+""" 
+    function getRegion(TMIversion,Alu,γ)
+    Mask corresponding to region of interest
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `γ`: TMI grid
+# Output
+- `region`: surface region mask 
+"""
+function getVar(TMIversion,varName)
+
+    inputfile = datadir("TMI_"*TMIversion*".nc")
+        
+    #A, Alu, γ, inputfile = config(TMIversion)
+    var = readtracer(inputfile,varName)
+
+    # PO₄ᴿ = cumulative regenerated phosphate
+
+    return var
+end
+""" 
     function volumefilled(TMIversion)
     Find the ocean volume that has originated from each surface box.
      This is equivalent to solving a sensitivity problem:
@@ -2313,6 +2377,24 @@ function surfaceregion(TMIversion,region,γ)
     d[:,:,1] = dsfc
     println(count(!isnan,d))
     return d
+end
+
+function identifywatermass(TMIversion,Alu,γ, list)
+    ocean_volumes = zeros(90, 45, 33, length(list))
+    for o in axes(ocean_volumes, 4)
+        region = list[o]
+        ocean_volumes[:, :, :, o] .= watermassdistribution(TMIversion,Alu,region,γ)
+    end
+
+    #dummy values for dry spots 
+    ocean_volumes[.!γ.wet, :] .= -1.0
+    #determine which ocean takes up the most volume in each grid square 
+    which_water_mass = findmax(ocean_volumes, dims =4)[2][:, :, :, 1]
+    which_water_mass = map((x) -> Float32(x[4]), which_water_mass)
+    #map dry spots back to NaN
+    which_water_mass[.!γ.wet] .= NaN
+
+    return which_water_mass
 end
 
 end
