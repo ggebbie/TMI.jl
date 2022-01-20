@@ -4,6 +4,13 @@ Based on ex8.transientsimulation.jl
 Data Input (both files in /data folder) 
   Uses 2° TMI grid
   Theta_anom_OPT-00015.nc downloaded from https://www.ncei.noaa.gov/pub/data/paleo/gcmoutput/gebbie2019/
+
+Run instructions
+  change bc_file variable to point to Theta_anom file on your machine
+  Put the 2degree TMI file into the "data" folder in TMI.jl folder
+  Change tspan to cover the period of interest - if this covers whole time period, it will take ~2 hrs to run. Change to "tspan = (tsfc[begin],tsfc[end])" to run a quick test
+  Output will save to a .nc file in data called ces_output.nc - make sure you rename or delete between runs so that it can write this file if you need the results
+ 
 =#
 
 using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra, ForwardDiff,OrdinaryDiffEq, PreallocationTools
@@ -56,9 +63,10 @@ f(du, u, p, t) = varying!(du, u, p, t) #diffeq function to solve
 #Solve diff eq 
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
 prob = ODEProblem(func, u0, tspan, p)
-println("Solving ODE")
+
 #solve using QNDF alg - tested against other alg and works fastest
-#Solver will print out what time step it is on 
+#Solver will print out what time step it is on
+println("Solving ODE")
 @time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,saveat=tsfc)
 println("ODE solved")
 
@@ -71,16 +79,16 @@ for i in 1:length(sol.t)
     sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
 end
 
-#stability check
-stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
+#stability check - no interior point should be less/greater than the surface extrema
+stable = true ? NaNMath.maximum(sol_array) < NaNMath.maximum(Csfc) && NaNMath.minimum(sol_array) > NaNMath.minimum(Csfc) : false
 println("stable: " *string(stable))
-println("Gain = "*string(NaNMath.sum(sol_array[end, :, :, :].-sol_array[begin, :, :, :])))
+
 
 #____PLOTTING____
-#longitudinal plots
 lon_index = 5
 t_index = 2
 absmax = NaNMath.maximum([NaNMath.maximum(abs.(sol_array)), NaNMath.maximum(abs.(sol_array))])
+#longitudinal plots
 dyeplot(γ.lat, γ.depth, sol_array[t_index, lon_index, :, :]',-absmax:0.05:absmax)
 
 #surface plots at 3 depths 
@@ -100,6 +108,7 @@ title("depth = "*string(γ.depth[25]))
 cf = contourf(γ.lon, γ.lat, sol_array[t_index,:,:,25]',-absmax:0.05:absmax,cmap="coolwarm")
 colorbar(cf,orientation="horizontal")
 
+#write output to ncfile 
 ces_ncwrite(γ,sol.t,sol_array)
 
 
