@@ -801,8 +801,6 @@ end
 - `lims`: contour levels
 """
 function dyeplot(lat, depth, vals, lims)
-
-    #calc fignum - based on current number of figures
     figure()
     cf = contourf(lat, depth, vals, lims)
     colorbar(cf)
@@ -1822,11 +1820,10 @@ end
 # Output
 - `du`: numerical value of LC+Bf, vector of size 74064 for 4°
 """
-
 function varying!(du, u, p, t)
     
     #load parameters 
-    Csfc,surface_ind,τ,L,B,li,LC,BF,Cb = p #0.014s
+    Csfc,surface_ind,τ,L,B,li,LC,BF,Cb = p
     println("time = ", t)
     
     #generate Cb - interpolated surface boundary condition  
@@ -1837,28 +1834,41 @@ function varying!(du, u, p, t)
     LC = get_tmp(LC, first(u)*t) 
     BF = get_tmp(BF, first(u)*t) 
 
-    #Figure out what u is at surface - probably nex thing to optimize 
+    #Figure out what u is at surface 
     u_sfc = @view u[surface_ind]
-    
-    mul!(LC, L, u) #0.01s
-    mul!(BF, B, -(u_sfc.-Cb)./τ) #0.08s
 
-    @. du = LC + BF #0.03s
+    #Inplace math to make faster 
+    mul!(LC, L, u) 
+    mul!(BF, B, -(u_sfc.-Cb)./τ) 
+    @. du = LC + BF 
     nothing
 end
 
+"""
+    function ces_ncwrite(γ,time,sol_array)
+    Write .nc file output for commonerasim.jl 
+# Arguments
+- `γ`: 
+- `time`: vector of time values 
+- `sol_array`: solution array in form time x lat x lon x depth - must match γ + time 
+# Output
+- saves .nc file titled "ces_output.nc" in data array 
+"""
 function ces_ncwrite(γ,time,sol_array)
     file = datadir() * "/ces_output.nc"
     ds = NCDataset(file,"c")
 
+    #define dimensions 
     defDim(ds,"lon", size(γ.lon)[1])
     defDim(ds,"lat",size(γ.lat)[1])
     defDim(ds,"depth",size(γ.depth)[1])
     defDim(ds,"time",size(time)[1])
 
+    #write theta output variable 
     v = defVar(ds,"theta",Float64, ("time","lon","lat","depth"))
     v[:,:,:,:] = sol_array
 
+    #write dimensions as variables (this might not be kosher...) 
     vlon = defVar(ds,"lon",Float64, ("lon",))
     vlon[:] = γ.lon
     vlat = defVar(ds,"lat",Float64,("lat",))
@@ -1867,6 +1877,7 @@ function ces_ncwrite(γ,time,sol_array)
     vtime[:] = time
     vdepth = defVar(ds,"depth",Float64,("depth",))
     vdepth[:] = γ.depth
+
     v.attrib["title"] = "output of commonerasim.jl" 
     v.attrib["units"] = "potential temperature anomaly"
     close(ds)

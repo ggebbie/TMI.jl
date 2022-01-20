@@ -1,19 +1,22 @@
 #= 
-nSimulate CE circulation 
-Based on ex8.transientsimulation.jl 
+Simulate CE circulation 
+Based on varying case from ex8.transientsimulation.jl 
 Data Input (both files in /data folder) 
-  Uses 2° TMI grid
+  2° TMI grid
   Theta_anom_OPT-00015.nc downloaded from https://www.ncei.noaa.gov/pub/data/paleo/gcmoutput/gebbie2019/
 
 Run instructions
-  change bc_file variable to point to Theta_anom file on your machine
-  Put the 2degree TMI file into the "data" folder in TMI.jl folder
-  Change tspan to cover the period of interest - if this covers whole time period, it will take ~2 hrs to run. Change to "tspan = (tsfc[begin],tsfc[end])" to run a quick test
-  Output will save to a .nc file in data called ces_output.nc - make sure you rename or delete between runs so that it can write this file if you need the results
- 
+ (a) Change bc_file variable to point to Theta_anom file on your machine
+ (b) Put the 2degree TMI file into the "data" folder in TMI.jl folder
+ (c) Change tspan to cover the period of interest
+     If this covers whole time period, it will take ~2 hrs to run
+     Change to "tspan = (tsfc[begin],tsfc[end])" to run a quick test
+ (d) Output will save to a .nc file in data called ces_output.nc
+     Make sure you rename or delete between runs so that it can write  
 =#
 
-using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra, ForwardDiff,OrdinaryDiffEq, PreallocationTools
+using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations
+using LinearAlgebra, ForwardDiff,OrdinaryDiffEq, PreallocationTools
 
 #load TMI data
 TMIversion = "modern_180x90x33_GH11_GH12"
@@ -25,19 +28,17 @@ tsfc, bc = readopt(bc_file,γ)
 dsfc = bc[begin,:, :, 1][γ.wet[:,:,1]] 
 
 #make initial conditions be output of ex1
-#this ends up being silly - initial surface cond are 0 for anom file, so it just ends up being zero everywhere, but I left it in so I  know how to do it in the future 
+#initial surface cond are 0 for anom file, so it just ends up being 0 everywhere  
 c0 = tracerinit(γ.wet)
 c0[γ.wet] = Alu\bc[begin, :, :, :][γ.wet]
 u0 = c0[γ.wet]
 
 #Timespan that diffeq solver will solve for, must be within tsfc 
-tspan = (tsfc[begin], tsfc[end])
+tspan = (tsfc[begin], tsfc[2])
 
 #Get surface boundary conditions from Theta_anom_OPT 
 Csfc = zeros((length(tsfc), length(dsfc)))
-for i in 1:length(tsfc)
-    Csfc[i, :] = bc[i,:,:, 1][γ.wet[:, :, 1]]
-end
+[Csfc[i,:] = bc[i,:,:,1][γ.wet[:,:,1]] for i ∈ 1:length(tsfc)]
 
 #more parameters for diffeq solver 
 τ = 1 / 12 #monthly restoring timescale
@@ -47,20 +48,10 @@ li = LinearInterpolation(tsfc, 1:length(tsfc))
 LC = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl
 BF = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl 
 Cb = similar(Csfc[1,:])
-
-#this is silly - but I just need to know which in γ.I are surface layer 
-surface_ind = []
-for i in 1:size(γ.I)[1]
-    if γ.I[i][3] == 1
-        push!(surface_ind, i)
-    end
-end
+surface_ind = findall(x-> x[3] == 1, γ.I) #Find which points in γ.I are on the surface
 
 p = (Csfc,surface_ind,τ,L,B,li,LC,BF,Cb) #parameters
-
 f(du, u, p, t) = varying!(du, u, p, t) #diffeq function to solve 
-
-#Solve diff eq 
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
 prob = ODEProblem(func, u0, tspan, p)
 
@@ -72,17 +63,11 @@ println("ODE solved")
 
 #put sol into time x lon x lat x depth 
 sol_array = zeros((length(sol.t),size(γ.wet)[1],size(γ.wet)[2],size(γ.wet)[3]))
-
-#everything in sol.u is size 74064 which is all points within the ocean
-#we want to make a global map, so we need to use γ to get it back to a matrix
-for i in 1:length(sol.t)
-    sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
-end
+[sol_array[i,:,:,:] = vec2fld(sol.u[i],γ.I) for i ∈ 1:length(sol.t)]
 
 #stability check - no interior point should be less/greater than the surface extrema
 stable = true ? NaNMath.maximum(sol_array) < NaNMath.maximum(Csfc) && NaNMath.minimum(sol_array) > NaNMath.minimum(Csfc) : false
 println("stable: " *string(stable))
-
 
 #____PLOTTING____
 lon_index = 5
@@ -110,6 +95,3 @@ colorbar(cf,orientation="horizontal")
 
 #write output to ncfile 
 ces_ncwrite(γ,sol.t,sol_array)
-
-
-

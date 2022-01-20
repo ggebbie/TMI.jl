@@ -1,28 +1,29 @@
-#= placeholder for transient simulation
-#how does a patch of tracer (concentratio= 1) evolve throughout time?
+#=
+ Example 8: Propagate initial conditions through time according to L-matrix 
+ Steps: (a) Define a surface patch (d) of concentration 1 to propagate
+        (b) Use a fixed euler timestep approximation to estimate how L
+            will propagate d
+        (c) Solve dc/dt = Lu for the fixed boundary condition case 
+ Varying boundary condition: Solve for tracer concentration given an initial
+ global surface tracer concentration of 1 that linearly decreases for 50 years
+ until global surface tracer concentration is 0. Functionality can be turned on
+ by toggling bc from "fixed" to "varying" 
+ Solves dc/dt = Lu + Bf 
 =#
 
-using Revise, TMI, Interpolations, PyPlot, NaNMath, DifferentialEquations, LinearAlgebra
+using Revise, TMI, Interpolations, PyPlot
+using NaNMath, DifferentialEquations, LinearAlgebra
 
-#load TMI data
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
-#here we will only use
-#γ: corresponding lat/lon values for L 
-#L: tendency matrix, essentially A (pathway matrix) scaled by residence time (tau) 
-#each entry of L tells us how each point in the ocean is connected to its neighbors
 
-#In MATLAB code: make_initial_condition - either rectangle or predefined region
-#here we'll assume rectangle 
+#In MATLAB code: make_initial_condition 
 latbox = [50,60]
 lonbox = [-50,0]
 d = surfacepatch(lonbox, latbox, γ) #vector(same dims as γ, global)  describing surface patch in terms of γ
 
-#γ.wet tells us, at each depth, which points are wet (binary mapping)
-#we'll make the first level of γ.wet into a bit array, and access the first level at d at each index. this essentially flattens it into the same format as B 
-dsfc =  d[:,:,1][γ.wet[:,:,1]]
+dsfc =  d[:,:,1][γ.wet[:,:,1]]#flatten d and access at surface wet positions 
 
-#following make_initial_conditions.m
 #initial conditions are the surface patch = 1, propagated down to the bottom of the mixed layer, which we get from B 
 c0 = B * dsfc 
 
@@ -60,17 +61,10 @@ elseif bc == "varying"
     LC = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl
     BF = DiffEqBase.dualcache(similar(u0)) #for PreallocationTools.jl 
     Cb = similar(Csfc[1,:])
-
-    #this is silly - but I just need to know which in γ.I are surface layer 
-    surface_ind = []
-    for i in 1:size(γ.I)[1]
-        if γ.I[i][3] == 1
-            push!(surface_ind, i)
-        end
-    end
-    p = (Csfc, surface_ind, τ,L,B, li, LC,BF, Cb)
+    surface_ind = findall(x-> x[3] == 1, γ.I)#which points in γ.I are on the surface  
     
-    f(du, u, p, t) = varying!(du, u, p, t)
+    p = (Csfc, surface_ind, τ,L,B, li, LC,BF, Cb) #parameters 
+    f(du, u, p, t) = varying!(du, u, p, t) #ODEfunction 
 else
     println("invalid boundary condition, must be 'fixed' or 'varying'")
 end
@@ -84,28 +78,14 @@ println("Solving ode")
 println("ode solved")
 
 #put sol into time x lon x lat x depth 
-sol_array = zeros((length(sol.t), 90,45,33))
+sol_array = zeros((length(sol.t),size(γ.wet)[1],size(γ.wet)[2],size(γ.wet)[3]))
+[sol_array[i,:,:,:] = vec2fld(sol.u[i],γ.I) for i ∈ 1:length(sol.t)]
 
 #stability check
 stable = true ? NaNMath.maximum(sol_array) < 1.000001  && NaNMath.minimum(sol_array) > -0.000001 : false
 println("stable: " *string(stable))
-gain = NaNMath.sum(sol_array[end, :, :, :] .- sol_array[begin,:,:,:])
-println("Gain = "*string(gain))
-    
-#everything in sol.u is size 74064 which is all points within the ocean
-#we want to make a global map, so we need to use γ to get it back to a matrix
-for i in 1:length(sol.t)
-    sol_array[i, :, :, :] = vec2fld(sol.u[i], γ.I)
-end 
 
 #____PLOTTING____
-#time plot
-figure()
-title("Time distribution")
-plot(1:length(sol.t), sol.t, ".")
-xlabel("time index [integer]")
-ylabel("time [yrs]")
-
 #longitudinal plots
 lon_index = 85
 dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', 0:0.05:1.05)
