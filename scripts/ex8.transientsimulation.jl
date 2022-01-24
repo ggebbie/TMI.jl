@@ -74,7 +74,7 @@ func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array
 prob = ODEProblem(func, u0, tspan,p)
 println("Solving ode")
 #solve using QNDF alg - tested against other alg and works fastest 
-@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,calck=false)
+@time sol = solve(prob,QNDF(),abstol = 1e-4,reltol=1e-4,saveat =tspan[1]:tspan[2])
 println("ode solved")
 
 #put sol into time x lon x lat x depth 
@@ -88,5 +88,4 @@ println("stable: " *string(stable))
 #____PLOTTING____
 #longitudinal plots
 lon_index = 85
-dyeplot(γ.lat, γ.depth, sol_array[end, lon_index, :, :]', 0:0.05:1.05)
-
+dyeplot(γ.lat, γ.depth, sol_array[25, lon_index, :, :]', 0:0.05:1.05)
