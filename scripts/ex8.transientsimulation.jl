@@ -68,10 +68,11 @@ elseif bc == "varying"
 else
     println("invalid boundary condition, must be 'fixed' or 'varying'")
 end
-typeof(L)
-#Solve diff eq 
+
+#Solve diff eq
+operator = DiffEqArrayOperator(L)
+isconstant(operator)
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
-func = ODEFunction(f) #jac_prototype for sparse array 
 prob = ODEProblem(func, u0, tspan,p)
 println("Solving ode")
 #solve using QNDF alg - tested against other alg and works fastest 
