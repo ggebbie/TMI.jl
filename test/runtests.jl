@@ -96,7 +96,7 @@ using Revise, TMI, Test
         u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻, ctrue = sample_observations(TMIversion,"θ",γ)
+        y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 
         # a first guess: observed surface boundary conditions are perfect.
         # set surface boundary condition to the observations.
@@ -153,7 +153,7 @@ using Revise, TMI, Test
         u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
         # take synthetic, noisy observations
-        y, W⁻, ctrue, locs, wis = sample_observations(TMIversion,"θ",γ,N)
+        y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
         # does this help optimization stay stable?
         #W⁻ *= 1.0/100.0
@@ -220,7 +220,7 @@ using Revise, TMI, Test
         #Fixed euler timestep approximation
         c = c0
         Δt = 1e-3 #this becomes unstable if you go any lower
-        Nt = 1/Δt
+        Nt = 1/Δt # shorter time span to speed things up
         for tt = 1:Nt
             # forward Euler timestep
             c += L*c*Δt

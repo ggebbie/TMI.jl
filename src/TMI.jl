@@ -21,13 +21,14 @@ export config, config_from_mat, config_from_nc,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, sample_observations, steadyclimatology,
+    surfaceorigin, synthetic_observations, observe, steadyclimatology,
     steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, varying!, readopt, ces_ncwrite
+    matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
+    surface_oxygensaturation, oxygen
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -800,13 +801,29 @@ end
 - `vals`: lat x depth value array
 - `lims`: contour levels
 """
-function dyeplot(lat, depth, vals, lims)
+function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
+
+    println(size(vals))
+
+    valsview = view(vals,:,33:-1:1)
+    println(size(valsview))
+    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
+    cmap_seismic = get_cmap("seismic")
+
+    z = reverse(depth)/1000.
+        
+    #calc fignum - based on current number of figures
     figure()
-    cf = contourf(lat, depth, vals, lims)
-    colorbar(cf)
-    contour(lat, depth, vals, lims, colors = "black", linewidths = 1)
-    ylim(maximum(depth), minimum(depth))
-    gca().set_title("Meridional dye concentration")
+    contourf(lat, z, valsview', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(lat, z, valsview', lims,colors="k")
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    xlabel("Latitude [°N]")
+    ylabel("Depth [km]")
+    gca().set_title(titlelabel)
+    gca().invert_yaxis()
+    colorbar(orientation="horizontal")
+    
 end
 
 """
@@ -1043,6 +1060,63 @@ function watermassdistribution(TMIversion,Alu,region,γ)
     return g
 end
 
+"""
+Surface oxygen saturation value and fraction of saturation value in field 
+"""
+function surface_oxygensaturation(file)
+    # read temperature and o2.
+    θ = readtracer(file,"θ")
+    θsurface = view(θ,:,:,1)
+
+    S = readtracer(file,"Sp")
+    Ssurface = view(S,:,:,1)
+
+    # GibbsSeaWater.jl for saturation value
+    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
+
+    O₂ = readtracer(file,"O₂")
+    O₂surface = view(O₂,:,:,1)
+    O₂fraction = O₂surface./O₂sol
+
+    return O₂sol, O₂fraction 
+end
+
+"""
+Reconstruct dissolved oxygen (that doesn't exist in TMI product)
+by assuming same oxygen saturation fraction as modern
+"""
+function oxygen(version,O₂fraction)
+
+    A, Alu, γ, file = config_from_nc(version)
+
+    o2po4ratio = 170
+    
+    # read temperature and o2.
+    θ = readtracer(file,"θ")
+    θsurface = view(θ,:,:,1)
+
+    S = readtracer(file,"Sp")
+    Ssurface = view(S,:,:,1)
+
+    # GibbsSeaWater.jl for saturation value
+    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
+
+    O₂surface = O₂sol.*O₂fraction
+
+    # invert with stoichiometric ratio
+    O₂ = tracerinit(γ.wet)
+    qPO₄ = readtracer(file,"qPO₄")
+    d = o2po4ratio*qPO₄
+
+    #d = qO₂lgm
+    d[:,:,1] = O₂surface;
+
+    O₂[γ.wet] =  Alu\d[γ.wet]
+
+    return O₂
+end
+
+
 """ 
     function ncurl(TMIversion)
     placeholder function to give location (URL) of NetCDF Google Drive input
@@ -1231,6 +1305,7 @@ function interpindex(loc,γ)
 function interpindex(loc,γ)
 
     # Handle longitudinal periodic condition (i.e., wraparound)
+
     lon = vcat(copy(γ.lon),γ.lon[1]+360.)
     list = vcat(1:length(γ.lon),1)
     nodes = (lon,γ.lat,γ.depth)
@@ -1354,7 +1429,7 @@ function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
 end
 
 """ 
-    function sample_observations(TMIversion,variable)
+    function synthetic_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
     This version: gridded observations
 # Arguments
@@ -1365,7 +1440,7 @@ end
 - `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
 - `θtrue`: real observations, 3D field
 """
-function sample_observations(TMIversion,variable,γ)
+function synthetic_observations(TMIversion,variable,γ)
 
     inputfile = datadir("TMI_"*TMIversion*".nc")
 
@@ -1389,7 +1464,7 @@ function sample_observations(TMIversion,variable,γ)
 end
  
 """ 
-    function sample_observations(TMIversion,variable,locs)
+    function synthetic_observations(TMIversion,variable,locs)
     Synthetic observations that are a contaminated version of real observations
     This version: observations with random (uniform) spatial sampling
 # Arguments
@@ -1403,7 +1478,7 @@ end
 - `locs`: 3-tuples of locations for observations
 - `wis`: weighted indices for interpolation to locs sites
 """
-function sample_observations(TMIversion,variable,γ,N)
+function synthetic_observations(TMIversion,variable,γ,N)
 
     inputfile = datadir("TMI_"*TMIversion*".nc")
 
@@ -1418,29 +1493,15 @@ function sample_observations(TMIversion,variable,γ,N)
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
-    [locs[i] = wetlocation(γ) for i in 1:N]
+    [locs[i] = wetlocation(γ) for i in eachindex(locs)]
 
+    # get weighted interpolation indices
+    N = length(locs)
     wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
     [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
-    # look at total weight, < 1 if there are land points
-    # later make sure total weight = 1 for proper average
-    # put this paragraph into a function or find an existing function
-    sumwis = Vector{Float64}(undef,N)
-    list = vcat(1:length(γ.lon),1)
-    wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in 1:N]
-
-    # sample the true field at these random locations
-    ytrue = Vector{Float64}(undef,N)
-    replace!(θtrue,NaN=>0.0)
-    θwrap = view(θtrue,list,:,:)
-    [ytrue[i] = θwrap[wis[i]...]/sumwis[i] for i in 1:N]
-
-    # interpolate the standard deviation of expected error
-    σtrue = Vector{Float64}(undef,N)
-    σwrap = view(σθ,list,:,:)
-    [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
+    ytrue = observe(θtrue,wis,γ)
+    σtrue = observe(σθ,wis,γ)
 
     #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
     ntrue = rand(Normal(),N).*σtrue
@@ -1451,7 +1512,30 @@ function sample_observations(TMIversion,variable,γ,N)
     W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
     return y, W⁻, ytrue, locs, wis
 end
- 
+
+"""
+    function observe
+    Take a observation at location given by weights wis
+"""
+function observe(field,wis,γ)
+
+    # look at total weight, < 1 if there are land points
+    # later make sure total weight = 1 for proper average
+    #N = length(wis)
+    sumwis = Vector{Float64}(undef,length(wis))
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+
+    # sample the true field at these random locations
+    field_sample = Vector{Float64}(undef,length(wis))
+    replace!(field,NaN=>0.0)
+    field_wrap = view(field,list,:,:)
+    [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+
+    return field_sample
+end
+
 """ 
     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
     squared model-data misfit for gridded data
@@ -1703,6 +1787,7 @@ end
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue: couldn't figure out how to nest with costfunction_obs!
+    Issue: why are wis and locs both needed?
 # Arguments
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
