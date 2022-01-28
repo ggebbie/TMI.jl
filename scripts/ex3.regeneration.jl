@@ -10,6 +10,7 @@ pygui(true) #needed for Atom, not sure what it will do in other places
 # A, Alu, γ, inputfile = config(url,inputdir)
 # ΔPO₄ = readtracer(inputfile,"qpo4")
 TMIversion = "modern_90x45x33_GH10_GH12"
+#TMIversion = "modern_180x90x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
 

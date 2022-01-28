@@ -32,48 +32,65 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 # ocean values are 0
 u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
 
-# take synthetic, noisy observations
-y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
-
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
 d₀ = tracerinit(γ.wet)
-d₀[:,:,1] = y[:,:,1]
 
-fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
-
-# filter the data with an Optim.jl method
-out = steadyclimatology(u₀,fg!)
-
-# reconstruct by hand to double-check.
-ũ = out.minimizer
+# get observations at surface
+# set them as surface boundary condition
+PO₄obs = readtracer(TMIfile,"PO₄")
+d₀[:,:,1] = PO₄obs[:,:,1]
 
 # reconstruct tracer map
-c₀ = steady_inversion(u₀,Alu,d₀,γ.wet)
-c̃ = steady_inversion(ũ,Alu,d₀,γ.wet)
+PO₄pre = steady_inversion(u₀,Alu,d₀,γ.wet)
+PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
+PO₄total = PO₄pre + PO₄ᴿ
+
+# invert for total phosphate in one step
+qPO₄ = readtracer(TMIfile,"qPO₄")
+dPO₄ = d₀ - qPO₄
+PO₄direct = steady_inversion(u₀,Alu,dPO₄,γ.wet)
 
 # view the surface
-cntrs = -1:0.05:1
+cntrs = 0:0.05:3.5
 
 # what model depth level?
 level = 15
-Δc̃ = c̃[:,:,level] .- ctrue[:,:,level]
-Δc₀ = c₀[:,:,level] .- ctrue[:,:,level]
 
 figure()
-contourf(γ.lon,γ.lat,Δc̃',cntrs)
+contourf(γ.lon,γ.lat,PO₄recon[:,:,level]',cntrs)
+contourf(γ.lon,γ.lat,PO₄total[:,:,level]',cntrs)
 #contour(γ.lon,γ.lat,Δc̃',cntrs)
 
 figure()
 contourf(γ.lon,γ.lat,Δc₀',cntrs)
 
-# sample tests
-#maximum(filter(!isnan,Δc₀))
-#maximum(filter(!isnan,Δc̃))
+lon_section = 330; # only works if exact
+Psection = section(PO₄total,lon_section,γ)
+lims = 0:0.05:3.0
+figure()
+dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', lims)
 
-# future step: box minimization to eliminate unreasonable temperatures.
-# should be made more generic for other tracers
-# From MATLAB:
-#lbT = -2.*ones(Nsfc,1); % temperature lower bound: can not freeze.
-#ubT = 40.*ones(Nsfc,1); % ad-hoc temperature upper bound: 40 C.
+
+# oxygen distribution
+O₂obs = readtracer(TMIfile,"O₂")
+d₀[:,:,1] = O₂obs[:,:,1]
+qO₂ = - 170 .* qPO₄
+dO₂ = d₀ - qO₂
+O₂recon = steady_inversion(u₀,Alu,dO₂,γ.wet)
+
+# view the surface
+cntrs = 0:10:400 # μmol/kg
+
+# what model depth level?
+level = 27
+
+figure()
+cf = contourf(γ.lon,γ.lat,O₂recon[:,:,level]',cntrs)
+colorbar(cf)
+
+lon_section = 202; # only works if exact
+Psection = section(O₂recon,lon_section,γ)
+figure()
+dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', cntrs)

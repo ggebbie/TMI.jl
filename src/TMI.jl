@@ -4,7 +4,8 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT, NCDatasets
+    Interpolations, LineSearches, MAT, NCDatasets,
+    OrdinaryDiffEq, PreallocationTools
 
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
@@ -26,7 +27,8 @@ export config, config_from_mat, config_from_nc,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
-    matrix_zyx2xyz, surface_oxygensaturation, oxygen
+    matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
+    surface_oxygensaturation, oxygen
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -75,15 +77,17 @@ end
 """
 function config_from_nc(TMIversion)
 
-    #- `url`: Google Drive URL for data
-    url = ncurl(TMIversion)
-    
-    TMIfile = datadir("TMI_"*TMIversion*".nc")
-    println(url)
-    println(TMIfile)
+    #make datdir() if it doesn't exist 
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfile) ? google_download(url,datadir()) : nothing
-
+    TMIfile = datadir("TMI_"*TMIversion*".nc")
+    #if TMIfile doesn't exist, get GDrive url and download 
+    if !isfile(TMIfile) 
+        #- `url`: Google Drive URL for data
+        url = ncurl(TMIversion)
+        google_download(url,datadir())
+    end 
+    
+    
     #ncdata = NetCDF.open(TMIfile) # necessary?
 
     # read Cartesian Index from file.
@@ -130,7 +134,8 @@ function config_from_mat(TMIversion)
     TMIfilegz = TMIfile*".gz"
     println(TMIfile)
     !isdir(datadir()) ? mkpath(datadir()) : nothing
-    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+#    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+    !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,datadir())
 
     # cloak mat file in gz to get Google Drive spam filter to shut down
     isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing
@@ -557,16 +562,15 @@ end
 - `field`: field in 3d form including land points (NaN)
 """
 function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
-
     # choose NaN for now, zero better? nothing better?
-    fillvalue = zero(T)/zero(T) # NaN32 or NaN64
-
+    fillvalue = zero(T)/zero(T)
+    
     nx = maximum(I)[1]
     ny = maximum(I)[2]
     nz = maximum(I)[3]
 
     # faster instead to allocate as undef and then fill! ?
-    field = fillvalue .* zeros(nx,ny,nz)
+    field = (NaN .* zero(T)) .* zeros(nx,ny,nz)
 
     # a comprehension
     [field[I[n]]=vector[n] for n ∈ eachindex(I)]
@@ -987,6 +991,8 @@ function state2obs(cvec,wis,γ)
     # perhaps the most clever line in TMI.jl?
     wetwrap = view(γ.wet,list,:,:)
 
+    # some interpolation weights on land, oh no
+    # sum up all weights in ocean
     [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # reconstruct the observations
@@ -996,6 +1002,7 @@ function state2obs(cvec,wis,γ)
     replace!(c̃,NaN=>0.0)
     cwrap = view(c̃,list,:,:)
 
+    # divide by sum of all ocean weights so that this is still a true average
     [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
@@ -1361,7 +1368,7 @@ function interpweights(loc,γ)
 end
 
 """
-function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
+function steadyclimatology(u₀,fg!,iterations)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1374,18 +1381,15 @@ function steadyclimatology(u₀,Alu,y,d₀,W⁻,γ)
     See Supplementary Section 2, Gebbie & Huybers 2011.
 # Arguments
 - `u₀`:
-- `Alu`:
-- `d₀`: first guess of boundary conditions and interior sources
-- `y`: observations on 3D grid
-- `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `fg!`: compute cost function and gradient in place
-- `γ`: grid
+- `iterations`: number of optimization iterations
 """
-function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+function steadyclimatology(u₀,fg!,iterations)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
 end
@@ -1412,14 +1416,13 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 - `γ`: grid
 """
 #function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
-
+function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
     # ### added this
      fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = 5))
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 #    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
     return out    
@@ -1484,6 +1487,7 @@ function synthetic_observations(TMIversion,variable,γ,N)
     
     θtrue = readtracer(inputfile,variable)
     replace!(θtrue,NaN=>0.0)
+    
     σθ = readtracer(inputfile,"σ"*variable)
     replace!(σθ,NaN=>0.0)
 
@@ -1498,29 +1502,9 @@ function synthetic_observations(TMIversion,variable,γ,N)
 
     ytrue = observe(θtrue,wis,γ)
     σtrue = observe(σθ,wis,γ)
-    
-    # wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
-    # [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
-    # # look at total weight, < 1 if there are land points
-    # # later make sure total weight = 1 for proper average
-    # sumwis = Vector{Float64}(undef,N)
-    # list = vcat(1:length(γ.lon),1)
-    # wetwrap = view(γ.wet,list,:,:)
-    # [sumwis[i] = wetwrap[wis[i]...] for i in 1:N]
-
-    # # sample the true field at these random locations
-    # ytrue = Vector{Float64}(undef,N)
-    # replace!(θtrue,NaN=>0.0)
-    # θwrap = view(θtrue,list,:,:)
-    # [ytrue[i] = θwrap[wis[i]...]/sumwis[i] for i in 1:N]
-
-    # interpolate the standard deviation of expected error
-    # σtrue = Vector{Float64}(undef,N)
-    # σwrap = view(σθ,list,:,:)
-    # [σtrue[i] = σwrap[wis[i]...]/sumwis[i] for i in 1:N]
-
-    ntrue = rand(Normal(),N) .* σtrue
+    #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+    ntrue = rand(Normal(),N).*σtrue
     y = ytrue .+ ntrue
 
     # weighting matrix
@@ -1894,8 +1878,7 @@ end
 # Arguments
 - `γ`: TMI.grid
 # Output
-- `loc`: lon,lat,depth tuple
-"""
+- `loc`: lon,lat,depth """
 function wetlocation(γ)
 
     confirmwet = false
@@ -1910,6 +1893,82 @@ function wetlocation(γ)
     end # if not, then start over.
 end
 
+"""
+    function varying!(du, u, p, t)
+    ODE function for varying boundary cond
+    Sets up dc/dt = L*C + B*f to be solved 
+# Arguments
+- `du`: dc/dt (must have this name for DifferentialEquations.jl to work
+- `u`: C, what we are solving for 
+- `p`: parameters for diffeq - must hold specified vars  
+- `t`: time we are solving for (automatically determined by DE.jl)
+# Output
+- `du`: numerical value of LC+Bf, vector of size 74064 for 4°
+"""
+function varying!(du, u, p, t)
+    
+    #load parameters 
+    Csfc,surface_ind,τ,L,B,li,LC,BF,Cb = p
+    println("time = ", t)
+    
+    #generate Cb - interpolated surface boundary condition  
+    li_t = convert(Float64, li[t])
+    Cb .= (ceil(li_t)-li_t).*Csfc[Int(floor(li_t)), :] .+ (li_t-floor(li_t)).*Csfc[Int(ceil(li_t)), :]
+    
+    #use PreallocationTools.jl to handle Dual type in u 
+    LC = get_tmp(LC, first(u)*t) 
+    BF = get_tmp(BF, first(u)*t) 
+
+    #Figure out what u is at surface 
+    u_sfc = @view u[surface_ind]
+
+    #Inplace math to make faster 
+    mul!(LC, L, u) 
+    mul!(BF, B, -(u_sfc.-Cb)./τ) 
+    @. du = LC + BF 
+    nothing
+end
+
+"""
+    function ces_ncwrite(γ,time,sol_array)
+    Write .nc file output for commonerasim.jl 
+# Arguments
+- `γ`: 
+- `time`: vector of time values 
+- `sol_array`: solution array in form time x lat x lon x depth - must match γ + time 
+# Output
+- saves .nc file titled "ces_output.nc" in data array 
+"""
+function ces_ncwrite(γ,time,sol_array)
+    file = datadir() * "/ces_output.nc"
+    ds = NCDataset(file,"c")
+
+    #define dimensions 
+    defDim(ds,"lon", size(γ.lon)[1])
+    defDim(ds,"lat",size(γ.lat)[1])
+    defDim(ds,"depth",size(γ.depth)[1])
+    defDim(ds,"time",size(time)[1])
+
+    #write theta output variable 
+    v = defVar(ds,"theta",Float64, ("time","lon","lat","depth"))
+    v[:,:,:,:] = sol_array
+
+    #write dimensions as variables (this might not be kosher...) 
+    vlon = defVar(ds,"lon",Float64, ("lon",))
+    vlon[:] = γ.lon
+    vlat = defVar(ds,"lat",Float64,("lat",))
+    vlat[:] = γ.lat
+    vtime = defVar(ds,"time",Float64,("time",))
+    vtime[:] = time
+    vdepth = defVar(ds,"depth",Float64,("depth",))
+    vdepth[:] = γ.depth
+
+    v.attrib["title"] = "output of commonerasim.jl" 
+    v.attrib["units"] = "potential temperature anomaly"
+    close(ds)
+end
+
+    
 function iswet(loc,γ,neighbors)
     # two approaches
     # approach 2
@@ -2348,4 +2407,23 @@ function surfaceregion(TMIversion,region,γ)
     return d
 end
 
+#read surface layer
+function readopt(filename,γ)
+    nc = NCDataset(filename)
+#    lat = nc["latitude"][:]
+#    lon = nc["longitude"][:]
+    time = nc["year"][:]
+#    depth = nc["depth"][:]
+    theta = nc["theta"][:, :, :, :]
+
+    #flip to time descending order
+    reverse!(time)
+    time = convert(Vector{Int}, time)
+    reverse!(theta, dims = 1)
+    theta_permuted = zeros((size(theta)[1], size(γ.wet)[1], size(γ.wet)[2], size(γ.wet)[3]))
+    permutedims!(theta_permuted, theta, [1,4,3,2])
+    return time, theta_permuted 
+end
+
+    
 end
