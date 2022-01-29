@@ -1913,17 +1913,22 @@ end
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
 - `dsfc`: surface boundary condition
-- `qint`: interior sources/sinks
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
 - `wet`: BitArray ocean mask
 # Output
 - `c`: steady-state tracer distribution
 """
-function steady_inversion(Alu,dsfc::Array{T,2},qint::Array{T,3},wet::BitArray{3}) where T <: Real
+function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
 
-    println("stopped here, not finished, Anthony help!!")
+    # use qint to store "d"
+    d = tracerinit(wet,T)
+    d = -r * q
+    d[:,:,1] += dsfc
+        
     c = tracerinit(wet,T)
     c[wet] =  Alu\d[wet]
 
