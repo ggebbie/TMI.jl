@@ -220,7 +220,8 @@ using Revise, TMI, Test
         #Fixed euler timestep approximation
         c = c0
         Δt = 1e-3 #this becomes unstable if you go any lower
-        Nt = 1/Δt # shorter time span to speed things up
+        T  = 0.1
+        Nt = T/Δt
         for tt = 1:Nt
             # forward Euler timestep
             c += L*c*Δt
@@ -232,7 +233,7 @@ using Revise, TMI, Test
         u0 = c0
         du = similar(u0)
         f(du,u,p,t) = mul!(du, L, u) 
-        tspan = (0.0,1.0)
+        tspan = (0.0,T)
         func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
         prob = ODEProblem(func, u0, tspan)
         println("Solving fixed ODE")
@@ -260,7 +261,7 @@ using Revise, TMI, Test
         println("Gain percent error ",200gain_error,"%")
 
         #varying case stability check
-        tsfc = [0, 10]
+        tsfc = [0, T]
         Csfc = zeros((2, length(dsfc)))
         Csfc[1, :] .= 1
         τ = 1/12
