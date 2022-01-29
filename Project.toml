@@ -62,6 +62,7 @@ PyCall = "1"
 PyPlot = "2"
 Revise = "3"
 StatsBase = "0.33"
+Sundials = "4"
 julia = "1.6"
 
 [extras]
