@@ -69,6 +69,7 @@ An example:\
 `cd TMI.jl`\
 `julia --project=@. scripts/ex1.trackpathways.jl`
 
+
 # Data files
 
 The Julia code is designed to download input files from Google Drive and to place them in the `data` directory. If that doesn't work, extract data from Google Drive using your favorite method or download manually at: https://drive.google.com/drive/folders/1nFDSINbst84pK68aWwRGBVfYZkfN1mUR?usp=sharing . Available TMI versions include:
@@ -113,6 +114,8 @@ Available functions are listed in the documentation at https://ggebbie.github.io
 # Scripts
 
 See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
+
+Scripts beginning with "ex" are tested and can serve as good templates for new work. Other scripts are a work in progress.
 
 # How this Julia package was started
 

@@ -1906,6 +1906,55 @@ function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) wh
     return c
 end
 
+""" 
+    function steady_inversion(Alu,d,γ.wet)
+    invert for a steady-state tracer distribution
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `d`: model constraints
+- `wet`: BitArray ocean mask
+# Output
+- `c`: steady-state tracer distribution
+"""
+function steady_inversion(Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    # below surface = 0 % no internal sinks or sources.
+
+    c = tracerinit(wet,T)
+    c[wet] =  Alu\d[wet]
+
+    return c
+end
+
+""" 
+    function steady_inversion(Alu,dsfc,qint,γ.wet)
+    invert for a steady-state tracer distribution
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `dsfc`: surface boundary condition
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
+- `wet`: BitArray ocean mask
+# Output
+- `c`: steady-state tracer distribution
+"""
+function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    # below surface = 0 % no internal sinks or sources.
+
+    # use qint to store "d"
+    d = tracerinit(wet,T)
+    d = -r * q
+    d[:,:,1] += dsfc
+        
+    c = tracerinit(wet,T)
+    c[wet] =  Alu\d[wet]
+
+    return c
+end
+
 """
     function wetlocation(γ)
     Get (lon,lat,depth) tuples of wet locations.
