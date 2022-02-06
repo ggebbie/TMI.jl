@@ -28,7 +28,7 @@ export config, config_from_mat, config_from_nc,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
-    surface_oxygensaturation, oxygen
+    surface_oxygensaturation, oxygen, location_obs
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1533,6 +1533,42 @@ function observe(field,wis,γ)
     field_wrap = view(field,list,:,:)
     [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
+    return field_sample
+end
+
+function location_obs(field, locs, γ)
+
+    tlength = length(size(field)) > 3 ? size(field)[1] : 1
+    #determine weights for locations 
+    N = length(locs)
+    wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+    [wis[i] = interpindex(locs[i],γ) for i in 1:N]
+
+    #
+    sumwis = Vector{Float64}(undef,length(wis))
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(γ.wet,list,:,:)
+    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    
+    field_sample = Matrix{Float64}(undef,(length(wis),tlength))
+    replace!(field,NaN=>0.0)
+    if tlength > 1
+        for t in 1:tlength
+            field_wrap = view(field[t,:,:,:], list, :, :)
+            [field_sample[i,t] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+        end
+
+        #below code is an attempt to replace for loop 
+        
+        #field_wrap = view(field, :, list, :, :) #handle wraparound
+        #[field_sample[i,:] = field_wrap[:,wis[i][1],wis[i][2],wis[i][3]]/sumwis[i] for i in eachindex(wis)]
+
+    else
+    
+    field_wrap = view(field,list,:,:)
+    [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    end
+    
     return field_sample
 end
 
