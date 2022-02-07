@@ -11,15 +11,6 @@
 %
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
-# using Random, Statistics, LinearAlgebra, Dates #Shipped with Julia
-# using Distributions, StatsBase #Core statistics
-# using CSV, DataFrames #Basic Data
-# using Plots, StatsPlots, LaTeXStrings, Measures #Plotting and Output
-# using HypothesisTests, KernelDensity, GLM, Lasso, Clustering, Multivaria
-# using Flux, Metalhead #Deep learning
-# using Combinatorics, SpecialFunctions, Roots #Mathematical misc.
-# using RDatasets, MLDatasets #Example datasets
-# #uncomment if using R: using RCall #Inter
 
 using Revise, TMI, GoogleDrive
 using PyPlot, PyCall, Test

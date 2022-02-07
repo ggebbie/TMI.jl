@@ -2,7 +2,7 @@ module TMI
 
 using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
-    GoogleDrive, Distances, DrWatson, GibbsSeaWater,  
+    GoogleDrive, Distances, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
     Interpolations, LineSearches, MAT, NCDatasets,
     OrdinaryDiffEq, PreallocationTools
@@ -21,14 +21,15 @@ export config, config_from_mat, config_from_nc,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, synthetic_observations, observe, steadyclimatology,
-    steady_inversion,
+    surfaceorigin, synthetic_observations, observe,
+    steadyclimatology, steady_inversion,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
-    surface_oxygensaturation, oxygen, location_obs
+    surface_oxygensaturation, oxygen, location_obs,
+    projectdir, datadir, srcdir
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -63,6 +64,17 @@ struct grid
 #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
 end
+
+# Credit to DrWatson.jl for these functions
+# Didn't want to add dependency for these small functions
+projectdir() = dirname(Base.active_project())
+projectdir(args...) = joinpath(projectdir(), args...)
+
+datadir() = joinpath(projectdir(),"data")
+datadir(args...) = joinpath(datadir(), args...)
+
+srcdir() = joinpath(projectdir(),"data")
+srcdir(args...) = joinpath(srcdir(), args...)
 
 """
     function config_from_nc(TMIversion)
@@ -2510,5 +2522,4 @@ function readopt(filename,γ)
     return time, theta_permuted 
 end
 
-    
 end
