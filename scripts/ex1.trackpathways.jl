@@ -9,9 +9,7 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 using Revise
-using TMI, BenchmarkTools, PyPlot, PyCall
-
-pygui(true) #needed for Atom, not sure what it will do in other places
+using TMI, PyPlot, PyCall
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)

@@ -3,7 +3,7 @@ using Revise, MAT, LinearAlgebra, SparseArrays, TMI, DrWatson, NCDatasets, Test
 
 # choose one version
 TMIversion = "modern_90x45x33_GH10_GH12"
-TMIversion = "modern_180x90x33_GH10_GH12"
+TMIversion = "modern_180x90x33_GH11_GH12"
 TMIversion = "modern_90x45x33_unpub12"
 TMIversion = "modern_90x45x33_G14_v2"
 TMIversion = "modern_90x45x33_G14"

@@ -73,7 +73,7 @@ projectdir(args...) = joinpath(projectdir(), args...)
 datadir() = joinpath(projectdir(),"data")
 datadir(args...) = joinpath(datadir(), args...)
 
-srcdir() = joinpath(projectdir(),"data")
+srcdir() = joinpath(projectdir(),"src")
 srcdir(args...) = joinpath(srcdir(), args...)
 
 """
@@ -90,18 +90,28 @@ srcdir(args...) = joinpath(srcdir(), args...)
 function config_from_nc(TMIversion)
 
     #make datdir() if it doesn't exist 
-    !isdir(datadir()) ? mkpath(datadir()) : nothing
+    !isdir(datadir()) && mkpath(datadir()) 
     TMIfile = datadir("TMI_"*TMIversion*".nc")
+
     #if TMIfile doesn't exist, get GDrive url and download 
-    if !isfile(TMIfile) 
-        #- `url`: Google Drive URL for data
-        url = ncurl(TMIversion)
-        google_download(url,datadir())
+    if !isfile(TMIfile)
+
+        # add a workaround for large files
+        if TMIversion == "modern_180x90x33_GH11_GH12"
+            println("workaround for 2° x 2°")
+            shellscript = srcdir("read_modern_180x90x33_GH11_GH12.sh")
+            #run(`sh read_modern_180x90x33_GH11_GH12.sh`)
+            run(`sh $shellscript`)
+            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+        else
+            println("read via GoogleDrive.jl")
+            #- `url`: Google Drive URL for data
+            url = ncurl(TMIversion)
+            google_download(url,datadir())
+        end
+
     end 
     
-    
-    #ncdata = NetCDF.open(TMIfile) # necessary?
-
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
 
@@ -145,16 +155,21 @@ function config_from_mat(TMIversion)
     TMIfile = datadir("TMI_"*TMIversion*".mat")
     TMIfilegz = TMIfile*".gz"
     println(TMIfile)
-    !isdir(datadir()) ? mkpath(datadir()) : nothing
-#    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
-    !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,datadir())
+    !isdir(datadir()) && mkpath(datadir()) 
+    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
 
-    # cloak mat file in gz to get Google Drive spam filter to shut down
-    isfile(TMIfilegz) & !isfile(TMIfile) ? run(`gunzip $TMIfilegz`) : nothing
+    if TMIversion == "modern_180x90x33_GH11_GH12"
+        println("workaround for 2° x 2°")
+        shellscript = srcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
+        run(`sh $shellscript`)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
+    else
+        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,datadir())
+    end
     
-    # move this to runtests.jl to see if it is read correctly?
-    # Azyx = watermassmatrix(TMIfile) 
-
+    # cloak mat file in gz to get Google Drive spam filter to shut down
+    isfile(TMIfilegz) & !isfile(TMIfile) && run(`gunzip $TMIfilegz`) 
+    
     # # make a sample field from zyx cartesian indices
     Izyx = cartesianindex(TMIfile)
 
@@ -162,16 +177,12 @@ function config_from_mat(TMIversion)
     wet = falses(maximum(Izyx)[1],maximum(Izyx)[2],maximum(Izyx)[3])
     wet[Izyx] .= 1
 
-    # # consistent with tracer definition?
-    # #wet = .!isnan.(c)
-
     I = cartesianindex(wet)
 
     R = linearindex(wet)
 
     Azyx = watermassmatrix(TMIfile)
     A = matrix_zyx2xyz(TMIfile,Azyx,R)
-    # #R = R[ wet ] # eliminate land points
 
     # # LU factorization for efficient matrix inversions
     Alu = lu(A)
