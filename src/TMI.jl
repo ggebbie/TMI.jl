@@ -99,8 +99,7 @@ function config_from_nc(TMIversion)
         # add a workaround for large files
         if TMIversion == "modern_180x90x33_GH11_GH12"
             println("workaround for 2° x 2°")
-            shellscript = srcdir("read_modern_180x90x33_GH11_GH12.sh")
-            #run(`sh read_modern_180x90x33_GH11_GH12.sh`)
+            shellscript = srcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
