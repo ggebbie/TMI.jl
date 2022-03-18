@@ -29,7 +29,7 @@ export config, config_from_mat, config_from_nc,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
-    projectdir, datadir, srcdir
+    packagedir, datadir, srcdir
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -67,13 +67,16 @@ end
 
 # Credit to DrWatson.jl for these functions
 # Didn't want to add dependency for these small functions
-projectdir() = dirname(Base.active_project())
-projectdir(args...) = joinpath(projectdir(), args...)
+#projectdir() = dirname(Base.active_project())
 
-datadir() = joinpath(projectdir(),"data")
+# find packagedir even if TMI is not the active project
+packagedir() = dirname(dirname(pathof(TMI)))
+packagedir(args...) = joinpath(packagedir(), args...)
+
+datadir() = joinpath(packagedir(),"data")
 datadir(args...) = joinpath(datadir(), args...)
 
-srcdir() = joinpath(projectdir(),"src")
+srcdir() = joinpath(packagedir(),"src")
 srcdir(args...) = joinpath(srcdir(), args...)
 
 """
