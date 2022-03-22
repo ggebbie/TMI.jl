@@ -29,7 +29,7 @@ export config, config_from_mat, config_from_nc,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
-    packagedir, datadir, srcdir
+    pkgdir, pkgdatadir, pkgsrcdir
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -70,14 +70,14 @@ end
 #projectdir() = dirname(Base.active_project())
 
 # find packagedir even if TMI is not the active project
-packagedir() = dirname(dirname(pathof(TMI)))
-packagedir(args...) = joinpath(packagedir(), args...)
+pkgdir() = dirname(dirname(pathof(TMI)))
+pkgdir(args...) = joinpath(pkgdir(), args...)
 
-datadir() = joinpath(packagedir(),"data")
-datadir(args...) = joinpath(datadir(), args...)
+pkgdatadir() = joinpath(pkgdir(),"data")
+pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 
-srcdir() = joinpath(packagedir(),"src")
-srcdir(args...) = joinpath(srcdir(), args...)
+pkgsrcdir() = joinpath(pkgdir(),"src")
+pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
 """
     function config_from_nc(TMIversion)
@@ -93,8 +93,8 @@ srcdir(args...) = joinpath(srcdir(), args...)
 function config_from_nc(TMIversion)
 
     #make datdir() if it doesn't exist 
-    !isdir(datadir()) && mkpath(datadir()) 
-    TMIfile = datadir("TMI_"*TMIversion*".nc")
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     #if TMIfile doesn't exist, get GDrive url and download 
     if !isfile(TMIfile)
@@ -102,14 +102,14 @@ function config_from_nc(TMIversion)
         # add a workaround for large files
         if TMIversion == "modern_180x90x33_GH11_GH12"
             println("workaround for 2° x 2°")
-            shellscript = srcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
+            shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
             url = ncurl(TMIversion)
-            google_download(url,datadir())
+            google_download(url,pkgdatadir())
         end
 
     end 
@@ -154,19 +154,19 @@ function config_from_mat(TMIversion)
 
     #- `url`: Google Drive URL for data
     url = maturl(TMIversion)
-    TMIfile = datadir("TMI_"*TMIversion*".mat")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".mat")
     TMIfilegz = TMIfile*".gz"
     println(TMIfile)
-    !isdir(datadir()) && mkpath(datadir()) 
-    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,datadir()) : nothing
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,pkgdatadir()) : nothing
 
     if TMIversion == "modern_180x90x33_GH11_GH12"
         println("workaround for 2° x 2°")
-        shellscript = srcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
+        shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     else
-        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,datadir())
+        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
     end
     
     # cloak mat file in gz to get Google Drive spam filter to shut down
@@ -1226,7 +1226,7 @@ end
 """
 function regeneratedphosphate(TMIversion,Alu,γ)
 
-    inputfile = datadir("TMI_"*TMIversion*".nc")
+    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
         
     #A, Alu, γ, inputfile = config(TMIversion)
     qPO₄ = readtracer(inputfile,"qPO₄")
@@ -1467,7 +1467,7 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ)
 
-    inputfile = datadir("TMI_"*TMIversion*".nc")
+    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
@@ -1505,7 +1505,7 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ,N)
 
-    inputfile = datadir("TMI_"*TMIversion*".nc")
+    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
@@ -2050,7 +2050,7 @@ end
 - saves .nc file titled "ces_output.nc" in data array 
 """
 function ces_ncwrite(γ,time,sol_array)
-    file = datadir() * "/ces_output.nc"
+    file = pkgdatadir() * "/ces_output.nc"
     ds = NCDataset(file,"c")
 
     #define dimensions 
@@ -2123,7 +2123,7 @@ Save TMI configuration to NetCDF format for non-proprietary access
 function config2nc(TMIversion,A,γ,L,B)
 
     # make new netcdf file.
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     isfile(filenetcdf) && rm(filenetcdf)
 
     grid2nc(TMIversion,γ)
@@ -2167,8 +2167,8 @@ Read 3D fields from mat file and save to NetCDF file.
 """
 function matfields2nc(TMIversion,γ)
 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
-    filemat = datadir("TMI_"*TMIversion*".mat")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
     vars = matread(filemat)
 
     TMIgrids, TMIgridsatts = griddicts(γ)
@@ -2247,8 +2247,8 @@ Read vectors from mat file, translate to 3D,
 """
 function regions2nc(TMIversion,γ)
 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
-    filemat = datadir("TMI_"*TMIversion*".mat")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
 
     # region names
     # didn't figure out how to use an ordered dict, instead use a tuple
@@ -2320,7 +2320,7 @@ end
 
 function watermassmatrix2nc(TMIversion,A)
 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     i, j, m = findnz(A)
     nelements = length(i)
 
@@ -2355,8 +2355,8 @@ Future considerations: split into 2 functions
 """
 function optim2nc(TMIversion)
 
-    filemat = datadir("TMI_"*TMIversion*".mat")
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
 
     matobj = matopen(filemat)
     if haskey(matobj,"fval")
@@ -2388,7 +2388,7 @@ function circulationmatrix2nc(TMIversion,L,γ)
 
     T = eltype(L)
     fullmatrix = false # more efficient to just save F₀, then modify A to get L 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     if !fullmatrix
         F₀ = tracerinit(γ.wet,T)
         for nd ∈ eachindex(γ.I)
@@ -2436,7 +2436,7 @@ Save boundary matrix for transient model to NetCDF file
 """
 function boundarymatrix2nc(TMIversion,B)
 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     i, j, b = findnz(B)
     nelements = length(i)
 
@@ -2467,7 +2467,7 @@ Put grid properties (Cartesian index) into NetCDF file
 """
 function grid2nc(TMIversion,γ)
 
-    filenetcdf = datadir("TMI_"*TMIversion*".nc")
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
 
     linearindexatts = Dict("longname" => "linear index")
     nfld = length(γ.I)
@@ -2495,7 +2495,7 @@ Read an oceanographically-relevant surface region from NetCDF file. (Also could 
 """
 function surfaceregion(TMIversion,region,γ)
 
-    file = datadir("TMI_"*TMIversion*".nc")
+    file = pkgdatadir("TMI_"*TMIversion*".nc")
     T = eltype(γ.lon)
     tracername = "d_"*region
     dsfc = ncread(file,tracername)
