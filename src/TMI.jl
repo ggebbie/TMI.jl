@@ -26,6 +26,7 @@ export config, config_from_mat, config_from_nc,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
+    surfacecontrol2field, surfacecontrol2field!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
@@ -884,14 +885,40 @@ function latindex(I)
     return j
 end
 
+function findindex(I,indexfunc,indexnumber)
+    Ifound = findall(indexfunc(I) .== indexnumber)
+    return Ifound
+end
+    
 """
     function surfaceindex(I) 
     Get the vector-index where depth level == 1 and it is ocean.
 """
-function surfaceindex(I)
-    Isfc = findall(depthindex(I) .==1)
-    return Isfc
-end
+surfaceindex(I) = findindex(I,depthindex,1)
+
+"""
+    function southindex(I) 
+    Get the vector-index on the southern open boundary
+"""
+southindex(I) = findindex(I,latindex,1)
+
+"""
+    function northindex(I) 
+    Get the vector index on the northern open boundary
+"""
+northindex(I) = findindex(I,latindex,maximum(latindex(I)))
+
+"""
+    function westindex(I) 
+    Get the vector index on the western open boundary
+"""
+westindex(I) = findindex(I,lonindex,1)
+
+"""
+    function eastindex(I) 
+    Get the vector index on the northern open boundary
+"""
+eastindex(I) = findindex(I,lonindex,maximum(lonindex(I)))
 
 """ 
     function tracerinit(wet,ltype=Float64)
@@ -959,15 +986,15 @@ function control2state(tracer2D::Matrix{T},wet) where T<: Real
 end
 
 """ 
-    function control2state(u,γ)
+    function surfacecontrol2field(usfc,γ.wet)
     turn surface control vector into 3D field with zeroes below surface    
 # Arguments
-- `u`:: surface control vector
+- `usfc`:: surface control vector
 - `wet`::BitArray mask of ocean points
 # Output
 - `tracer3D`:: 3d tracer field with NaN on dry points
 """
-function control2state(u::Vector{T},wet) where T<: Real
+function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
     # preallocate
     tracer3D = Array{T}(undef,size(wet))
 
@@ -975,39 +1002,51 @@ function control2state(u::Vector{T},wet) where T<: Real
     # consider whether land should be nothing or missing
     tracer3D[wet] .= zero(T)
     tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1][wet[:,:,1]] = u
+    tracer3D[:,:,1][wet[:,:,1]] = usfc
     return tracer3D
 end
 
-""" 
-    function control2state!(c,u,γ)
+"""
+    function Γsfc 
+    Γsfc anonymously calls surfacecontrol2field
+"""
+Γsfc = surfacecontrol2field
+
+"""
+    function surfacecontrol2field!(c,u,γ)
     Add surface control vector to existing 3D field 
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `u`:: surface control vector
+- `usfc`:: surface control vector
 - `wet`::BitArray mask of ocean points
 """
-function control2state!(c::Array{T,3},u::Vector{T},γ) where T<: Real
+function surfacecontrol2field!(c::Array{T,3},usfc::Vector{T},γ) where T<: Real
     #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
 #    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
     list = surfaceindex(γ.I)
-    [c[γ.I[ii]] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    [c[γ.I[ii]] += usfc[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
 """ 
-    function control2state!(c,u,γ)
-    Add surface control vector to existing 3D field 
+    function surfacecontrol2field!(c,u,γ)
+    Add surface control vector to tracer vector
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
 - `u`:: surface control vector
 - `wet`::BitArray mask of ocean points
 """
-function control2state!(c::Vector{T},u::Vector{T},γ) where T<: Real
+function surfacecontrol2field!(c::Vector{T},u::Vector{T},γ) where T<: Real
     list = surfaceindex(γ.I)
     [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
-function state2obs(cvec,wis,γ)
+"""
+    function Γsfc! 
+    Γsfc! anonymously calls surfacecontrol2field!
+"""
+Γsfc! = surfacecontrol2field!
+
+function field2obs(cvec,wis,γ)
     # interpolate onto data points
     N = length(wis)
     sumwis = Vector{Float64}(undef,N)
@@ -1031,7 +1070,13 @@ function state2obs(cvec,wis,γ)
     [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
-    
+
+"""
+    function E 
+    E anonymously calls field2obs
+"""
+E = field2obs
+
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
     Track the pathways of a user-defined water mass.
@@ -1718,7 +1763,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
     J = ỹ'* (Wⁱ * ỹ)
     #println(J)
@@ -1728,7 +1773,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     #gd = Vector{T}(undef,sum(γ.wet))
     gd = zeros(T,sum(γ.wet))
     
-    # transpose of "E" operation in state2obs
+    # transpose of "E" operation in field2obs
     for ii in eachindex(y)
         # interpweights repeats some calculations
         gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
@@ -1765,7 +1810,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
     if gJ != nothing    
@@ -1821,7 +1866,7 @@ function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diago
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
     gỹ = 2*(Wⁱ*ỹ)
@@ -1877,7 +1922,7 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
     if gJ != nothing    
