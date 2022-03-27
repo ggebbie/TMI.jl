@@ -12,7 +12,8 @@ export config, config_from_mat, config_from_nc,
     lonindex, latindex, depthindex,
     surfacepatch, section,
     layerthickness, cellarea, cellvolume,
-    planview, dyeplot, plotextent, tracerinit,
+    planview, dyeplot, sectionplot, plotextent,
+    tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
@@ -853,6 +854,41 @@ function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentratio
 end
 
 """
+    function sectionplot
+    Plot of section (lat-depth) in ocean
+# Arguments
+- `lat`: latitude arrays
+- `depth`: depth array
+- `vals`: lat x depth value array
+- `lims`: contour levels
+"""
+function sectionplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
+
+    println(size(vals))
+
+    #valsview = view(vals,:,33:-1:1)
+    #println(size(valsview))
+    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
+    cmap_seismic = get_cmap("seismic")
+
+    #z = reverse(depth)/1000.
+    z = depth/1000.0
+    
+    #calc fignum - based on current number of figures
+    figure()
+    contourf(lat, z, vals', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(lat, z, vals', lims,colors="k")
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    xlabel("Latitude [°N]")
+    ylabel("Depth [km]")
+    gca().set_title(titlelabel)
+    gca().invert_yaxis()
+    colorbar(orientation="horizontal")
+    
+end
+
+"""
     function depthindex(I) 
     Get the k-index (depth level) from the Cartesian index
 """
@@ -920,6 +956,17 @@ westindex(I) = findindex(I,lonindex,1)
 """
 eastindex(I) = findindex(I,lonindex,maximum(lonindex(I)))
 
+# """
+# Find the locations of the control adjustments
+# Is this necessary?
+# """
+# function controlindex(plane)
+#     i = lonindex(I)
+#     j = latindex(I)
+#     Isfc = findall(depthindex(I) .==1 .|| i.==maximum(i) .|| i.==minimum(i) .|| j.==maximum(j) .|| j.==minimum(j))
+#     return Isfc
+# end
+
 """ 
     function tracerinit(wet,ltype=Float64)
       initialize tracer field on TMI grid
@@ -962,6 +1009,30 @@ function tracerinit(vec,I,wet)
     #- a comprehension
     [field[I[n]]=vec[n] for n ∈ eachindex(I)]
     return field
+end
+
+
+""" 
+    function surfacecontrolinit(wet,ltype=Float64)
+      initialize control on TMI grid
+    perhaps better to have a control struct and constructor
+# Arguments
+- `wet`::BitArray mask of ocean points
+- `ltype`:: optional type argument, default=Float64
+# Output
+- `u`:: 3d tracer field with NaN on dry points
+"""
+function surfacecontrolinit(wet,ltype=Float64)
+    # preallocate
+    # surface control takes k = 1
+    wetsfc = view(wet,:,:,1)
+    u = Array{ltype}(undef,size(wetsfc))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    u[wetsfc] .= zero(ltype)
+    u[.!wetsfc] .= zero(ltype)/zero(ltype) # NaNs with right type
+    return u
 end
 
 """ 
@@ -1946,6 +2017,30 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
         Jcontrol = u'*(Q⁻*u)
         return  ỹ'* (Wⁱ * ỹ) + Jcontrol
     end
+end
+
+""" 
+    function steady_inversion(usfc,Alu,d,γ.wet)
+    invert for a steady-state tracer distribution
+# Arguments
+- `usfc`: controls, 2D format
+- `Alu`: LU decomposition of water-mass matrix
+- `d`: model constraints
+- `wet`: BitArray ocean mask
+# Output
+- `c`: steady-state tracer distribution
+"""
+function steady_inversion(usfc::Array{T,2},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    c = tracerinit(wet,T)
+    #n = tracerinit(wet,T)
+    
+    # first-guess reconstruction of observations
+    Δd = d + control2state(usfc,wet)
+    c[wet] =  Alu\Δd[wet]
+
+    return c
 end
 
 """ 

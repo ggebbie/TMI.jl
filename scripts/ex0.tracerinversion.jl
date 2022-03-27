@@ -21,7 +21,8 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
+#u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
+u₀ = TMI.surfacecontrolinit(γ.wet)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
@@ -50,26 +51,21 @@ cntrs = 0:0.05:3.5
 level = 15
 
 figure()
-contourf(γ.lon,γ.lat,PO₄recon[:,:,level]',cntrs)
+contourf(γ.lon,γ.lat,PO₄ᴿ[:,:,level]',cntrs)
 contourf(γ.lon,γ.lat,PO₄total[:,:,level]',cntrs)
-#contour(γ.lon,γ.lat,Δc̃',cntrs)
-
-figure()
-contourf(γ.lon,γ.lat,Δc₀',cntrs)
 
 lon_section = 330; # only works if exact
 Psection = section(PO₄total,lon_section,γ)
 lims = 0:0.05:3.0
 figure()
-dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', lims)
-
+sectionplot(γ.lat,γ.depth,Psection, lims)
 
 # oxygen distribution
 O₂obs = readtracer(TMIfile,"O₂")
 d₀[:,:,1] = O₂obs[:,:,1]
 qO₂ = - 170 .* qPO₄
 dO₂ = d₀ - qO₂
-O₂recon = steady_inversion(u₀,Alu,dO₂,γ.wet)
+O₂ᴿ = steady_inversion(u₀,Alu,dO₂,γ.wet)
 
 # view the surface
 cntrs = 0:10:400 # μmol/kg
@@ -78,10 +74,11 @@ cntrs = 0:10:400 # μmol/kg
 level = 27
 
 figure()
-cf = contourf(γ.lon,γ.lat,O₂recon[:,:,level]',cntrs)
+cf = contourf(γ.lon,γ.lat,O₂ᴿ[:,:,level]',cntrs)
 colorbar(cf)
 
 lon_section = 202; # only works if exact
-Psection = section(O₂recon,lon_section,γ)
+Psection = section(O₂ᴿ,lon_section,γ)
 figure()
-dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', cntrs)
+#dyeplot(γ.lat,γ.depth[33:-1:1],Psection[:,33:-1:1], cntrs)
+sectionplot(γ.lat,γ.depth,Psection, cntrs)
