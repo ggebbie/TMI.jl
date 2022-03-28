@@ -30,8 +30,8 @@ export config, config_from_mat, config_from_nc,
     surfacecontrol2field, surfacecontrol2field!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
-    surface_oxygensaturation, oxygen, location_obs,
-    pkgdir, pkgdatadir, pkgsrcdir
+    surface_oxygensaturation, oxygen, location_obs
+    #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -57,7 +57,7 @@ function __init__()
     println("Python libraries installed")
  end
 
-struct grid
+struct Grid
     lon::Vector{Float64}
     lat::Vector{Float64}
     depth::Vector{Float64}
@@ -65,6 +65,22 @@ struct grid
     R::Array{Int,3}
 #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
+end
+
+"""
+    struct controlplane
+
+    a plane defined at `dim=dimval`
+    Can array have other element types?
+    Are indices needed?
+"""
+struct ControlPlane
+    field::Array{Float64,2}
+    #I::Vector{CartesianIndex{3}} # index
+    #R::Array{Int,3}
+    dim::String
+    dimval::Int64
+    wet::BitArray{2}
 end
 
 # Credit to DrWatson.jl for these functions
@@ -136,7 +152,7 @@ function config_from_nc(TMIversion)
     
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
-    γ = grid(lon,lat,depth,I,R,wet)
+    γ = Grid(lon,lat,depth,I,R,wet)
 
     # would be good to make this optional
     println("L=")
@@ -194,7 +210,7 @@ function config_from_mat(TMIversion)
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
 
-    γ = grid(lon,lat,depth,I,R,wet)
+    γ = Grid(lon,lat,depth,I,R,wet)
 
     # need to make this optional
     L = circulationmatrix(TMIfile,γ)
@@ -564,13 +580,13 @@ function cellvolume(γ)
     return volume
 end
 
-function layerthickness(γ::grid)
+function layerthickness(γ::Grid)
     zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
     dz = ([zface[1] ; diff(zface); 500]);
     return dz
 end
 
-function zonalgriddist(γ::grid)
+function zonalgriddist(γ::Grid)
     dx = similar(γ.lat)
     for j in eachindex(γ.lat)
         dx[j] = haversine((γ.lon[1],γ.lat[j])
@@ -633,7 +649,7 @@ function fld2vec(field::Array{T,3},I::Vector{CartesianIndex{3}}) where T<:Real
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacepatch(lonbox,latbox,γ::grid)
+function surfacepatch(lonbox,latbox,γ::Grid)
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
@@ -665,7 +681,7 @@ end
 # Output
 - `δ`: nearest neighbor mask 3D field
 """
-function nearestneighbormask(loc,γ::grid,N=1)
+function nearestneighbormask(loc,γ::Grid,N=1)
 
     Inn, Rnn = nearestneighbor(loc,γ,N)
 
@@ -727,7 +743,7 @@ end
 # Output
 - `hordist`: horizontal distance to nearest tracer grid points
 """
-function horizontaldistance(loc,γ::grid)
+function horizontaldistance(loc,γ::Grid)
 
     # hordist will have same type as lon,lat,depth
     T = eltype(γ.lon)
@@ -1728,7 +1744,7 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
+function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
@@ -1782,7 +1798,7 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
+function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     d = dfld[γ.wet]
     y = view(yfld,γ.wet)
@@ -1826,7 +1842,7 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
@@ -1873,7 +1889,7 @@ end
 - `locs`: data locations (lon,lat,depth)
 - `γ`: grid
 """
-function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
@@ -1925,7 +1941,7 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
+function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
     list = surfaceindex(γ.I)
@@ -1978,7 +1994,7 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
+function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
