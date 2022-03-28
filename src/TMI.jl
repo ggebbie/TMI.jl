@@ -78,7 +78,7 @@ struct ControlPlane
     field::Array{Float64,2}
     #I::Vector{CartesianIndex{3}} # index
     #R::Array{Int,3}
-    dim::String
+    dim::Int64
     dimval::Int64
     wet::BitArray{2}
 end
@@ -1027,29 +1027,34 @@ function tracerinit(vec,I,wet)
     return field
 end
 
+function controlinit(dim,dimval,wet)::ControlPlane
 
-""" 
-    function surfacecontrolinit(wet,ltype=Float64)
-      initialize control on TMI grid
-    perhaps better to have a control struct and constructor
-# Arguments
-- `wet`::BitArray mask of ocean points
-- `ltype`:: optional type argument, default=Float64
-# Output
-- `u`:: 3d tracer field with NaN on dry points
-"""
-function surfacecontrolinit(wet,ltype=Float64)
-    # preallocate
-    # surface control takes k = 1
-    wetsfc = view(wet,:,:,1)
-    u = Array{ltype}(undef,size(wetsfc))
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wetplane = view(wet,dimval,:,:)
+    elseif dim == 2
+        wetplane = view(wet,:,dimval,:)
+    elseif dim == 3
+        wetplane = view(wet,:,:,dimval)
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    
+    field2d = Array{Float64}(undef,size(wetplane))
+    field2d[wetplane] .= zero(Float64)
+    
+    u = ControlPlane(field2d,dim,dimval,wetplane)
 
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    u[wetsfc] .= zero(ltype)
-    u[.!wetsfc] .= zero(ltype)/zero(ltype) # NaNs with right type
-    return u
 end
+
+# define the correct dimension and index for each control plane
+# maybe someday find a way to hide γ
+surfacecontrolinit(γ) = controlinit(3,1,γ.wet)::ControlPlane
+northcontrolinit(γ) = controlinit(2,maximum(latindex(γ.I)),γ.wet)::ControlPlane
+eastcontrolinit(γ) = controlinit(1,maximum(lonindex(γ.I)),γ.wet)::ControlPlane
+southcontrolinit(γ) = controlinit(2,1,γ.wet)::ControlPlane
+westcontrolinit(γ) = controlinit(1,1,γ.wet)::ControlPlane
 
 """ 
     function control2state(tracer2D,γ)
