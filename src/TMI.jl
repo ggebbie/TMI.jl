@@ -30,7 +30,8 @@ export config, config_from_mat, config_from_nc,
     surfacecontrol2field, surfacecontrol2field!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
-    surface_oxygensaturation, oxygen, location_obs
+    surface_oxygensaturation, oxygen, location_obs,
+    surfacecontrolinit
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 #Python packages - initialize them to null globally
@@ -68,19 +69,20 @@ struct Grid
 end
 
 """
-    struct controlplane
+    struct BoundaryCondition
 
     a plane defined at `dim=dimval`
     Can array have other element types?
     Are indices needed?
 """
-struct ControlPlane
-    field::Array{Float64,2}
+struct BoundaryCondition
+    field2d::Array{Float64,2}
     #I::Vector{CartesianIndex{3}} # index
     #R::Array{Int,3}
     dim::Int64
     dimval::Int64
     wet::BitArray{2}
+    T::DataType
 end
 
 # Credit to DrWatson.jl for these functions
@@ -1027,7 +1029,10 @@ function tracerinit(vec,I,wet)
     return field
 end
 
-function controlinit(dim,dimval,wet)::ControlPlane
+"""
+   Initialize boundary condition with undefined values
+"""
+function boundaryinit(dim,dimval,wet)::BoundaryCondition
 
     dimsize = size(wet)
     # dumb way to do it
@@ -1038,23 +1043,106 @@ function controlinit(dim,dimval,wet)::ControlPlane
     elseif dim == 3
         wetplane = view(wet,:,:,dimval)
     else
-        error("controls not implemented for 4+ dimensions")
+        error("boundary condition not implemented in 4+ dimensions")
     end
     
     field2d = Array{Float64}(undef,size(wetplane))
     field2d[wetplane] .= zero(Float64)
     
-    u = ControlPlane(field2d,dim,dimval,wetplane)
+    b = BoundaryCondition(field2d,dim,dimval,wetplane,eltype(field2d))
+
+end
+
+"""
+   Initialize boundary condition with field2d
+"""
+function boundaryinit(field,dim,dimval,wet)::BoundaryCondition
+
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = view(wet,dimval,:,:)
+        field2d  = view(field,dimval,:,:)
+    elseif dim == 2
+        wet2d = view(wet,:,dimval,:)
+        field2d = view(field,dimval,:,:)
+    elseif dim == 3
+        wet2d = view(wet,:,:,dimval)
+        field2d = view(field,dimval,:,:)
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(field2d,dim,dimval,wet2d,eltype(field2d))
 
 end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-surfacecontrolinit(γ) = controlinit(3,1,γ.wet)::ControlPlane
-northcontrolinit(γ) = controlinit(2,maximum(latindex(γ.I)),γ.wet)::ControlPlane
-eastcontrolinit(γ) = controlinit(1,maximum(lonindex(γ.I)),γ.wet)::ControlPlane
-southcontrolinit(γ) = controlinit(2,1,γ.wet)::ControlPlane
-westcontrolinit(γ) = controlinit(1,1,γ.wet)::ControlPlane
+surfaceboundaryinit(γ) = boundaryinit(3,1,γ.wet)::BoundaryCondition
+surfaceboundaryinit(field,γ) = boundaryinit(field,3,1,γ.wet)::BoundaryCondition
+
+northboundaryinit(γ) = boundaryinit(2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
+eastboundaryinit(γ) = boundaryinit(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
+southboundaryinit(γ) = boundaryinit(2,1,γ.wet)::BoundaryCondition
+westboundaryinit(γ) = boundaryinit(1,1,γ.wet)::BoundaryCondition
+
+""" 
+    function constraint(b::BoundaryCondition,γ)
+    turn control adjustment into adjustment of constraint for all 3d grid points    
+# Arguments
+- `b`:: BoundaryCondition
+- `γ`:: TMI.Grid
+# Output
+- `d`:: right hand side adjustment
+"""
+function constraint(b::BoundaryCondition,γ::Grid) 
+    # preallocate
+    d = Array{b.T}(undef,size(γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    d[γ.wet]   .= zero(b.T)
+    d[.!γ.wet] .= zero(b.T)/zero(b.T)
+    if b.dim == 1
+        d[b.dimval,:,:] = b.field2d
+    elseif b.dim == 2
+        d[:,b.dimval,:] = b.field2d
+    elseif b.dim == 3
+        d[:,:,b.dimval] = b.field2d
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return d
+end
+
+""" 
+    function constraint!(d::Array{T,3},u::ControlPlane,γ::Grid)
+    turn control adjustment into adjustment of constraint for all 3d grid points    
+# Arguments
+- `d`:: adjusted equation constraint (i.e., right hand side)
+- `b`:: BoundaryCondition
+- `γ`:: TMI.Grid
+"""
+function constraint!(d::Array{T,3},b::BoundaryCondition,γ::Grid) where T<: Real
+
+    # preallocate
+    if T != b.T
+        println("constraint!: warning type mismatch")
+    end
+
+    if b.dim == 1
+        d[b.dimval,:,:] += b.field2d
+    elseif b.dim == 2
+        d[:,b.dimval,:] += b.field2d
+    elseif b.dim == 3
+        d[:,:,b.dimval] += b.field2d
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return d
+end
+
 
 """ 
     function control2state(tracer2D,γ)

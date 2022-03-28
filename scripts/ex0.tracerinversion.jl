@@ -19,11 +19,17 @@ using PyPlot, PyCall, Test
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
-# first guess of change to surface boundary conditions
-# ocean values are 0
-#u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
-u₀ = TMI.surfacecontrolinit(γ.wet)
+# get observations at surface
+# set them as surface boundary condition
+PO₄obs = readtracer(TMIfile,"PO₄")
+b = TMI.surfaceboundaryinit(PO₄obs,γ)
 
+
+u₀ = surfacecontrolinit(γ)
+Δd = TMI.constraint(u₀,γ)
+maximum(Δd[γ.wet])
+TMI.constraint!(Δd,u₀,γ)
+maximum(Δd[γ.wet])
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
@@ -32,6 +38,10 @@ d₀ = tracerinit(γ.wet)
 # get observations at surface
 # set them as surface boundary condition
 PO₄obs = readtracer(TMIfile,"PO₄")
+
+
+d = surfaceconstraint(PO₄obs,
+               
 d₀[:,:,1] = PO₄obs[:,:,1]
 
 # reconstruct tracer map
