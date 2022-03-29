@@ -7,6 +7,7 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     Interpolations, LineSearches, MAT, NCDatasets,
     OrdinaryDiffEq, PreallocationTools
 
+
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
@@ -31,8 +32,12 @@ export config, config_from_mat, config_from_nc,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
-    surfacecontrolinit
+    surfacecontrolinit,
+    getsurfaceboundary, setboundarycondition!,
+    zeros, maximum, minimum
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
+
+import Base: zeros, maximum, minimum
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -69,20 +74,35 @@ struct Grid
 end
 
 """
+    struct Tracer
+
+    This structure permits the grid to be 
+    automatically passed to functions with
+    the tracer field.
+
+    This structure assumes the Tracer type to be 
+    three-dimensional.
+"""
+struct Field{T}
+    tracer::Array{T,3}
+    γ::Grid
+end
+
+"""
     struct BoundaryCondition
 
     a plane defined at `dim=dimval`
     Can array have other element types?
     Are indices needed?
 """
-struct BoundaryCondition
-    field2d::Array{Float64,2}
+struct BoundaryCondition{T}
+    tracer::Array{T,2}
     #I::Vector{CartesianIndex{3}} # index
     #R::Array{Int,3}
     dim::Int64
     dimval::Int64
     wet::BitArray{2}
-    T::DataType
+    #T::DataType
 end
 
 # Credit to DrWatson.jl for these functions
@@ -986,23 +1006,30 @@ eastindex(I) = findindex(I,lonindex,maximum(lonindex(I)))
 # end
 
 """ 
-    function tracerinit(wet,ltype=Float64)
+    function zeros(γ::Grid)
       initialize tracer field on TMI grid
-    perhaps better to have a tracer struct and constructor
+      using a Field struct and constructor
 # Arguments
-- `wet`::BitArray mask of ocean points
-- `ltype`:: optional type argument, default=Float64
+- `γ`::TMI.Grid
 # Output
-- `d`:: 3d tracer field with NaN on dry points
+- `d`::Field,  3d tracer field with NaN on dry points
 """
-function tracerinit(wet,ltype=Float64)
+function zeros(γ::Grid)::Field
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    T = eltype(γ.depth)
+    
     # preallocate
-    d = Array{ltype}(undef,size(wet))
+    tracer = Array{T}(undef,size(γ.wet))
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    d[wet] .= zero(ltype)
-    d[.!wet] .= zero(ltype)/zero(ltype) # NaNs with right type
+    tracer[γ.wet] .= zero(T)
+    tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,γ)
+
     return d
 end
 
@@ -1030,9 +1057,9 @@ function tracerinit(vec,I,wet)
 end
 
 """
-   Initialize boundary condition with undefined values
+   Initialize boundary condition with zeroes
 """
-function boundaryinit(dim,dimval,wet)::BoundaryCondition
+function zeros(dim,dimval,wet)::BoundaryCondition
 
     dimsize = size(wet)
     # dumb way to do it
@@ -1046,103 +1073,119 @@ function boundaryinit(dim,dimval,wet)::BoundaryCondition
         error("boundary condition not implemented in 4+ dimensions")
     end
     
-    field2d = Array{Float64}(undef,size(wetplane))
-    field2d[wetplane] .= zero(Float64)
+    tracer = Array{Float64}(undef,size(wetplane))
+    tracer[wetplane] .= zero(Float64)
     
-    b = BoundaryCondition(field2d,dim,dimval,wetplane,eltype(field2d))
+    b = BoundaryCondition(tracer,dim,dimval,wetplane,eltype(tracer))
 
 end
 
 """
-   Initialize boundary condition with field2d
+   Get boundary condition by extracting from 3D tracer
 """
-function boundaryinit(field,dim,dimval,wet)::BoundaryCondition
+function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
 
     dimsize = size(wet)
     # dumb way to do it
     if dim == 1
-        wet2d = view(wet,dimval,:,:)
-        field2d  = view(field,dimval,:,:)
+        #wet2d = view(wet,dimval,:,:)
+        #tracer2d  = view(tracer3d,dimval,:,:)
+        wet2d = wet[dimval,:,:]
+        tracer2d = tracer3d[dimval,:,:]
     elseif dim == 2
-        wet2d = view(wet,:,dimval,:)
-        field2d = view(field,dimval,:,:)
+        #wet2d = view(wet,:,dimval,:)
+        #tracer2d = view(tracer3d,dimval,:,:)
+        wet2d = wet[:,dimval,:]
+        tracer2d = tracer3d[:,dimval,:]
     elseif dim == 3
-        wet2d = view(wet,:,:,dimval)
-        field2d = view(field,dimval,:,:)
+        #wet2d = view(wet,:,:,dimval)
+        #tracer2d = view(tracer3d,dimval,:,:)
+        wet2d = wet[:,:,dimval]
+        tracer2d = tracer3d[:,:,dimval]
     else
         error("boundary condition not implemented in 4+ dimensions")
     end
     
-    b = BoundaryCondition(field2d,dim,dimval,wet2d,eltype(field2d))
+    b = BoundaryCondition(tracer2d,dim,dimval,wet2d)
 
 end
+
+# Define maximum for Field to not include NaNs
+maximum(x::Field) = maximum(x.tracer[x.γ.wet])
+minimum(x::Field) = minimum(x.tracer[x.γ.wet])
+#mean(x::Field) = mean(x.tracer[x.γ.wet])
+
+# Define max/min for BoundaryCondition
+maximum(x::BoundaryCondition) = maximum(x.tracer[x.wet])
+minimum(x::BoundaryCondition) = minimum(x.tracer[x.wet])
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-surfaceboundaryinit(γ) = boundaryinit(3,1,γ.wet)::BoundaryCondition
-surfaceboundaryinit(field,γ) = boundaryinit(field,3,1,γ.wet)::BoundaryCondition
+zerosurfaceboundary(γ) = zeros(3,1,γ.wet)::BoundaryCondition
+zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
+zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
+zerosouthboundary(γ) = zeros(2,1,γ.wet)::BoundaryCondition
+zerowestboundary(γ) = zeros(1,1,γ.wet)::BoundaryCondition
 
-northboundaryinit(γ) = boundaryinit(2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
-eastboundaryinit(γ) = boundaryinit(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
-southboundaryinit(γ) = boundaryinit(2,1,γ.wet)::BoundaryCondition
-westboundaryinit(γ) = boundaryinit(1,1,γ.wet)::BoundaryCondition
+getsurfaceboundary(field,γ) = getboundarycondition(field,3,1,γ.wet)::BoundaryCondition
+getnorthboundary(field,γ) = getboundarycondition(field,2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
+geteastboundary(field,γ) = getboundarycondition(field,1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
+getsouthboundary(field,γ) = getboundarycondition(field,2,1,γ.wet)::BoundaryCondition
+getwestboundary(field,γ) = getboundarycondition(field,1,1,γ.wet)::BoundaryCondition
+
+### TURN THIS INTO SET BOUNDARY CONDITION COMMAND.
+# """ 
+#     function constraint(b::BoundaryCondition,γ)
+#     turn control adjustment into adjustment of constraint for all 3d grid points    
+# # Arguments
+# - `b`:: BoundaryCondition
+# - `γ`:: TMI.Grid
+# # Output
+# - `d`:: right hand side adjustment
+# """
+# function constraint(b::BoundaryCondition,γ::Grid) 
+#     # preallocate
+#     T = eltype(b.tracer)
+#     d = Array{T}(undef,size(γ.wet))
+
+#     # set ocean to zero, land to NaN
+#     # consider whether land should be nothing or missing
+#     d[γ.wet]   .= zero(T)
+#     d[.!γ.wet] .= zero(T)/zero(T)
+#     if b.dim == 1
+#         d[b.dimval,:,:] = b.tracer
+#     elseif b.dim == 2
+#         d[:,b.dimval,:] = b.tracer
+#     elseif b.dim == 3
+#         d[:,:,b.dimval] = b.tracer
+#     else
+#         error("controls not implemented for 4+ dimensions")
+#     end
+#     return d
+# end
 
 """ 
-    function constraint(b::BoundaryCondition,γ)
-    turn control adjustment into adjustment of constraint for all 3d grid points    
+    function setboundarycondition!(d::Field,b::BoundaryCondition)
+    apply boundary condition to the equation constraints
 # Arguments
-- `b`:: BoundaryCondition
-- `γ`:: TMI.Grid
-# Output
-- `d`:: right hand side adjustment
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
 """
-function constraint(b::BoundaryCondition,γ::Grid) 
-    # preallocate
-    d = Array{b.T}(undef,size(γ.wet))
+function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Real
 
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    d[γ.wet]   .= zero(b.T)
-    d[.!γ.wet] .= zero(b.T)/zero(b.T)
     if b.dim == 1
-        d[b.dimval,:,:] = b.field2d
+        d.tracer[b.dimval,:,:] += b.tracer
     elseif b.dim == 2
-        d[:,b.dimval,:] = b.field2d
+        d.tracer[:,b.dimval,:] += b.tracer
     elseif b.dim == 3
-        d[:,:,b.dimval] = b.field2d
+        println(size(d.tracer[:,:,b.dimval]))
+        println(size(b.tracer))
+        d.tracer[:,:,b.dimval] += b.tracer
     else
         error("controls not implemented for 4+ dimensions")
     end
     return d
 end
-
-""" 
-    function constraint!(d::Array{T,3},u::ControlPlane,γ::Grid)
-    turn control adjustment into adjustment of constraint for all 3d grid points    
-# Arguments
-- `d`:: adjusted equation constraint (i.e., right hand side)
-- `b`:: BoundaryCondition
-- `γ`:: TMI.Grid
-"""
-function constraint!(d::Array{T,3},b::BoundaryCondition,γ::Grid) where T<: Real
-
-    # preallocate
-    if T != b.T
-        println("constraint!: warning type mismatch")
-    end
-
-    if b.dim == 1
-        d[b.dimval,:,:] += b.field2d
-    elseif b.dim == 2
-        d[:,b.dimval,:] += b.field2d
-    elseif b.dim == 3
-        d[:,:,b.dimval] += b.field2d
-    else
-        error("controls not implemented for 4+ dimensions")
-    end
-    return d
-end
-
 
 """ 
     function control2state(tracer2D,γ)

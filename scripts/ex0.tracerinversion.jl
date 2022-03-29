@@ -22,27 +22,16 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 # get observations at surface
 # set them as surface boundary condition
 PO₄obs = readtracer(TMIfile,"PO₄")
-b = TMI.surfaceboundaryinit(PO₄obs,γ)
 
-
-u₀ = surfacecontrolinit(γ)
-Δd = TMI.constraint(u₀,γ)
-maximum(Δd[γ.wet])
-TMI.constraint!(Δd,u₀,γ)
-maximum(Δd[γ.wet])
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
-d₀ = tracerinit(γ.wet)
+b = getsurfaceboundary(PO₄obs,γ)
 
-# get observations at surface
-# set them as surface boundary condition
-PO₄obs = readtracer(TMIfile,"PO₄")
+# preallocate Field for equation constraints
+d = zeros(γ)
 
-
-d = surfaceconstraint(PO₄obs,
-               
-d₀[:,:,1] = PO₄obs[:,:,1]
+setboundarycondition!(d,b)
 
 # reconstruct tracer map
 PO₄pre = steady_inversion(u₀,Alu,d₀,γ.wet)
