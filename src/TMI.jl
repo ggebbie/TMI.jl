@@ -34,6 +34,7 @@ export config, config_from_mat, config_from_nc,
     surface_oxygensaturation, oxygen, location_obs,
     surfacecontrolinit,
     getsurfaceboundary, setboundarycondition!,
+    getsource, setsource!,
     zeros, maximum, minimum
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
@@ -1164,6 +1165,13 @@ getwestboundary(field,γ) = getboundarycondition(field,1,1,γ.wet)::BoundaryCond
 #     return d
 # end
 
+"""
+   Get interior source by read from 3D tracer array
+"""
+function getsource(tracer3d,γ)::Field
+    q = Field(tracer3d,γ)
+end
+
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)
     apply boundary condition to the equation constraints
@@ -1185,6 +1193,21 @@ function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Re
         error("controls not implemented for 4+ dimensions")
     end
     return d
+end
+
+""" 
+    function setsource!(d::Field,q::Field,r::Number)
+    apply interior source q to the equation constraints d
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `q`::Field, interior source
+- `r`::Number, default = 1.0, stoichiometric ratio
+"""
+function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
+
+    # warning d.γ.wet and q.γ.wet must match
+    d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
+
 end
 
 """ 
@@ -2266,6 +2289,40 @@ function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{
     d = -r * q
     d[:,:,1] += dsfc
         
+    c = tracerinit(wet,T)
+    c[wet] =  Alu\d[wet]
+
+    return c
+end
+
+""" 
+    function steady_inversion(Alu,b,qint,γ.wet)
+    invert for a steady-state tracer distribution
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `γ`::Grid
+# Optional Arguments
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
+# Output
+- `c`::Field, steady-state tracer distribution
+"""
+function steady_inversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0) where T <: Real
+
+    # preallocate Field for equation constraints
+    d = zeros(γ)
+
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    # define ldiv with fields
     c = tracerinit(wet,T)
     c[wet] =  Alu\d[wet]
 

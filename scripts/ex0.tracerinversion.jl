@@ -30,16 +30,21 @@ b = getsurfaceboundary(PO₄obs,γ)
 
 # preallocate Field for equation constraints
 d = zeros(γ)
-
 setboundarycondition!(d,b)
+
+# invert for total phosphate in one step
+qPO₄ = readtracer(TMIfile,"qPO₄")
+q = getsource(qPO₄,γ)
+setsource!(d,q)
 
 # reconstruct tracer map
 PO₄pre = steady_inversion(u₀,Alu,d₀,γ.wet)
 PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
 PO₄total = PO₄pre + PO₄ᴿ
 
-# invert for total phosphate in one step
-qPO₄ = readtracer(TMIfile,"qPO₄")
+
+
+
 dPO₄ = d₀ - qPO₄
 PO₄direct = steady_inversion(u₀,Alu,dPO₄,γ.wet)
 
