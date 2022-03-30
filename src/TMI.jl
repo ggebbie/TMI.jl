@@ -1444,13 +1444,15 @@ end
 """
 function watermassdistribution(TMIversion,Alu,region,γ)
 
-    d = surfaceregion(TMIversion,region,γ)
+    
+    b = surfaceregion(TMIversion,region,γ)
+    g = steadyinversion(Alu,b,γ)
 
-    # do matrix inversion to get quantity of dyed water throughout ocean:
-    g = tracerinit(γ.wet); # pre-allocate c
+    # # do matrix inversion to get quantity of dyed water throughout ocean:
+    # g = tracerinit(γ.wet); # pre-allocate c
 
-    # make methods that make the "wet" index unnecessary
-    g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
+    # # make methods that make the "wet" index unnecessary
+    # g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
 
     return g
 end
@@ -2922,30 +2924,20 @@ function grid2nc(TMIversion,γ)
 end
 
 """
-Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+     function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
+
+    Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+    Return a BoundaryCondition
 """
-function surfaceregion(TMIversion,region,γ)
+function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
 
     file = pkgdatadir("TMI_"*TMIversion*".nc")
-    T = eltype(γ.lon)
     tracername = "d_"*region
+
+    # Didn't use readfiled because dsfc is 2d.
     dsfc = ncread(file,tracername)
-    println("sumdsfc",sum(filter(!isnan,dsfc)))
-    println("maxdsfc",maximum(filter(!isnan,dsfc)))
-    # expand dsfc to cover 3D.
-    # will not use control2state, because the control
-    # make include non-surface regions in future.
-
-    # preallocate
-    d = Array{T}(undef,size(γ.wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    d[γ.wet] .= zero(T)
-    d[.!γ.wet] .= zero(T)/zero(T)
-    d[:,:,1] = dsfc
-    println(count(!isnan,d))
-    return d
+    b = BoundaryCondition(dsfc,3,1,γ.wet[:,:,1])
+    return b
 end
 
 #read surface layer

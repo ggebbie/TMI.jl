@@ -46,6 +46,19 @@ using TMI, Test
         @test maximum(c) ≤ 1.0
         @test minimum(c) ≥ 0.0
     end
+
+    @testset "watermassdistribution" begin
+        list = ("GLOBAL","ANT","SUBANT",
+                "NATL","NPAC","TROP","ARC",
+                "MED","ROSS","WED","LAB","GIN",
+                "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
+                "TROPATL","TROPPAC","TROPIND")
+        region = list[2]
+        g = watermassdistribution(TMIversion,Alu,region,γ)
+        @test maximum(g) ≤ 1.0
+        @test minimum(g) ≥ 0.0
+
+    end
     
     #######################################
     ## example: regeneration

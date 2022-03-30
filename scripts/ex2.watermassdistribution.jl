@@ -10,9 +10,7 @@
 using Revise
 using TMI, BenchmarkTools, PyPlot, PyCall
 
-pygui(true) #needed for Atom, not sure what it will do in other places
-
-TMIversion = "modern_180x90x33_GH10_GH12"
+#TMIversion = "modern_180x90x33_GH10_GH12"
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
@@ -30,10 +28,7 @@ region = list[2]
 g = watermassdistribution(TMIversion,Alu,region,γ);
 
 # plot a section at 330 east longitude (i.e., 30 west)
-#lon_section = 329;
-lon_section = 330;
-gsection = section(g,lon_section,γ)
+lon_section = 330 # only works if exact
 lims = 0:5:100
-
-# make a plot of dye in the ocean
-dyeplot(γ.lat,γ.depth[33:-1:1],100 * gsection[:,33:-1:1], lims)
+tlabel = region * " water-mass fraction [%]"
+sectionplot(100g,lon_section,lims,titlelabel = tlabel)
