@@ -21,15 +21,13 @@ latbox = [50,60]; # 50 N -> 60 N, for example.
 lonbox = [-50,0]; # 50 W -> prime meridian
 
 # do numerical analysis
-c = trackpathways(Alu,latbox,lonbox,γ)
+c = trackpathways(Alu,latbox,lonbox,γ);
 
 # do plotting (could be a function)
 plotextent(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)
-lon_section = 330;
-csection = section(c,lon_section,γ)
+lon_section = 330; # only works if exact
 lims = 0:5:100
-
-# make a plot of dye in the ocean
-dyeplot(γ.lat,γ.depth[33:-1:1],100 * csection[:,33:-1:1], lims)
+tlabel = "water-mass fraction [%]"
+sectionplot(100c,lon_section,lims,titlelabel = tlabel)

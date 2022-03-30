@@ -1,4 +1,4 @@
-using Revise, TMI, Test
+using TMI, Test
 
 @testset "TMI.jl" begin
 
@@ -7,6 +7,29 @@ using Revise, TMI, Test
     #TMIversion = "modern_90x45x33_unpub12"
     
     A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+
+    @testset "steadyinversion" begin
+
+        yPO₄ = readfield(TMIfile,"PO₄",γ)
+        bPO₄ = getsurfaceboundary(yPO₄)
+        PO₄pre = steadyinversion(Alu,bPO₄,γ)
+        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+        b₀ = zerosurfaceboundary(γ)
+        PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+        PO₄total = PO₄ᴿ + PO₄pre
+        PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
+
+        ## how big is the maximum difference?
+        # could replace with abs function
+        @test maximum(PO₄direct - PO₄total) < 0.1
+        @test minimum(PO₄direct - PO₄total) > -0.1
+
+        ## oxygen distribution, just be sure it runs
+        yO₂ = readfield(TMIfile,"O₂",γ)
+        bO₂ = getsurfaceboundary(yO₂)
+        O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
+
+    end
     
     ############################
     ## trackpathways
@@ -15,16 +38,13 @@ using Revise, TMI, Test
         @test isapprox(maximum(sum(A,dims=2)),1.0)
         @test minimum(sum(A,dims=2))> -1e-14
         
-        #- define the surface patch by the bounding latitude and longitude.
-        latbox = [50. , 60.]; # 50 N -> 60 N, for example.
-
-        # mutable due to wraparound: don't use an immutable tuple
-        lonbox = [-50. , 0.]; # 50 W -> prime meridian
+        latbox = [50,60]; # 50 N -> 60 N, for example.
+        lonbox = [-50, 0]; # 50 W -> prime meridian
 
         c = trackpathways(Alu,latbox,lonbox,γ)
 
-        @test maximum(c[γ.wet]) ≤ 1.0
-        @test minimum(c[γ.wet]) ≥ 0.0
+        @test maximum(c) ≤ 1.0
+        @test minimum(c) ≥ 0.0
     end
     
     #######################################

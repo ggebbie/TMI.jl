@@ -36,11 +36,11 @@ export config, config_from_mat, config_from_nc,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
     setboundarycondition!, setsource!,
-    zeros, maximum, minimum, (+), (-)
+    zeros, maximum, minimum, (+), (-), (*)
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 import Base: zeros, maximum, minimum, (\)
-import Base: (+), (-)
+import Base: (+), (-), (*)
 #import Base.\
 
 #Python packages - initialize them to null globally
@@ -704,26 +704,21 @@ function fld2vec(field::Array{T,3},I::Vector{CartesianIndex{3}}) where T<:Real
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacepatch(lonbox,latbox,γ::Grid)
+function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
     lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
 
-    # define the surface boundary condition
-
     # preallocate
-    d = tracerinit(γ.wet,Float64)
+    patch = zeros(γ.wet[:,:,1])
 
     # can you add a logical to a Float64? yes, it's 1.0
-    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+    [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
 
-    # old method for vectors
-        #nfield = length(γ.I) # number of ocean points
-    #d = zeros(Int,nfield) # preallocate
-    #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
-    #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
-    return d
+    # 3,1 to identify surface
+    b = BoundaryCondition(patch,3,1,γ.wet[:,:,1])
+    return b
 end
 
 """
@@ -1054,6 +1049,26 @@ function zeros(γ::Grid)::Field
 end
 
 """ 
+    function zeros(wet,ltype=Float64)
+    initialize tracer field on TMI grid
+    This version will give an array
+# Arguments
+- `wet`::BitArray mask of ocean points
+- `ltype`:: optional type argument, default=Float64
+# Output
+- `d`:: 3d tracer field with NaN on dry points
+"""
+function zeros(wet,ltype=Float64)
+    # preallocate
+    d = Array{ltype}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    d[wet] .= zero(ltype)
+    d[.!wet] .= zero(ltype)/zero(ltype) # NaNs with right type
+    return d
+end
+
+""" 
     function tracerinit(wet,vec,I)
           initialize tracer field on TMI grid
         perhaps better to have a tracer struct and constructor
@@ -1187,6 +1202,16 @@ function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
     return e
 end
 
+"""
+    `function *(c::Number,d::Field)::Field`
+    Define scalar multiplication for fields
+"""
+function *(c::Number,d::Field{T})::Field{T} where T <: Real
+
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += c*d.tracer[d.γ.wet]
+    return e
+end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
@@ -1247,8 +1272,6 @@ function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Re
     elseif b.dim == 2
         d.tracer[:,b.dimval,:] += b.tracer
     elseif b.dim == 3
-        println(size(d.tracer[:,:,b.dimval]))
-        println(size(b.tracer))
         d.tracer[:,:,b.dimval] += b.tracer
     else
         error("controls not implemented for 4+ dimensions")
@@ -1399,13 +1422,8 @@ E = field2obs
 """
 function trackpathways(Alu,latbox,lonbox,γ)
 
-    d = surfacepatch(lonbox,latbox,γ)
-
-    # do matrix inversion to get quantity of dyed water throughout ocean:
-    c = tracerinit(γ.wet); # pre-allocate c
-
-    # make methods that make the "wet" index unnecessary
-    c[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
+    b = surfacepatch(lonbox,latbox,γ)
+    c = steadyinversion(Alu,b,γ)
 
     return c
 end

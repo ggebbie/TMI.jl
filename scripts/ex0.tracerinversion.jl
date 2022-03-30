@@ -70,6 +70,7 @@ sectionplot(PO₄total,lon_section,lims)
 ## oxygen distribution
 yO₂ = readfield(TMIfile,"O₂",γ)
 bO₂ = getsurfaceboundary(yO₂)
+# set the optional stoichiometric ratio.
 O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
