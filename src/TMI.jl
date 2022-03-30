@@ -11,15 +11,17 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
-    surfacepatch, section,
+    surfacepatch, 
     layerthickness, cellarea, cellvolume,
-    planview, dyeplot, sectionplot, plotextent,
-    tracerinit,
+    planview, planviewplot,
+    section, sectionplot,
+    plotextent, tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
-    readtracer, cartesianindex, Γ,
+    readtracer, readfield,
+    cartesianindex, Γ,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
@@ -816,29 +818,28 @@ end
     function section
     View latitude-depth slice of field
 # Arguments
-- `c`: 3d tracer field
+- `c::Field`, 3D tracer field plus meta data
 - `lon`: longitude of section
-- `γ`: TMI.grid
 # Output
 - `csection`: 2d slice of field
 """
-function section(c,lon,γ)
+function section(c::Field{T},lon)::Array{T,2} where T <: Real
 
-    isec = findall(==(lon),γ.lon)
+    isec = findall(==(lon),c.γ.lon)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    csection= dropdims(view(c,isec,:,:),dims=1)
+    csection= dropdims(view(c.tracer,isec,:,:),dims=1)
     return csection
 end
 
-function planview(c,depth,γ)
-
-    isec = findall(==(depth),γ.depth)
+function planview(c::Field{T},depth)::Array{T,2} where T <: Real
+ 
+    isec = findall(==(depth),c.γ.depth)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    cplan = dropdims(view(c,:,:,isec),dims=3)
+    cplan = dropdims(view(c.tracer,:,:,isec),dims=3)
     return cplan
 end
 
@@ -889,30 +890,25 @@ function plotextent(latbox, lonbox)
 end
 
 """
-    function dyeplot
-    Plot of dye in ocean
+    function sectionplot
+    Plot of section (lat-depth) in ocean
 # Arguments
-- `lat`: latitude arrays
-- `depth`: depth array
-- `vals`: lat x depth value array
+- `field::Field`, 3d filed of values to be plotted
+- `lon`: longitude of section
 - `lims`: contour levels
+- `titlelabel`: optional title labeln
 """
-function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
+function sectionplot(field::Field{T}, lon, lims;titlelabel="section plot") where T <: Real
 
-    println(size(vals))
-
-    valsview = view(vals,:,33:-1:1)
-    println(size(valsview))
-    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
+    Psection = section(field,lon)
     cmap_seismic = get_cmap("seismic")
-
-    z = reverse(depth)/1000.
-        
+    z = field.γ.depth/1000.0
+    
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, z, valsview', lims, cmap=cmap_seismic)
+    contourf(field.γ.lat, z, Psection', lims, cmap=cmap_seismic)
     #fig, ax = plt.subplots()
-    CS = gca().contour(lat, z, valsview', lims,colors="k")
+    CS = gca().contour(field.γ.lat, z, Psection', lims,colors="k")
     gca().clabel(CS, CS.levels, inline=true, fontsize=10)
     xlabel("Latitude [°N]")
     ylabel("Depth [km]")
@@ -923,37 +919,30 @@ function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentratio
 end
 
 """
-    function sectionplot
-    Plot of section (lat-depth) in ocean
+    function planviewplot
+    Plot of plan view (lon-lat) in ocean
 # Arguments
-- `lat`: latitude arrays
-- `depth`: depth array
-- `vals`: lat x depth value array
+- `field::Field`, 3d filed of values to be plotted
+- `depth`: depth of plan view
 - `lims`: contour levels
+- `titlelabel`: optional title label
 """
-function sectionplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
+function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where T <: Real
 
-    println(size(vals))
+    cplan = planview(c::Field{T},depth)
 
-    #valsview = view(vals,:,33:-1:1)
-    #println(size(valsview))
-    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
     cmap_seismic = get_cmap("seismic")
-
-    #z = reverse(depth)/1000.
-    z = depth/1000.0
     
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, z, vals', lims, cmap=cmap_seismic)
+    contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
     #fig, ax = plt.subplots()
-    CS = gca().contour(lat, z, vals', lims,colors="k")
+    CS = gca().contour(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
     gca().clabel(CS, CS.levels, inline=true, fontsize=10)
-    xlabel("Latitude [°N]")
-    ylabel("Depth [km]")
+    ylabel("Latitude [°N]")
+    xlabel("Longitude [°E]")
     gca().set_title(titlelabel)
-    gca().invert_yaxis()
-    colorbar(orientation="horizontal")
+    colorbar(orientation="vertical")
     
 end
 
@@ -1207,11 +1196,11 @@ zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryConditio
 zerosouthboundary(γ) = zeros(2,1,γ.wet)::BoundaryCondition
 zerowestboundary(γ) = zeros(1,1,γ.wet)::BoundaryCondition
 
-getsurfaceboundary(field,γ) = getboundarycondition(field,3,1,γ.wet)::BoundaryCondition
-getnorthboundary(field,γ) = getboundarycondition(field,2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
-geteastboundary(field,γ) = getboundarycondition(field,1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
-getsouthboundary(field,γ) = getboundarycondition(field,2,1,γ.wet)::BoundaryCondition
-getwestboundary(field,γ) = getboundarycondition(field,1,1,γ.wet)::BoundaryCondition
+getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ.wet)::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ.wet)::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ.wet)::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ.wet)::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ.wet)::BoundaryCondition
 
 ### TURN THIS INTO SET BOUNDARY CONDITION COMMAND.
 # """ 
