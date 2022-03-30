@@ -36,11 +36,13 @@ export config, config_from_mat, config_from_nc,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
     setboundarycondition!, setsource!,
-    zeros, maximum, minimum, (+), (-), (*)
+    zeros, maximum, minimum, (+), (-), (*), dot
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 import Base: zeros, maximum, minimum, (\)
 import Base: (+), (-), (*)
+import LinearAlgebra: dot
+
 #import Base.\
 
 #Python packages - initialize them to null globally
@@ -1158,18 +1160,12 @@ function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
     dimsize = size(wet)
     # dumb way to do it
     if dim == 1
-        #wet2d = view(wet,dimval,:,:)
-        #tracer2d  = view(tracer3d,dimval,:,:)
         wet2d = wet[dimval,:,:]
         tracer2d = tracer3d[dimval,:,:]
     elseif dim == 2
-        #wet2d = view(wet,:,dimval,:)
-        #tracer2d = view(tracer3d,dimval,:,:)
         wet2d = wet[:,dimval,:]
         tracer2d = tracer3d[:,dimval,:]
     elseif dim == 3
-        #wet2d = view(wet,:,:,dimval)
-        #tracer2d = view(tracer3d,dimval,:,:)
         wet2d = wet[:,:,dimval]
         tracer2d = tracer3d[:,:,dimval]
     else
@@ -1197,9 +1193,27 @@ minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
 function \(A,d::Field{T})::Field{T} where T <: Real
     # initialize output
     c = zeros(d.γ)
-    println(size(d.tracer[d.γ.wet]))
     c.tracer[c.γ.wet] = A\d.tracer[d.γ.wet]
     return c
+end
+
+"""
+    `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
+    Define addition for Fields
+"""
+function +(c::BoundaryCondition{T},d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
+
+    if c.wet != d.wet # check conformability
+        error("BoundaryCondition's not conformable for addition")
+    end
+    array = zeros(c.wet)
+    e = BoundaryCondition(array,c.dim,c.dimval,c.wet)
+    
+    # a strange formulation to get
+    # return e to be correct
+    e.tracer[e.wet] += c.tracer[c.wet]
+    e.tracer[e.wet] += d.tracer[d.wet]
+    return e
 end
 
 """
@@ -1208,8 +1222,7 @@ end
 """
 function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
     # initialize output
-
-    if c.γ.wet !== d.γ.wet # check conformability
+    if c.γ.wet != d.γ.wet # check conformability
         error("Fields not conformable for addition")
     end
     e = zeros(d.γ)
@@ -1237,15 +1250,38 @@ function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
 end
 
 """
-    `function *(c::Number,d::Field)::Field`
-    Define scalar multiplication for fields
+    `function *(C,d::Field)::Field`
+    Define scalar or matrix multiplication for fields
 """
-function *(c::Number,d::Field{T})::Field{T} where T <: Real
+function *(C,d::Field{T})::Field{T} where T <: Real
 
     e = zeros(d.γ)
-    e.tracer[e.γ.wet] += c*d.tracer[d.γ.wet]
+    e.tracer[e.γ.wet] += C*d.tracer[d.γ.wet]
     return e
 end
+
+"""
+    `function *(c::Field,d::Field)::Field`
+    Field by field multiplication is element-by-element.
+"""
+function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
+    return e
+end
+
+
+"""
+    `function *(c::Field,d::Field)::Field`
+    Field by field multiplication is element-by-element.
+"""
+function dot(c::Field{T},d::Field{T})::T where T <: Real
+
+    e =  c.tracer[c.γ.wet]' * d.tracer[d.γ.wet]
+    return e
+end
+
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
@@ -1311,6 +1347,28 @@ function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Re
         error("controls not implemented for 4+ dimensions")
     end
     return d
+end
+
+""" 
+    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    ADJOINT: apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+    gb = zerosurfaceboundary(gd.γ)
+    if b.dim == 1
+        gb.tracer = gd.tracer[b.dimval,:,:]
+    elseif b.dim == 2
+        gb.tracer = gd.tracer[:,b.dimval,:]
+    elseif b.dim == 3
+        gb.tracer .+= gd.tracer[:,:,b.dimval] 
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return gb
 end
 
 """ 
@@ -1823,7 +1881,9 @@ function steadyclimatology(u₀,fg!,iterations)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
 end
@@ -1876,24 +1936,31 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
-    θtrue = readtracer(inputfile,variable)
-    σθ = readtracer(inputfile,"σ"*variable)
+    #θtrue = readtracer(inputfile,variable)
+    #σθ = readtracer(inputfile,"σ"*variable)
+    θtrue = readfield(TMIfile,variable,γ)
+    σθ = readfield(TMIfile,"σ"*variable,γ)
 
-    ntrue = tracerinit(γ.wet)
-    ntrue[γ.wet] = rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+    #ntrue = zeros(γ)
+    #ntrue = zeros(γ.wet)
+    #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ)
+    ntrue *= σθ
 
-    y = θtrue .+ ntrue
+    y = θtrue + ntrue
+    
+    #y = θtrue .+ ntrue
 
     # get cost function (J) based on model misfit
     # here the data-model misfit is weighted by the expected error
 
     # weighting matrix
     #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
-    W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ[γ.wet].^2)
+    W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ.tracer[γ.wet].^2)
     return y, W⁻, θtrue
 end
  
@@ -2006,99 +2073,135 @@ function location_obs(field, locs, γ)
     return field_sample
 end
 
+# """ 
+#     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
+#     squared model-data misfit for gridded data
+#     controls are a vector input for Optim.jl
+# # Arguments
+# - `u`: controls, vector format
+# - `Alu`: LU decomposition of water-mass matrix
+# - `y`: observations on grid
+# - `d`: model constraints
+# - `Wⁱ`: inverse of W weighting matrix for observations
+# - `wet`: BitArray ocean mask
+# # Output
+# - `J`: cost function of sum of squared misfits
+# - `gJ`: derivative of cost function wrt to controls
+# """
+# function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+#     # a first guess: observed surface boundary conditions are perfect.
+#     # set surface boundary condition to the observations.
+#     # below surface = 0 % no internal sinks or sources.
+#     #u = tracerinit(γ.wet[:,:,1],T)
+#     #u[γ.wet[:,:,1]] = uvec
+
+#     d = dfld[γ.wet]
+#     y = view(yfld,γ.wet)
+    
+#     #ỹ = tracerinit(γ.wet,T)
+#     #n = tracerinit(γ.wet,T)
+#     #dJdn = tracerinit(γ.wet,T)
+#     dJdd = tracerinit(γ.wet,T)
+    
+#     # first-guess reconstruction of observations
+#     #Δd = d + Γ(u,wet)
+#     #ỹ[wet] =  Alu\Δd[wet]
+#     #n = y .- ỹ
+#     #d[γ.wet] = Alu\d[γ.wet]
+
+#     # use in-place functions to make this more performant
+#     control2state!(d,u,γ) # d stores Δd
+#     ldiv!(Alu,d) # d stores -ỹ
+#     d .-= y # d stores n
+#     J = d'* (Wⁱ * d)
+#     # move this to its own function
+#     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
+
+#     #dJdn[wet] = 2Wⁱ*[wet]
+#     #dJdd[wet] = Alu'\dJdn[wet]
+#     gd = 2*(Wⁱ*d)
+#     ldiv!(Alu',gd)
+
+#     # "transpose" of control2state! operation
+#     gJ = gd[surfaceindex(γ.I)]
+
+#     return J, gJ
+# end
+
 """ 
-    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
+    function costfunction_obs!(J,gJ,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
+
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
 # Arguments
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `y`: observations on grid
-- `d`: model constraints
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wet`: BitArray ocean mask
-# Output
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
-"""
-function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-    #u = tracerinit(γ.wet[:,:,1],T)
-    #u[γ.wet[:,:,1]] = uvec
-
-    d = dfld[γ.wet]
-    y = view(yfld,γ.wet)
-    
-    #ỹ = tracerinit(γ.wet,T)
-    #n = tracerinit(γ.wet,T)
-    #dJdn = tracerinit(γ.wet,T)
-    dJdd = tracerinit(γ.wet,T)
-    
-    # first-guess reconstruction of observations
-    #Δd = d + Γ(u,wet)
-    #ỹ[wet] =  Alu\Δd[wet]
-    #n = y .- ỹ
-    #d[γ.wet] = Alu\d[γ.wet]
-
-    # use in-place functions to make this more performant
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores -ỹ
-    d .-= y # d stores n
-    J = d'* (Wⁱ * d)
-    # move this to its own function
-    #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
-
-    #dJdn[wet] = 2Wⁱ*[wet]
-    #dJdd[wet] = Alu'\dJdn[wet]
-    gd = 2*(Wⁱ*d)
-    ldiv!(Alu',gd)
-
-    # "transpose" of control2state! operation
-    gJ = gd[surfaceindex(γ.I)]
-
-    return J, gJ
-end
-
-""" 
-    function costfunction_obs(u,Alu,y,d,Wⁱ,wet)
-    squared model-data misfit for gridded data
-    controls are a vector input for Optim.jl
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-- `u`: controls, vector format
+- `u`: controls, field format
 - `Alu`: LU decomposition of water-mass matrix
-- `d`: model constraints
+- `b`: boundary conditions
 - `y`: observations on grid
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
-    d = dfld[γ.wet]
-    y = view(yfld,γ.wet)
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d)
-    d .-= y # .- d
+    # turn uvec into a boundary condition
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+    J = y ⋅ (Wⁱ * y) # dot product
 
-    if gJ != nothing
-        gd = Vector{T}(undef,length(d))
-        gd = 2Wⁱ*d
-        ldiv!(Alu',gd)
 
-        list = surfaceindex(γ.I)
-        [gJ[ii] = gd[list[ii]] for ii in 1:length(list)]
-        #gJ = gd[surfaceindex(γ.I)]
-        #[gJ[γ.R[ii]] = gd[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    # adjoint equations
+    gy = -2Wⁱ * y
+    gu = gsteadyinversion( gy, Alu, b, γ)
+    #gu = gb
 
-        #pick out I[3]==1
-        #gJ = -dJdd[:,:,1][γ.wet[:,:,1]]
+    guvec = gu.tracer[gu.wet]
+        
+    return J, guvec
+end
+
+#""" 
+#   define the minus sign for Field types
+#"""
+#-(f::Field) = -1*f
+    
+""" 
+    function costfunction_obs!(J,gJ,u::BoundaryCondition{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
+
+    squared model-data misfit for gridded data
+    controls are a vector input for Optim.jl
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: controls, field format
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary conditions
+- `y`: observations on grid
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `γ`: grid
+"""
+function costfunction_obs!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+
+    # turn uvec into a boundary condition
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+
+    if guvec != nothing
+        gy = -2Wⁱ * y
+        gu = gsteadyinversion( gy, Alu, b, γ)
+        #gu = gb
+        guvec .= gu.tracer[gu.wet]
     end
     
     if J !=nothing
-        return  d'* (Wⁱ * d)       
+        return  y ⋅ (Wⁱ * y) # dot product
     end
 end
 
@@ -2428,7 +2531,7 @@ end
 """
 function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
-    println("running steady inversion")
+    #println("running steady inversion")
 
     # preallocate Field for equation constraints
     d = zeros(γ)
@@ -2448,6 +2551,36 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
     c = Alu \ d
     
     return c
+end
+
+""" 
+    function steadyinversion(Alu,b;q=nothing,r=1.0)
+    invert for a steady-state tracer distribution
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `γ`::Grid
+# Optional Arguments
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
+# Output
+- `c`::Field, steady-state tracer distribution
+"""
+function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
+
+    #println("running adjoint steady inversion")
+
+    gd = Alu' \ gc
+    println("complete ldiv")
+
+    # still need to develop this
+    # and to find a way to return the value
+    if !isnothing(q)
+        gq = gsetsource!(gd,d,q,r)
+    end
+
+    gb = gsetboundarycondition(gd,b)
+    return gb
 end
 
 """

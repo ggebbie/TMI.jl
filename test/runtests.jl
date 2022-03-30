@@ -115,30 +115,19 @@ using TMI, Test
     ## formerly filterdata
     @testset "steadyclimatology" begin
 
-        # first guess of change to surface boundary conditions
-        # ocean values are 0
-        u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
-
-        # take synthetic, noisy observations
+        u = zerosurfaceboundary(γ)
+        u₀ = u.tracer[u.wet]
         y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
+        b = getsurfaceboundary(y)
 
-        # a first guess: observed surface boundary conditions are perfect.
-        # set surface boundary condition to the observations.
-        # below surface = 0 % no internal sinks or sources.
-        d₀ = tracerinit(γ.wet)
-        d₀[:,:,1] = y[:,:,1]
-
-        # check gradients in misfit_gridded_data!
-        fg(x) = costfunction_obs(x,Alu,d₀,y,W⁻,γ)
+        # check gradients with respect to costfunction!
+        fg(x) = costfunction_obs(x,Alu,b,y,W⁻,γ)
         f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
-        fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
-        #fg!(J̃₀,gJ₀,u₀)
-        # filter the data with an Optim.jl method
+        fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,b,y,W⁻,γ)
 
-        iterations = 5
+        iterations = 10
         out = steadyclimatology(u₀,fg!,iterations)
-        # out = steadyclimatology(u₀,Alu,y,d₀,W⁻,fg!,γ)
 
         # check with forward differences
         ϵ = 1e-3

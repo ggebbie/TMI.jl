@@ -30,47 +30,49 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
-
+u = zerosurfaceboundary(γ)
+uvec = u.tracer[u.wet]
+    
 # take synthetic, noisy observations
 y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
-d₀ = tracerinit(γ.wet)
-d₀[:,:,1] = y[:,:,1]
+b = getsurfaceboundary(y)
 
-fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,d₀,y,W⁻,γ)
+# get sample J value
+F,G = costfunction_obs(uvec,Alu,b,y,W⁻,γ)
+fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,b,y,W⁻,γ)
 
 # filter the data with an Optim.jl method
-out = steadyclimatology(u₀,fg!)
+iterations = 15
+out = steadyclimatology(uvec,fg!,iterations)
 
 # reconstruct by hand to double-check.
-ũ = out.minimizer
+ũ = zerosurfaceboundary(γ)
+ũ.tracer[u.wet] = out.minimizer
+
+# apply to the boundary conditions
+b̃ = b + ũ
 
 # reconstruct tracer map
-c₀ = steady_inversion(u₀,Alu,d₀,γ.wet)
-c̃ = steady_inversion(ũ,Alu,d₀,γ.wet)
+c₀ = steadyinversion(Alu,b,γ)
+c̃  = steadyinversion(Alu,b̃,γ)
 
-# view the surface
+Δc̃ = c̃ - ctrue
+Δc₀ = c₀ - ctrue
+
+# plot the difference
+level = 15 # your choice 1-33
+depth = γ.depth[level]
 cntrs = -1:0.05:1
+label = "Optimized misfit: Δc̃"
+# Help: needs work with continents and labels
+planviewplot(Δc̃, depth, cntrs, titlelabel=label) 
 
-# what model depth level?
-level = 15
-Δc̃ = c̃[:,:,level] .- ctrue[:,:,level]
-Δc₀ = c₀[:,:,level] .- ctrue[:,:,level]
-
-figure()
-contourf(γ.lon,γ.lat,Δc̃',cntrs)
-#contour(γ.lon,γ.lat,Δc̃',cntrs)
-
-figure()
-contourf(γ.lon,γ.lat,Δc₀',cntrs)
-
-# sample tests
-#maximum(filter(!isnan,Δc₀))
-#maximum(filter(!isnan,Δc̃))
+label = "First guess misfit: Δc₀"
+planviewplot(Δc₀, depth, cntrs, titlelabel=label) 
 
 # future step: box minimization to eliminate unreasonable temperatures.
 # should be made more generic for other tracers
