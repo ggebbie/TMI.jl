@@ -942,6 +942,40 @@ function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where 
 end
 
 """
+    function planviewplot
+    Plot of plan view (lon-lat) in ocean
+# Arguments
+- `field::BoundaryCondition`, 3d filed of values to be plotted
+- `depth`: depth of plan view
+- `lims`: contour levels
+- `γ::Grid`, needed for lat, lon but not in BoundaryCondition! (could refactor)
+- `titlelabel`: optional title label
+"""
+function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
+
+    # is the boundary condition oriented correctly?
+    if b.dim != 3
+        error("boundary condition not horizontal")
+    end
+    
+    cplan = b.tracer
+    
+    cmap_seismic = get_cmap("seismic")
+    
+    #calc fignum - based on current number of figures
+    figure()
+    contourf(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    ylabel("Latitude [°N]")
+    xlabel("Longitude [°E]")
+    gca().set_title(titlelabel)
+    colorbar(orientation="vertical")
+    
+end
+
+"""
     function depthindex(I) 
     Get the k-index (depth level) from the Cartesian index
 """
@@ -1625,29 +1659,29 @@ end
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI.grid
 # Output
-- `volume`: global ocean volume filled by a surface region
+- `volume`: log10 of global ocean volume filled by a surface region, exists at surface, therefore given BoundaryCondition type
 """
-function volumefilled(TMIversion,Alu,γ)
+function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
 
-    #A, Alu, γ = config(TMIversion)
-    
     v = cellvolume(γ)
     area = cellarea(γ)
     
     # effectively take inverse of transpose A matrix.
-    dVdd = tracerinit(γ.wet); # pre-allocate c
+    dVdd = zeros(γ.wet); # pre-allocate array
     dVdd[γ.wet] = Alu'\v[γ.wet]
 
     # scale the sensitivity value by surface area so that converging meridians are taken into account.
     I = γ.I
-    volume = zeros(Float64,length(γ.lon),length(γ.lat))
-    #volume = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
-    #fill!(volume,0.0)
-
+    #volume = zeros(Float64,length(γ.lon),length(γ.lat))
+    volume = zeros(γ.wet[:,:,1])
     # this step could use a function with γ.I argument
     [volume[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
-    return volume
+    volume = log10.(volume)
+
+    ∂V∂b  = BoundaryCondition(volume,3,1,γ.wet[:,:,1])
+    
+    return  ∂V∂b 
 end
 
 """ 

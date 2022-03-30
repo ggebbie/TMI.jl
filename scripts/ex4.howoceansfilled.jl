@@ -21,6 +21,5 @@ volume = volumefilled(TMIversion,Alu,γ)
 
 # view the surface
 cntrs = 1:0.25:6
-
-# PyPlot turned off for CI.
-contourf(γ.lon,γ.lat,log10.(volume'),cntrs) # units: effective thickness in log10(meters)
+tlabel="Volume filled by surface patch [log10(m)]"
+planviewplot(volume,cntrs,γ,titlelabel=tlabel) 

@@ -77,16 +77,9 @@ using TMI, Test
         v = cellvolume(γ)
         area = cellarea(γ)
         @test sum(0. .< v./area .< 1000.)/length(γ.I) == 1
-        
-        # effectively take inverse of transpose A matrix.
-        dVdd = tracerinit(γ.wet); # pre-allocate c
-        dVdd[γ.wet] = Alu'\v[γ.wet]
-
         volume = volumefilled(TMIversion,Alu,γ)
-
-        # volumefill positive at surface?
-        @test sum(volume .< 0) == 0
-        @test minimum(volume) ≤ 0.0
+        # volumefill no smaller than smallest box?
+        @test exp10(minimum(volume)) ≥ 5.0
     end
     
     ####################################
