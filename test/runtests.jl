@@ -88,7 +88,6 @@ using TMI, Test
 
         # choose linear or nearest neighbor interpolation
         linearinterp = true #true
-        
         # randomized location.
         loc = wetlocation(γ)
 
@@ -96,21 +95,20 @@ using TMI, Test
 
         if linearinterp
             # temporary tracer to initialize linear interp
-            ctmp = tracerinit(γ.wet)
+            ctmp = zeros(γ.wet)
             δ = interpweights(loc,γ)
         else
             # alternate choice
             δ = nearestneighbormask(loc,γ)
         end
-
         @test isapprox(sum(filter(!isnan,δ)),1.0) 
 
         origin = surfaceorigin(loc, Alu, γ)
         
-        @test isapprox(sum(filter(!isnan,origin)),1)
-        @test isapprox(sum(filter(!isnan,origin)),1)
-        @test minimum(filter(!isnan,origin)) ≥ 0
-        @test maximum(filter(!isnan,origin)) ≤ 1
+        #@test isapprox(sum(filter(!isnan,origin)),1)
+        #@test isapprox(sum(filter(!isnan,origin)),1)
+        #@test minimum(origin) ≥ -20
+        @test maximum(origin) ≤ 0 # log10(1) = 0
     end
     
     #########################################

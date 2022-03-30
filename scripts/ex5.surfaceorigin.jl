@@ -14,6 +14,9 @@
 using Revise
 using TMI, PyPlot, PyCall
 
+TMIversion = "modern_90x45x33_GH10_GH12"
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+
 # % choose an interior location X (Xlon[lon], Xlat [lat], Xdepth [m depth]).
 #% -7.38, 115.26E
 
@@ -22,10 +25,9 @@ xlat = -6.38;  # deg N.
 xdepth = 3000;  # meters.
 loc = (xlon,xlat,xdepth)
 
-TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
-
 origin = surfaceorigin(loc, Alu, γ)
 
-# units: effective thickness in log10(meters)
-contourf(γ.lon,γ.lat,log10.(origin'))
+# view the surface
+cntrs = -8:1:0
+tlabel="Surface origin of interior location [log10(fraction)]"
+planviewplot(origin,cntrs,γ,titlelabel=tlabel) 

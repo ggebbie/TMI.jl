@@ -1699,13 +1699,12 @@ end
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI grid
 # Output
-- `origin`: surface map of fraction of source water for a given location
+- `origin`: surface map of fraction of source water for a given location, log10 of effective depth, in terms of a BoundaryCondition
 """
-function surfaceorigin(loc,Alu,γ)
+function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
 
     #A, Alu, γ = config(TMIversion)
-
-    ctmp = tracerinit(γ.wet)
+    #ctmp = tracerinit(γ.wet)
     δ = interpweights(loc,γ)
     
     # Find nearest neighbor on grid
@@ -1713,11 +1712,14 @@ function surfaceorigin(loc,Alu,γ)
     #δ = nearestneighbormask(loc,γ)
     # Note: ctrue[γ.wet]'*δ[γ.wet] returns interpolated value
 
-    dvlocdd = tracerinit(γ.wet); # pre-allocate c
+    dvlocdd = zeros(γ.wet); # pre-allocate c
     dvlocdd[γ.wet] = Alu'\δ[γ.wet]
 
     # origin is defined at sea surface
-    origin = view(dvlocdd,:,:,1)
+    #origin = view(dvlocdd,:,:,1)
+    dvlocdd = log10.(dvlocdd[:,:,1])
+    origin = BoundaryCondition(dvlocdd,3,1,γ.wet[:,:,1])
+    
     return origin
 end
 
@@ -1774,7 +1776,7 @@ function interpweights(loc,γ)
 
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
-    δ = tracerinit(γ.wet)
+    δ = zeros(γ.wet)
 
     # changes in δwrap i=91 are translated back to δ i=1
     δwrap = view(δ,list,:,:)
