@@ -35,11 +35,12 @@ export config, config_from_mat, config_from_nc,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
+    onesurfaceboundary,
     setboundarycondition!, setsource!,
-    zeros, maximum, minimum, (+), (-), (*), dot
+    zeros, ones, maximum, minimum, (+), (-), (*), dot
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
-import Base: zeros, maximum, minimum, (\)
+import Base: zeros, ones, maximum, minimum, (\)
 import Base: (+), (-), (*)
 import LinearAlgebra: dot
 
@@ -1153,6 +1154,31 @@ function zeros(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
 end
 
 """
+   Initialize boundary condition with ones
+"""
+function ones(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
+
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = wet[dimval,:,:]
+    elseif dim == 2
+        wet2d = wet[:,dimval,:]
+    elseif dim == 3
+        wet2d = wet[:,:,dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    tracer = Array{Float64}(undef,size(wet2d))
+    tracer[wet2d] .= ones(Float64)
+    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
+    
+    b = BoundaryCondition(tracer,dim,dimval,wet2d)
+
+end
+
+"""
    Get boundary condition by extracting from 3D tracer
 """
 function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
@@ -1261,6 +1287,17 @@ function *(C,d::Field{T})::Field{T} where T <: Real
 end
 
 """
+    `function *(C,d::BoundaryCondition)::BoundaryCondition`
+    Define scalar or matrix multiplication for BoundaryCondition`s
+"""
+function *(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
+    array = zeros(d.wet)
+    e = BoundaryCondition(array,d.dim,d.dimval,d.wet)
+    e.tracer[e.wet] += C*d.tracer[d.wet]
+    return e
+end
+
+"""
     `function *(c::Field,d::Field)::Field`
     Field by field multiplication is element-by-element.
 """
@@ -1290,6 +1327,8 @@ zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ.wet)::BoundaryConditi
 zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
 zerosouthboundary(γ) = zeros(2,1,γ.wet)::BoundaryCondition
 zerowestboundary(γ) = zeros(1,1,γ.wet)::BoundaryCondition
+
+onesurfaceboundary(γ) = ones(3,1,γ.wet)::BoundaryCondition
 
 getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ.wet)::BoundaryCondition
 getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ.wet)::BoundaryCondition
@@ -1940,8 +1979,6 @@ function synthetic_observations(TMIversion,variable,γ)
 
     # take synthetic observations
     # get observational uncertainty
-    #θtrue = readtracer(inputfile,variable)
-    #σθ = readtracer(inputfile,"σ"*variable)
     θtrue = readfield(TMIfile,variable,γ)
     σθ = readfield(TMIfile,"σ"*variable,γ)
 
@@ -1981,16 +2018,16 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ,N)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
     
-    θtrue = readtracer(inputfile,variable)
-    replace!(θtrue,NaN=>0.0)
+    θtrue = readfield(TMIfile,variable,γ)
+    replace!(θtrue.tracer,NaN=>0.0)
     
-    σθ = readtracer(inputfile,"σ"*variable)
-    replace!(σθ,NaN=>0.0)
+    σθ = readfield(TMIfile,"σ"*variable,γ)
+    replace!(σθ.tracer,NaN=>0.0)
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
@@ -2018,23 +2055,22 @@ end
     function observe
     Take a observation at location given by weights wis
 """
-function observe(field,wis,γ)
+function observe(c::Field{T},wis,γ) where T <: Real
 
     # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
-    #N = length(wis)
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
     [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # sample the true field at these random locations
-    field_sample = Vector{Float64}(undef,length(wis))
-    replace!(field,NaN=>0.0)
-    field_wrap = view(field,list,:,:)
-    [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    c_sample = Vector{Float64}(undef,length(wis))
+    replace!(c.tracer,NaN=>0.0)
+    c_wrap = view(c.tracer,list,:,:)
+    [c_sample[i] = c_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
-    return field_sample
+    return c_sample
 end
 
 function location_obs(field, locs, γ)
@@ -2303,14 +2339,14 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
 end
 
 """ 
-    function costfunction(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+    function costfunction(J,gJ,uvec,Alu,b,y,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue: couldn't figure out how to nest with costfunction_obs!
 # Arguments
-- `u`: controls, vector format
+- `uvec`: controls, vector format
 - `Alu`: LU decomposition of water-mass matrix
-- `dfld`: model constraints
+- `b`: boundary condition
 - `y`: pointwise observations
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `wis`: weights for interpolation (data sampling, E)
@@ -2321,15 +2357,15 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction(u::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
-    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
     list = surfaceindex(γ.I)
     gJ = Vector{T}(undef,size(u))
     [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
     Jcontrol = u'*(Q⁻*u)
 
     # use in-place functions: more performant
+    #d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 

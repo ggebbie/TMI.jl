@@ -17,7 +17,7 @@
 - `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `wet`: BitArray mask of ocean points
 =#
-using Revise, TMI, Interpolations
+using Revise, TMI, Interpolations, Statistics
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
@@ -26,19 +26,20 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 # how many randomly sampled observations?
 N = 20
 
+# first guess of change to surface boundary conditions
 # ocean values are 0
-u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
+u = zerosurfaceboundary(γ)
+uvec = u.tracer[u.wet]
 
 # take synthetic, noisy observations
 y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
-d₀ = tracerinit(γ.wet)
-[d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+b = mean(y) * onesurfaceboundary(γ)
 
 # assume temperature known ± 5°C
-σd = 5.0
-Q⁻ = 1.0/(σd^2)
+σb = 5.0
+Q⁻ = 1.0/(σb^2)
 
 # optimize the sparse data map with an Optim.jl method
 out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
