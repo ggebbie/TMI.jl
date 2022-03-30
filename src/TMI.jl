@@ -33,12 +33,12 @@ export config, config_from_mat, config_from_nc,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
-    setboundarycondition!,
-    getsource, setsource!,
+    setboundarycondition!, setsource!,
     zeros, maximum, minimum, (+), (-)
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
-import Base: zeros, maximum, minimum, (\), (+), (-)
+import Base: zeros, maximum, minimum, (\)
+import Base: (+), (-)
 #import Base.\
 
 #Python packages - initialize them to null globally
@@ -562,6 +562,35 @@ end
 """
 function readtracer(file,tracername)
     c = ncread(file,tracername)
+    return c
+end
+
+"""
+    function readfield(file,tracername,γ)
+    Read a tracer field from NetCDF but return it 
+    as a Field. 
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+- `γ::Grid`, TMI grid specification
+# Output
+- `c`::Field
+"""
+function readfield(file,tracername,γ::Grid)
+    tracer = ncread(file,tracername)
+
+    # perform a check of file compatibility
+    # with grid
+    if sum(isnan.(tracer[γ.wet])) > 0
+        println("readfield warning: NaN on grid")
+    end
+    # check for non NaN or nonzero off grid
+    # Need to rethink how to do this.
+    # if sum( !iszero(tracer[.!γ.wet])) > 0 
+    #     println("readfield warning: nonzero value off grid")
+    # end
+           
+    c = Field(tracer,γ)
     return c
 end
 
@@ -1142,13 +1171,15 @@ end
 function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
     # initialize output
 
-    if c.γ.wet == d.γ.wet # check conformability
-        e = zeros(c.γ)
-        e.tracer[e.γ.wet] = c.tracer[c.γ.wet]
-        + d.tracer[d.γ.wet]
-    else
+    if c.γ.wet !== d.γ.wet # check conformability
         error("Fields not conformable for addition")
     end
+    e = zeros(d.γ)
+
+    # a strange formulation to get
+    # return e to be correct
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+    e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
     return e
 end
 
@@ -1158,14 +1189,12 @@ end
 """
 function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
     # initialize output
-
-    if c.γ.wet == d.γ.wet # check conformability
-        e = zeros(c.γ)
-        e.tracer[e.γ.wet] = c.tracer[c.γ.wet]
-        - d.tracer[d.γ.wet]
-    else
-        error("Fields not conformable for subtraction")
+    if c.γ.wet !== d.γ.wet # check conformability
+        error("Fields not conformable for addition")
     end
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+    e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
     return e
 end
 
@@ -1214,13 +1243,6 @@ getwestboundary(field,γ) = getboundarycondition(field,1,1,γ.wet)::BoundaryCond
 #     end
 #     return d
 # end
-
-"""
-   Get interior source by read from 3D tracer array
-"""
-function getsource(tracer3d,γ)::Field
-    q = Field(tracer3d,γ)
-end
 
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)

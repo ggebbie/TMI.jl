@@ -32,23 +32,21 @@ bobs = getsurfaceboundary(PO₄obs,γ)
 PO₄pre = steadyinversion(Alu,bobs,γ)
 
 ## regenerated phosphate
-
-qPO₄ = readtracer(TMIfile,"qPO₄")
-q = getsource(qPO₄,γ)
+qPO₄ = TMI.readfield(TMIfile,"qPO₄",γ)
 
 # zero boundary condition
 b₀ = zerosurfaceboundary(γ)
 PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=q)
-PO₄total = PO₄pre + PO₄ᴿ
+PO₄total = PO₄ᴿ + PO₄pre;
 
 ## compute total phosphate directly
 PO₄direct = steadyinversion(Alu,bobs,γ,q=q)
 
 ## how big is the maximum difference?
-maximum(PO₄direct - PO₄total)
-minimum(PO₄direct - PO₄total)
+@test maximum(PO₄direct - PO₄total) < 0.1
+@test minimum(PO₄direct - PO₄total) > -0.1
 
-maximum(PO₄obs[γ.wet])
+## compare to observations
 
 # view the surface
 cntrs = 0:0.05:3.5
