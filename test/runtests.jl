@@ -65,8 +65,8 @@ using TMI, Test
     @testset "regeneration" begin
 
         PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
-        @test maximum(PO₄ᴿ[γ.wet]) < 10
-        @test minimum(PO₄ᴿ[γ.wet]) ≥ 0
+        @test maximum(PO₄ᴿ) < 5
+        @test minimum(PO₄ᴿ) ≥ 0
     end
     
     ########################################

@@ -1598,14 +1598,15 @@ end
 """
 function regeneratedphosphate(TMIversion,Alu,γ)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
-        
-    #A, Alu, γ, inputfile = config(TMIversion)
-    qPO₄ = readtracer(inputfile,"qPO₄")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
-    # PO₄ᴿ = cumulative regenerated phosphate
-    PO₄ᴿ = tracerinit(γ.wet); # pre-allocate 
-    PO₄ᴿ[γ.wet] = -(Alu\qPO₄[γ.wet])
+    ## read phosphate source
+    qPO₄ = readfield(TMIfile,"qPO₄",γ)
+
+    # zero boundary condition
+    b₀ = zerosurfaceboundary(γ)
+    PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+
     return PO₄ᴿ
 end
 
