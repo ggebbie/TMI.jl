@@ -24,7 +24,7 @@ export config, config_from_mat, config_from_nc,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, synthetic_observations, observe,
-    steadyclimatology, steady_inversion,
+    steadyclimatology, steadyinversion,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
@@ -32,13 +32,14 @@ export config, config_from_mat, config_from_nc,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
-    surfacecontrolinit,
-    getsurfaceboundary, setboundarycondition!,
+    getsurfaceboundary, zerosurfaceboundary,
+    setboundarycondition!,
     getsource, setsource!,
-    zeros, maximum, minimum
+    zeros, maximum, minimum, (+), (-)
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
-import Base: zeros, maximum, minimum
+import Base: zeros, maximum, minimum, (\), (+), (-)
+#import Base.\
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -1060,24 +1061,25 @@ end
 """
    Initialize boundary condition with zeroes
 """
-function zeros(dim,dimval,wet)::BoundaryCondition
+function zeros(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
 
     dimsize = size(wet)
     # dumb way to do it
     if dim == 1
-        wetplane = view(wet,dimval,:,:)
+        wet2d = wet[dimval,:,:]
     elseif dim == 2
-        wetplane = view(wet,:,dimval,:)
+        wet2d = wet[:,dimval,:]
     elseif dim == 3
-        wetplane = view(wet,:,:,dimval)
+        wet2d = wet[:,:,dimval]
     else
         error("boundary condition not implemented in 4+ dimensions")
     end
     
-    tracer = Array{Float64}(undef,size(wetplane))
-    tracer[wetplane] .= zero(Float64)
+    tracer = Array{Float64}(undef,size(wet2d))
+    tracer[wet2d] .= zero(Float64)
+    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
     
-    b = BoundaryCondition(tracer,dim,dimval,wetplane,eltype(tracer))
+    b = BoundaryCondition(tracer,dim,dimval,wet2d)
 
 end
 
@@ -1112,13 +1114,61 @@ function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
 end
 
 # Define maximum for Field to not include NaNs
-maximum(x::Field) = maximum(x.tracer[x.γ.wet])
-minimum(x::Field) = minimum(x.tracer[x.γ.wet])
+maximum(c::Field) = maximum(c.tracer[c.γ.wet])
+minimum(c::Field) = minimum(c.tracer[c.γ.wet])
 #mean(x::Field) = mean(x.tracer[x.γ.wet])
 
 # Define max/min for BoundaryCondition
-maximum(x::BoundaryCondition) = maximum(x.tracer[x.wet])
-minimum(x::BoundaryCondition) = minimum(x.tracer[x.wet])
+maximum(b::BoundaryCondition) = maximum(b.tracer[b.wet])
+minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
+
+"""
+    `function \\(A,d::Field)::Field`
+    Define left division for Fields
+    Need two slashes to prevent invalid escape
+"""
+function \(A,d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    c = zeros(d.γ)
+    println(size(d.tracer[d.γ.wet]))
+    c.tracer[c.γ.wet] = A\d.tracer[d.γ.wet]
+    return c
+end
+
+"""
+    `function +(c::Field,d::Field)::Field`
+    Define addition for Fields
+"""
+function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+
+    if c.γ.wet == d.γ.wet # check conformability
+        e = zeros(c.γ)
+        e.tracer[e.γ.wet] = c.tracer[c.γ.wet]
+        + d.tracer[d.γ.wet]
+    else
+        error("Fields not conformable for addition")
+    end
+    return e
+end
+
+"""
+    `function -(c::Field,d::Field)::Field`
+    Define addition for Fields
+"""
+function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+
+    if c.γ.wet == d.γ.wet # check conformability
+        e = zeros(c.γ)
+        e.tracer[e.γ.wet] = c.tracer[c.γ.wet]
+        - d.tracer[d.γ.wet]
+    else
+        error("Fields not conformable for subtraction")
+    end
+    return e
+end
+
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
@@ -2195,7 +2245,7 @@ function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ:
 end
 
 """ 
-    function steady_inversion(usfc,Alu,d,γ.wet)
+    function steadyinversion(usfc,Alu,d,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
 - `usfc`: controls, 2D format
@@ -2205,7 +2255,7 @@ end
 # Output
 - `c`: steady-state tracer distribution
 """
-function steady_inversion(usfc::Array{T,2},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
+function steadyinversion(usfc::Array{T,2},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     c = tracerinit(wet,T)
@@ -2219,7 +2269,7 @@ function steady_inversion(usfc::Array{T,2},Alu,d::Array{T,3},wet::BitArray{3}) w
 end
 
 """ 
-    function steady_inversion(u,Alu,d,γ.wet)
+    function steadyinversion(u,Alu,d,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
 - `u`: controls, vector format
@@ -2229,7 +2279,7 @@ end
 # Output
 - `c`: steady-state tracer distribution
 """
-function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
+function steadyinversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
@@ -2247,7 +2297,7 @@ function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) wh
 end
 
 """ 
-    function steady_inversion(Alu,d,γ.wet)
+    function steadyinversion(Alu,d,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
@@ -2256,7 +2306,7 @@ end
 # Output
 - `c`: steady-state tracer distribution
 """
-function steady_inversion(Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
+function steadyinversion(Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
@@ -2268,7 +2318,7 @@ function steady_inversion(Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
 end
 
 """ 
-    function steady_inversion(Alu,dsfc,qint,γ.wet)
+    function steadyinversion(Alu,dsfc,qint,γ.wet)
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
@@ -2279,7 +2329,7 @@ end
 # Output
 - `c`: steady-state tracer distribution
 """
-function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{3}) where T <: Real
+function steadyinversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{3}) where T <: Real
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     # below surface = 0 % no internal sinks or sources.
@@ -2296,7 +2346,7 @@ function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{
 end
 
 """ 
-    function steady_inversion(Alu,b,qint,γ.wet)
+    function steadyinversion(Alu,b;q=nothing,r=1.0)
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
@@ -2308,11 +2358,13 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steady_inversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0) where T <: Real
+function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
+
+    println("running steady inversion")
 
     # preallocate Field for equation constraints
     d = zeros(γ)
-
+    
     # update d with the boundary condition b
     setboundarycondition!(d,b)
 
@@ -2323,9 +2375,10 @@ function steady_inversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0) 
     end
 
     # define ldiv with fields
-    c = tracerinit(wet,T)
-    c[wet] =  Alu\d[wet]
-
+    c = zeros(d.γ)
+    #c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
+    c = Alu \ d
+    
     return c
 end
 

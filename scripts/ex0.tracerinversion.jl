@@ -26,27 +26,29 @@ PO₄obs = readtracer(TMIfile,"PO₄")
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
-b = getsurfaceboundary(PO₄obs,γ)
+bobs = getsurfaceboundary(PO₄obs,γ)
 
-# preallocate Field for equation constraints
-d = zeros(γ)
-setboundarycondition!(d,b)
+## preformed phosphate
+PO₄pre = steadyinversion(Alu,bobs,γ)
 
-# invert for total phosphate in one step
+## regenerated phosphate
+
 qPO₄ = readtracer(TMIfile,"qPO₄")
 q = getsource(qPO₄,γ)
-setsource!(d,q)
 
-# reconstruct tracer map
-PO₄pre = steady_inversion(u₀,Alu,d₀,γ.wet)
-PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
+# zero boundary condition
+b₀ = zerosurfaceboundary(γ)
+PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=q)
 PO₄total = PO₄pre + PO₄ᴿ
 
+## compute total phosphate directly
+PO₄direct = steadyinversion(Alu,bobs,γ,q=q)
 
+## how big is the maximum difference?
+maximum(PO₄direct - PO₄total)
+minimum(PO₄direct - PO₄total)
 
-
-dPO₄ = d₀ - qPO₄
-PO₄direct = steady_inversion(u₀,Alu,dPO₄,γ.wet)
+maximum(PO₄obs[γ.wet])
 
 # view the surface
 cntrs = 0:0.05:3.5
