@@ -7,7 +7,6 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     Interpolations, LineSearches, MAT, NCDatasets,
     OrdinaryDiffEq, PreallocationTools
 
-
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
@@ -2109,63 +2108,8 @@ function location_obs(field, locs, γ)
     return field_sample
 end
 
-# """ 
-#     function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
-#     squared model-data misfit for gridded data
-#     controls are a vector input for Optim.jl
-# # Arguments
-# - `u`: controls, vector format
-# - `Alu`: LU decomposition of water-mass matrix
-# - `y`: observations on grid
-# - `d`: model constraints
-# - `Wⁱ`: inverse of W weighting matrix for observations
-# - `wet`: BitArray ocean mask
-# # Output
-# - `J`: cost function of sum of squared misfits
-# - `gJ`: derivative of cost function wrt to controls
-# """
-# function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
-#     # a first guess: observed surface boundary conditions are perfect.
-#     # set surface boundary condition to the observations.
-#     # below surface = 0 % no internal sinks or sources.
-#     #u = tracerinit(γ.wet[:,:,1],T)
-#     #u[γ.wet[:,:,1]] = uvec
-
-#     d = dfld[γ.wet]
-#     y = view(yfld,γ.wet)
-    
-#     #ỹ = tracerinit(γ.wet,T)
-#     #n = tracerinit(γ.wet,T)
-#     #dJdn = tracerinit(γ.wet,T)
-#     dJdd = tracerinit(γ.wet,T)
-    
-#     # first-guess reconstruction of observations
-#     #Δd = d + Γ(u,wet)
-#     #ỹ[wet] =  Alu\Δd[wet]
-#     #n = y .- ỹ
-#     #d[γ.wet] = Alu\d[γ.wet]
-
-#     # use in-place functions to make this more performant
-#     control2state!(d,u,γ) # d stores Δd
-#     ldiv!(Alu,d) # d stores -ỹ
-#     d .-= y # d stores n
-#     J = d'* (Wⁱ * d)
-#     # move this to its own function
-#     #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
-
-#     #dJdn[wet] = 2Wⁱ*[wet]
-#     #dJdd[wet] = Alu'\dJdn[wet]
-#     gd = 2*(Wⁱ*d)
-#     ldiv!(Alu',gd)
-
-#     # "transpose" of control2state! operation
-#     gJ = gd[surfaceindex(γ.I)]
-
-#     return J, gJ
-# end
-
 """ 
-    function costfunction_obs!(J,gJ,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
+    function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -2179,7 +2123,6 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     # turn uvec into a boundary condition
     u = zerosurfaceboundary(γ)
@@ -2198,11 +2141,6 @@ function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T
         
     return J, guvec
 end
-
-#""" 
-#   define the minus sign for Field types
-#"""
-#-(f::Field) = -1*f
     
 """ 
     function costfunction_obs!(J,gJ,u::BoundaryCondition{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
@@ -2341,7 +2279,9 @@ end
     function costfunction(J,gJ,uvec,Alu,b,y,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
-    Issue: couldn't figure out how to nest with costfunction_obs!
+    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    Issue #2: Update for BoundaryCondition types
+    
 # Arguments
 - `uvec`: controls, vector format
 - `Alu`: LU decomposition of water-mass matrix
