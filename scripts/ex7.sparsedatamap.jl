@@ -71,8 +71,6 @@ planviewplot(Δc̃, depth, cntrs, titlelabel=label)
 label = "First guess misfit: Δc₀"
 planviewplot(Δc₀, depth, cntrs, titlelabel=label) 
 
-# missing: plots of results
-
 # % what is the uncertainty in the surface boundary condition?
 # err_d = 1;
 # diagonal = false; % or set to false.
