@@ -28,11 +28,11 @@ N = 20
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u = TMI.zerosurfaceboundary(γ)
+u = zerosurfaceboundary(γ)
 uvec = u.tracer[u.wet]
 
 # take synthetic, noisy observations
-y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
+y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
 b = mean(y) * onesurfaceboundary(γ)
@@ -41,8 +41,35 @@ b = mean(y) * onesurfaceboundary(γ)
 σb = 5.0
 Q⁻ = 1.0/(σb^2)
 
+iterations = 25
+
 # optimize the sparse data map with an Optim.jl method
-out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+out = sparsedatamap(uvec,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
+
+# reconstruct by hand to double-check.
+ũ = zerosurfaceboundary(γ)
+ũ.tracer[u.wet] = out.minimizer
+
+# apply to the boundary conditions
+b̃ = b + ũ
+
+# reconstruct tracer map
+c₀ = steadyinversion(Alu,b,γ)
+c̃  = steadyinversion(Alu,b̃,γ)
+
+Δc̃ = c̃ - ctrue
+Δc₀ = c₀ - ctrue
+
+# plot the difference
+level = 15 # your choice 1-33
+depth = γ.depth[level]
+cntrs = -10:0.5:10
+label = "Optimized misfit: Δc̃"
+# Help: needs work with continents and labels
+planviewplot(Δc̃, depth, cntrs, titlelabel=label) 
+
+label = "First guess misfit: Δc₀"
+planviewplot(Δc₀, depth, cntrs, titlelabel=label) 
 
 # missing: plots of results
 

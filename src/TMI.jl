@@ -2047,7 +2047,7 @@ function synthetic_observations(TMIversion,variable,γ,N)
     # weighting matrix
     #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
     W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
-    return y, W⁻, ytrue, locs, wis
+    return y, W⁻, θtrue, ytrue, locs, wis
 end
 
 """
