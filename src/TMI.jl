@@ -1927,7 +1927,7 @@ function steadyclimatology(u₀,fg!,iterations)
 end
 
 """
-    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid,iterations) where T <: Real
+    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid;iterations=10) where T <: Real
 
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
@@ -1948,8 +1948,7 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-#function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid,iterations) where T <: Real
+function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where T <: Real
 
      fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
     

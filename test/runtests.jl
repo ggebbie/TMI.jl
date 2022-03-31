@@ -159,10 +159,12 @@ using TMI, Test
     ## globalmap
     @testset "sparsedatamap" begin
 
+        using Statistics, Interpolations
+        
         N = 20
         u = zerosurfaceboundary(γ)
         u₀ = u.tracer[u.wet]
-        y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
+        y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
         b = mean(y) * onesurfaceboundary(γ)
         σb = 5.0
         Q⁻ = 1.0/(σb^2)
@@ -179,7 +181,8 @@ using TMI, Test
         # Note: ϵ=1e-5 fails tests sometimes due to no finite difference at all
         # Problem with types or rounding or precision?
         
-        ii = rand(1:sum(γ.wet[:,:,1]))
+        #ii = rand(1:sum(γ.wet[:,:,1]))
+        ii = 1000
         println("gradient check location=",ii)
         δu = copy(u₀); δu[ii] += ϵ
         ∇f_finite = (f(δu) - f(u₀))/ϵ
@@ -213,7 +216,7 @@ using TMI, Test
         latbox = [50,60]
         lonbox = [-50,0]
         d = surfacepatch(lonbox, latbox, γ) 
-        dsfc =  d[:,:,1][γ.wet[:,:,1]]
+        dsfc = d.tracer[d.wet]
 
         #following make_initial_conditions.m
         c0 = B * dsfc 
@@ -221,7 +224,7 @@ using TMI, Test
         #Fixed euler timestep approximation
         c = c0
         Δt = 1e-3 #this becomes unstable if you go any lower
-        T  = 0.1
+        T  = 1e-2
         Nt = T/Δt
         for tt = 1:Nt
             # forward Euler timestep
