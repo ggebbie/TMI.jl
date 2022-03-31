@@ -2123,6 +2123,7 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
+    function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     # turn uvec into a boundary condition
     u = zerosurfaceboundary(γ)
