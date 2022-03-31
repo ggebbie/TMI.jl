@@ -22,7 +22,8 @@ latbox = [50,60]
 lonbox = [-50,0]
 d = surfacepatch(lonbox, latbox, γ) #vector(same dims as γ, global)  describing surface patch in terms of γ
 
-dsfc =  d[:,:,1][γ.wet[:,:,1]]#flatten d and access at surface wet positions 
+#flatten d and access at surface wet positions 
+dsfc = d.tracer[d.wet]
 
 #initial conditions are the surface patch = 1, propagated down to the bottom of the mixed layer, which we get from B 
 c0 = B * dsfc 
@@ -71,7 +72,7 @@ end
 
 #Solve diff eq
 operator = DiffEqArrayOperator(L)
-isconstant(operator)
+#isconstant(operator) # not currently working
 func = ODEFunction(f, jac_prototype = L) #jac_prototype for sparse array 
 prob = ODEProblem(func, u0, tspan,p)
 println("Solving ode")
@@ -89,5 +90,11 @@ println("stable: " *string(stable))
 
 #____PLOTTING____
 #longitudinal plots
-lon_index = 85
-dyeplot(γ.lat, γ.depth, sol_array[25, lon_index, :, :]', 0:0.05:1.05)
+#lon_index = 85
+#dyeplot(γ.lat, γ.depth, sol_array[25, lon_index, :, :]', 0:0.05:1.05)
+
+lon_section = 330; # only works if exact
+lims = 0:0.05:3.0
+snapshot = TMI.Field(sol_array[25,:,:,:],γ)
+label = "Some quantity [units]"
+sectionplot(snapshot,lon_section,lims,titlelabel=label)

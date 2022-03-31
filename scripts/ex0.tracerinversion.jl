@@ -19,69 +19,64 @@ using PyPlot, PyCall, Test
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
-# first guess of change to surface boundary conditions
-# ocean values are 0
-u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
+# get observations at surface
+# set them as surface boundary condition
+yPO₄ = readfield(TMIfile,"PO₄",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
-# below surface = 0 % no internal sinks or sources.
-d₀ = tracerinit(γ.wet)
+bPO₄ = getsurfaceboundary(yPO₄)
 
-# get observations at surface
-# set them as surface boundary condition
-PO₄obs = readtracer(TMIfile,"PO₄")
-d₀[:,:,1] = PO₄obs[:,:,1]
+## preformed phosphate
+PO₄pre = steadyinversion(Alu,bPO₄,γ)
 
-# reconstruct tracer map
-PO₄pre = steady_inversion(u₀,Alu,d₀,γ.wet)
-PO₄ᴿ = regeneratedphosphate(TMIversion,Alu,γ)
-PO₄total = PO₄pre + PO₄ᴿ
+## read phosphate source
+qPO₄ = readfield(TMIfile,"qPO₄",γ)
 
-# invert for total phosphate in one step
-qPO₄ = readtracer(TMIfile,"qPO₄")
-dPO₄ = d₀ - qPO₄
-PO₄direct = steady_inversion(u₀,Alu,dPO₄,γ.wet)
+# zero boundary condition
+b₀ = zerosurfaceboundary(γ)
+PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+PO₄total = PO₄ᴿ + PO₄pre
 
+## compute total phosphate directly
+PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
+
+## how big is the maximum difference?
+# could replace with abs function
+@test maximum(PO₄direct - PO₄total) < 0.1
+@test minimum(PO₄direct - PO₄total) > -0.1
+
+## compare to observations
+@test maximum(PO₄direct - yPO₄) < 1.2 # lenient test
+@test minimum(PO₄direct - yPO₄) > -1.2
+
+## Plot a plan view
 # view the surface
 cntrs = 0:0.05:3.5
 
 # what model depth level?
 level = 15
+depth = γ.depth[level]
+label = "depth = "*string(depth)*" m"
 
-figure()
-contourf(γ.lon,γ.lat,PO₄recon[:,:,level]',cntrs)
-contourf(γ.lon,γ.lat,PO₄total[:,:,level]',cntrs)
-#contour(γ.lon,γ.lat,Δc̃',cntrs)
+# Help: needs work with continents and labels
+planviewplot(PO₄total, depth, cntrs, titlelabel=label) 
 
-figure()
-contourf(γ.lon,γ.lat,Δc₀',cntrs)
-
+## Plot a lat-depth section
 lon_section = 330; # only works if exact
-Psection = section(PO₄total,lon_section,γ)
 lims = 0:0.05:3.0
-figure()
-dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', lims)
+sectionplot(PO₄total,lon_section,lims)
 
+## oxygen distribution
+yO₂ = readfield(TMIfile,"O₂",γ)
+bO₂ = getsurfaceboundary(yO₂)
+# set the optional stoichiometric ratio.
+O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
-# oxygen distribution
-O₂obs = readtracer(TMIfile,"O₂")
-d₀[:,:,1] = O₂obs[:,:,1]
-qO₂ = - 170 .* qPO₄
-dO₂ = d₀ - qO₂
-O₂recon = steady_inversion(u₀,Alu,dO₂,γ.wet)
-
-# view the surface
+# Plan view of oxygen at same depth as phosphate
+# but different contours
 cntrs = 0:10:400 # μmol/kg
+planviewplot(O₂, depth, cntrs, titlelabel=label) 
 
-# what model depth level?
-level = 27
-
-figure()
-cf = contourf(γ.lon,γ.lat,O₂recon[:,:,level]',cntrs)
-colorbar(cf)
-
-lon_section = 202; # only works if exact
-Psection = section(O₂recon,lon_section,γ)
-figure()
-dyeplot(γ.lat,-γ.depth[33:-1:1],Psection[:,33:-1:1]', cntrs)
+# Section view of oxygen on same phosphate section.
+sectionplot(O₂,lon_section,cntrs)

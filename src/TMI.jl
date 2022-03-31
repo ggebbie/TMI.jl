@@ -10,26 +10,40 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
-    surfacepatch, section,
+    surfacepatch, 
     layerthickness, cellarea, cellvolume,
-    planview, dyeplot, plotextent, tracerinit,
+    planview, planviewplot,
+    section, sectionplot,
+    plotextent, tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
-    readtracer, cartesianindex, Γ,
+    readtracer, readfield,
+    cartesianindex, Γ,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, volumefilled,
     surfaceorigin, synthetic_observations, observe,
-    steadyclimatology, steady_inversion,
+    steadyclimatology, steadyinversion,
     interpweights, interpindex,
     wetlocation, iswet,
     control2state, control2state!,
+    surfacecontrol2field, surfacecontrol2field!,
     sparsedatamap, config2nc, gridprops,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
-    pkgdir, pkgdatadir, pkgsrcdir
+    getsurfaceboundary, zerosurfaceboundary,
+    onesurfaceboundary,
+    setboundarycondition!, setsource!,
+    zeros, ones, maximum, minimum, (+), (-), (*), dot
+    #pkgdir, pkgdatadir, pkgsrcdir, not needed?
+
+import Base: zeros, ones, maximum, minimum, (\)
+import Base: (+), (-), (*)
+import LinearAlgebra: dot
+
+#import Base.\
 
 #Python packages - initialize them to null globally
 #const patch = PyNULL()
@@ -55,7 +69,7 @@ function __init__()
     println("Python libraries installed")
  end
 
-struct grid
+struct Grid
     lon::Vector{Float64}
     lat::Vector{Float64}
     depth::Vector{Float64}
@@ -63,6 +77,38 @@ struct grid
     R::Array{Int,3}
 #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
+end
+
+"""
+    struct Tracer
+
+    This structure permits the grid to be 
+    automatically passed to functions with
+    the tracer field.
+
+    This structure assumes the Tracer type to be 
+    three-dimensional.
+"""
+struct Field{T}
+    tracer::Array{T,3}
+    γ::Grid
+end
+
+"""
+    struct BoundaryCondition
+
+    a plane defined at `dim=dimval`
+    Can array have other element types?
+    Are indices needed?
+"""
+struct BoundaryCondition{T}
+    tracer::Array{T,2}
+    #I::Vector{CartesianIndex{3}} # index
+    #R::Array{Int,3}
+    dim::Int64
+    dimval::Int64
+    wet::BitArray{2}
+    #T::DataType
 end
 
 # Credit to DrWatson.jl for these functions
@@ -134,7 +180,7 @@ function config_from_nc(TMIversion)
     
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
-    γ = grid(lon,lat,depth,I,R,wet)
+    γ = Grid(lon,lat,depth,I,R,wet)
 
     # would be good to make this optional
     println("L=")
@@ -192,7 +238,7 @@ function config_from_mat(TMIversion)
     # get properties of grid
     lat,lon,depth = gridprops(TMIfile)
 
-    γ = grid(lon,lat,depth,I,R,wet)
+    γ = Grid(lon,lat,depth,I,R,wet)
 
     # need to make this optional
     L = circulationmatrix(TMIfile,γ)
@@ -524,6 +570,35 @@ function readtracer(file,tracername)
 end
 
 """
+    function readfield(file,tracername,γ)
+    Read a tracer field from NetCDF but return it 
+    as a Field. 
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+- `γ::Grid`, TMI grid specification
+# Output
+- `c`::Field
+"""
+function readfield(file,tracername,γ::Grid)
+    tracer = ncread(file,tracername)
+
+    # perform a check of file compatibility
+    # with grid
+    if sum(isnan.(tracer[γ.wet])) > 0
+        println("readfield warning: NaN on grid")
+    end
+    # check for non NaN or nonzero off grid
+    # Need to rethink how to do this.
+    # if sum( !iszero(tracer[.!γ.wet])) > 0 
+    #     println("readfield warning: nonzero value off grid")
+    # end
+           
+    c = Field(tracer,γ)
+    return c
+end
+
+"""
     Horizontal area of grid cell
 """
 function cellarea(γ)
@@ -562,13 +637,13 @@ function cellvolume(γ)
     return volume
 end
 
-function layerthickness(γ::grid)
+function layerthickness(γ::Grid)
     zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
     dz = ([zface[1] ; diff(zface); 500]);
     return dz
 end
 
-function zonalgriddist(γ::grid)
+function zonalgriddist(γ::Grid)
     dx = similar(γ.lat)
     for j in eachindex(γ.lat)
         dx[j] = haversine((γ.lon[1],γ.lat[j])
@@ -631,26 +706,21 @@ function fld2vec(field::Array{T,3},I::Vector{CartesianIndex{3}}) where T<:Real
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacepatch(lonbox,latbox,γ::grid)
+function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
     lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
 
-    # define the surface boundary condition
-
     # preallocate
-    d = tracerinit(γ.wet,Float64)
+    patch = zeros(γ.wet[:,:,1])
 
     # can you add a logical to a Float64? yes, it's 1.0
-    [d[i,j,1] =  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+    [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
 
-    # old method for vectors
-        #nfield = length(γ.I) # number of ocean points
-    #d = zeros(Int,nfield) # preallocate
-    #[d[n]=1 for n ∈ 1:nfield if γ.I[n][3]==1 && latbox[1] ≤ γ.lat[γ.I[n][2]] ≤ latbox[2]
-    #     && lonbox[1] ≤ γ.lon[γ.I[n][1]] ≤ lonbox[2] ]
-    return d
+    # 3,1 to identify surface
+    b = BoundaryCondition(patch,3,1,γ.wet[:,:,1])
+    return b
 end
 
 """
@@ -663,7 +733,7 @@ end
 # Output
 - `δ`: nearest neighbor mask 3D field
 """
-function nearestneighbormask(loc,γ::grid,N=1)
+function nearestneighbormask(loc,γ::Grid,N=1)
 
     Inn, Rnn = nearestneighbor(loc,γ,N)
 
@@ -725,7 +795,7 @@ end
 # Output
 - `hordist`: horizontal distance to nearest tracer grid points
 """
-function horizontaldistance(loc,γ::grid)
+function horizontaldistance(loc,γ::Grid)
 
     # hordist will have same type as lon,lat,depth
     T = eltype(γ.lon)
@@ -745,29 +815,28 @@ end
     function section
     View latitude-depth slice of field
 # Arguments
-- `c`: 3d tracer field
+- `c::Field`, 3D tracer field plus meta data
 - `lon`: longitude of section
-- `γ`: TMI.grid
 # Output
 - `csection`: 2d slice of field
 """
-function section(c,lon,γ)
+function section(c::Field{T},lon)::Array{T,2} where T <: Real
 
-    isec = findall(==(lon),γ.lon)
+    isec = findall(==(lon),c.γ.lon)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    csection= dropdims(view(c,isec,:,:),dims=1)
+    csection= dropdims(view(c.tracer,isec,:,:),dims=1)
     return csection
 end
 
-function planview(c,depth,γ)
-
-    isec = findall(==(depth),γ.depth)
+function planview(c::Field{T},depth)::Array{T,2} where T <: Real
+ 
+    isec = findall(==(depth),c.γ.depth)
 
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    cplan = dropdims(view(c,:,:,isec),dims=3)
+    cplan = dropdims(view(c.tracer,:,:,isec),dims=3)
     return cplan
 end
 
@@ -818,36 +887,93 @@ function plotextent(latbox, lonbox)
 end
 
 """
-    function dyeplot
-    Plot of dye in ocean
+    function sectionplot
+    Plot of section (lat-depth) in ocean
 # Arguments
-- `lat`: latitude arrays
-- `depth`: depth array
-- `vals`: lat x depth value array
+- `field::Field`, 3d filed of values to be plotted
+- `lon`: longitude of section
 - `lims`: contour levels
+- `titlelabel`: optional title labeln
 """
-function dyeplot(lat, depth, vals, lims, titlelabel="Meridional dye concentration")
+function sectionplot(field::Field{T}, lon, lims;titlelabel="section plot") where T <: Real
 
-    println(size(vals))
-
-    valsview = view(vals,:,33:-1:1)
-    println(size(valsview))
-    #depthplot = -reverse(depth),Osection[:,33:-1:1]'
+    Psection = section(field,lon)
     cmap_seismic = get_cmap("seismic")
-
-    z = reverse(depth)/1000.
-        
+    z = field.γ.depth/1000.0
+    
     #calc fignum - based on current number of figures
     figure()
-    contourf(lat, z, valsview', lims, cmap=cmap_seismic)
+    contourf(field.γ.lat, z, Psection', lims, cmap=cmap_seismic)
     #fig, ax = plt.subplots()
-    CS = gca().contour(lat, z, valsview', lims,colors="k")
+    CS = gca().contour(field.γ.lat, z, Psection', lims,colors="k")
     gca().clabel(CS, CS.levels, inline=true, fontsize=10)
     xlabel("Latitude [°N]")
     ylabel("Depth [km]")
     gca().set_title(titlelabel)
     gca().invert_yaxis()
     colorbar(orientation="horizontal")
+    
+end
+
+"""
+    function planviewplot
+    Plot of plan view (lon-lat) in ocean
+# Arguments
+- `field::Field`, 3d filed of values to be plotted
+- `depth`: depth of plan view
+- `lims`: contour levels
+- `titlelabel`: optional title label
+"""
+function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where T <: Real
+
+    cplan = planview(c::Field{T},depth)
+
+    cmap_seismic = get_cmap("seismic")
+    
+    #calc fignum - based on current number of figures
+    figure()
+    contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    ylabel("Latitude [°N]")
+    xlabel("Longitude [°E]")
+    gca().set_title(titlelabel)
+    colorbar(orientation="vertical")
+    
+end
+
+"""
+    function planviewplot
+    Plot of plan view (lon-lat) in ocean
+# Arguments
+- `field::BoundaryCondition`, 3d filed of values to be plotted
+- `depth`: depth of plan view
+- `lims`: contour levels
+- `γ::Grid`, needed for lat, lon but not in BoundaryCondition! (could refactor)
+- `titlelabel`: optional title label
+"""
+function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
+
+    # is the boundary condition oriented correctly?
+    if b.dim != 3
+        error("boundary condition not horizontal")
+    end
+    
+    cplan = b.tracer
+    
+    cmap_seismic = get_cmap("seismic")
+    
+    #calc fignum - based on current number of figures
+    figure()
+    contourf(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    #fig, ax = plt.subplots()
+    CS = gca().contour(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    ylabel("Latitude [°N]")
+    xlabel("Longitude [°E]")
+    gca().set_title(titlelabel)
+    colorbar(orientation="vertical")
     
 end
 
@@ -884,31 +1010,95 @@ function latindex(I)
     return j
 end
 
+function findindex(I,indexfunc,indexnumber)
+    Ifound = findall(indexfunc(I) .== indexnumber)
+    return Ifound
+end
+    
 """
     function surfaceindex(I) 
     Get the vector-index where depth level == 1 and it is ocean.
 """
-function surfaceindex(I)
-    Isfc = findall(depthindex(I) .==1)
-    return Isfc
+surfaceindex(I) = findindex(I,depthindex,1)
+
+"""
+    function southindex(I) 
+    Get the vector-index on the southern open boundary
+"""
+southindex(I) = findindex(I,latindex,1)
+
+"""
+    function northindex(I) 
+    Get the vector index on the northern open boundary
+"""
+northindex(I) = findindex(I,latindex,maximum(latindex(I)))
+
+"""
+    function westindex(I) 
+    Get the vector index on the western open boundary
+"""
+westindex(I) = findindex(I,lonindex,1)
+
+"""
+    function eastindex(I) 
+    Get the vector index on the northern open boundary
+"""
+eastindex(I) = findindex(I,lonindex,maximum(lonindex(I)))
+
+# """
+# Find the locations of the control adjustments
+# Is this necessary?
+# """
+# function controlindex(plane)
+#     i = lonindex(I)
+#     j = latindex(I)
+#     Isfc = findall(depthindex(I) .==1 .|| i.==maximum(i) .|| i.==minimum(i) .|| j.==maximum(j) .|| j.==minimum(j))
+#     return Isfc
+# end
+
+""" 
+    function zeros(γ::Grid)
+      initialize tracer field on TMI grid
+      using a Field struct and constructor
+# Arguments
+- `γ`::TMI.Grid
+# Output
+- `d`::Field,  3d tracer field with NaN on dry points
+"""
+function zeros(γ::Grid)::Field
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    T = eltype(γ.depth)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer[γ.wet] .= zero(T)
+    tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,γ)
+
+    return d
 end
 
 """ 
-    function tracerinit(wet,ltype=Float64)
-      initialize tracer field on TMI grid
-    perhaps better to have a tracer struct and constructor
+    function zeros(wet,ltype=Float64)
+    initialize tracer field on TMI grid
+    This version will give an array
 # Arguments
 - `wet`::BitArray mask of ocean points
 - `ltype`:: optional type argument, default=Float64
 # Output
 - `d`:: 3d tracer field with NaN on dry points
 """
-function tracerinit(wet,ltype=Float64)
+function zeros(wet,ltype=Float64)
     # preallocate
     d = Array{ltype}(undef,size(wet))
 
     # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
     d[wet] .= zero(ltype)
     d[.!wet] .= zero(ltype)/zero(ltype) # NaNs with right type
     return d
@@ -937,6 +1127,303 @@ function tracerinit(vec,I,wet)
     return field
 end
 
+"""
+   Initialize boundary condition with zeroes
+"""
+function zeros(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
+
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = wet[dimval,:,:]
+    elseif dim == 2
+        wet2d = wet[:,dimval,:]
+    elseif dim == 3
+        wet2d = wet[:,:,dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    tracer = Array{Float64}(undef,size(wet2d))
+    tracer[wet2d] .= zero(Float64)
+    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
+    
+    b = BoundaryCondition(tracer,dim,dimval,wet2d)
+
+end
+
+"""
+   Initialize boundary condition with ones
+"""
+function ones(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
+
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = wet[dimval,:,:]
+    elseif dim == 2
+        wet2d = wet[:,dimval,:]
+    elseif dim == 3
+        wet2d = wet[:,:,dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    tracer = Array{Float64}(undef,size(wet2d))
+    tracer[wet2d] .= ones(Float64)
+    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
+    
+    b = BoundaryCondition(tracer,dim,dimval,wet2d)
+
+end
+
+"""
+   Get boundary condition by extracting from 3D tracer
+"""
+function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
+
+    dimsize = size(wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = wet[dimval,:,:]
+        tracer2d = tracer3d[dimval,:,:]
+    elseif dim == 2
+        wet2d = wet[:,dimval,:]
+        tracer2d = tracer3d[:,dimval,:]
+    elseif dim == 3
+        wet2d = wet[:,:,dimval]
+        tracer2d = tracer3d[:,:,dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(tracer2d,dim,dimval,wet2d)
+
+end
+
+# Define maximum for Field to not include NaNs
+maximum(c::Field) = maximum(c.tracer[c.γ.wet])
+minimum(c::Field) = minimum(c.tracer[c.γ.wet])
+#mean(x::Field) = mean(x.tracer[x.γ.wet])
+
+# Define max/min for BoundaryCondition
+maximum(b::BoundaryCondition) = maximum(b.tracer[b.wet])
+minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
+
+"""
+    `function \\(A,d::Field)::Field`
+    Define left division for Fields
+    Need two slashes to prevent invalid escape
+"""
+function \(A,d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    c = zeros(d.γ)
+    c.tracer[c.γ.wet] = A\d.tracer[d.γ.wet]
+    return c
+end
+
+"""
+    `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
+    Define addition for Fields
+"""
+function +(c::BoundaryCondition{T},d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
+
+    if c.wet != d.wet # check conformability
+        error("BoundaryCondition's not conformable for addition")
+    end
+    array = zeros(c.wet)
+    e = BoundaryCondition(array,c.dim,c.dimval,c.wet)
+    
+    # a strange formulation to get
+    # return e to be correct
+    e.tracer[e.wet] += c.tracer[c.wet]
+    e.tracer[e.wet] += d.tracer[d.wet]
+    return e
+end
+
+"""
+    `function +(c::Field,d::Field)::Field`
+    Define addition for Fields
+"""
+function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    if c.γ.wet != d.γ.wet # check conformability
+        error("Fields not conformable for addition")
+    end
+    e = zeros(d.γ)
+
+    # a strange formulation to get
+    # return e to be correct
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+    e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
+    return e
+end
+
+"""
+    `function -(c::Field,d::Field)::Field`
+    Define addition for Fields
+"""
+function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    if c.γ.wet !== d.γ.wet # check conformability
+        error("Fields not conformable for addition")
+    end
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+    e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
+    return e
+end
+
+"""
+    `function *(C,d::Field)::Field`
+    Define scalar or matrix multiplication for fields
+"""
+function *(C,d::Field{T})::Field{T} where T <: Real
+
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += C*d.tracer[d.γ.wet]
+    return e
+end
+
+"""
+    `function *(C,d::BoundaryCondition)::BoundaryCondition`
+    Define scalar or matrix multiplication for BoundaryCondition`s
+"""
+function *(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
+    array = zeros(d.wet)
+    e = BoundaryCondition(array,d.dim,d.dimval,d.wet)
+    e.tracer[e.wet] += C*d.tracer[d.wet]
+    return e
+end
+
+"""
+    `function *(c::Field,d::Field)::Field`
+    Field by field multiplication is element-by-element.
+"""
+function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+
+    e = zeros(d.γ)
+    e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
+    return e
+end
+
+
+"""
+    `function *(c::Field,d::Field)::Field`
+    Field by field multiplication is element-by-element.
+"""
+function dot(c::Field{T},d::Field{T})::T where T <: Real
+
+    e =  c.tracer[c.γ.wet]' * d.tracer[d.γ.wet]
+    return e
+end
+
+
+# define the correct dimension and index for each control plane
+# maybe someday find a way to hide γ
+zerosurfaceboundary(γ) = zeros(3,1,γ.wet)::BoundaryCondition
+zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
+zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
+zerosouthboundary(γ) = zeros(2,1,γ.wet)::BoundaryCondition
+zerowestboundary(γ) = zeros(1,1,γ.wet)::BoundaryCondition
+
+onesurfaceboundary(γ) = ones(3,1,γ.wet)::BoundaryCondition
+
+getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ.wet)::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ.wet)::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ.wet)::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ.wet)::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ.wet)::BoundaryCondition
+
+### TURN THIS INTO SET BOUNDARY CONDITION COMMAND.
+# """ 
+#     function constraint(b::BoundaryCondition,γ)
+#     turn control adjustment into adjustment of constraint for all 3d grid points    
+# # Arguments
+# - `b`:: BoundaryCondition
+# - `γ`:: TMI.Grid
+# # Output
+# - `d`:: right hand side adjustment
+# """
+# function constraint(b::BoundaryCondition,γ::Grid) 
+#     # preallocate
+#     T = eltype(b.tracer)
+#     d = Array{T}(undef,size(γ.wet))
+
+#     # set ocean to zero, land to NaN
+#     # consider whether land should be nothing or missing
+#     d[γ.wet]   .= zero(T)
+#     d[.!γ.wet] .= zero(T)/zero(T)
+#     if b.dim == 1
+#         d[b.dimval,:,:] = b.tracer
+#     elseif b.dim == 2
+#         d[:,b.dimval,:] = b.tracer
+#     elseif b.dim == 3
+#         d[:,:,b.dimval] = b.tracer
+#     else
+#         error("controls not implemented for 4+ dimensions")
+#     end
+#     return d
+# end
+
+""" 
+    function setboundarycondition!(d::Field,b::BoundaryCondition)
+    apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    if b.dim == 1
+        d.tracer[b.dimval,:,:] += b.tracer
+    elseif b.dim == 2
+        d.tracer[:,b.dimval,:] += b.tracer
+    elseif b.dim == 3
+        d.tracer[:,:,b.dimval] += b.tracer
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return d
+end
+
+""" 
+    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    ADJOINT: apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+    gb = zerosurfaceboundary(gd.γ)
+    if b.dim == 1
+        gb.tracer = gd.tracer[b.dimval,:,:]
+    elseif b.dim == 2
+        gb.tracer = gd.tracer[:,b.dimval,:]
+    elseif b.dim == 3
+        gb.tracer .+= gd.tracer[:,:,b.dimval] 
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return gb
+end
+
+""" 
+    function setsource!(d::Field,q::Field,r::Number)
+    apply interior source q to the equation constraints d
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `q`::Field, interior source
+- `r`::Number, default = 1.0, stoichiometric ratio
+"""
+function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
+
+    # warning d.γ.wet and q.γ.wet must match
+    d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
+
+end
+
 """ 
     function control2state(tracer2D,γ)
     turn 2D surface field into 3D field with zeroes below surface    
@@ -959,15 +1446,15 @@ function control2state(tracer2D::Matrix{T},wet) where T<: Real
 end
 
 """ 
-    function control2state(u,γ)
+    function surfacecontrol2field(usfc,γ.wet)
     turn surface control vector into 3D field with zeroes below surface    
 # Arguments
-- `u`:: surface control vector
+- `usfc`:: surface control vector
 - `wet`::BitArray mask of ocean points
 # Output
 - `tracer3D`:: 3d tracer field with NaN on dry points
 """
-function control2state(u::Vector{T},wet) where T<: Real
+function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
     # preallocate
     tracer3D = Array{T}(undef,size(wet))
 
@@ -975,39 +1462,51 @@ function control2state(u::Vector{T},wet) where T<: Real
     # consider whether land should be nothing or missing
     tracer3D[wet] .= zero(T)
     tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1][wet[:,:,1]] = u
+    tracer3D[:,:,1][wet[:,:,1]] = usfc
     return tracer3D
 end
 
-""" 
-    function control2state!(c,u,γ)
+"""
+    function Γsfc 
+    Γsfc anonymously calls surfacecontrol2field
+"""
+Γsfc = surfacecontrol2field
+
+"""
+    function surfacecontrol2field!(c,u,γ)
     Add surface control vector to existing 3D field 
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `u`:: surface control vector
+- `usfc`:: surface control vector
 - `wet`::BitArray mask of ocean points
 """
-function control2state!(c::Array{T,3},u::Vector{T},γ) where T<: Real
+function surfacecontrol2field!(c::Array{T,3},usfc::Vector{T},γ) where T<: Real
     #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
 #    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
     list = surfaceindex(γ.I)
-    [c[γ.I[ii]] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    [c[γ.I[ii]] += usfc[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
 """ 
-    function control2state!(c,u,γ)
-    Add surface control vector to existing 3D field 
+    function surfacecontrol2field!(c,u,γ)
+    Add surface control vector to tracer vector
 # Arguments
 - `c`:: state field, 3d tracer field with NaN on dry points, modified by function
 - `u`:: surface control vector
 - `wet`::BitArray mask of ocean points
 """
-function control2state!(c::Vector{T},u::Vector{T},γ) where T<: Real
+function surfacecontrol2field!(c::Vector{T},u::Vector{T},γ) where T<: Real
     list = surfaceindex(γ.I)
     [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
 end
 
-function state2obs(cvec,wis,γ)
+"""
+    function Γsfc! 
+    Γsfc! anonymously calls surfacecontrol2field!
+"""
+Γsfc! = surfacecontrol2field!
+
+function field2obs(cvec,wis,γ)
     # interpolate onto data points
     N = length(wis)
     sumwis = Vector{Float64}(undef,N)
@@ -1031,7 +1530,13 @@ function state2obs(cvec,wis,γ)
     [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
-    
+
+"""
+    function E 
+    E anonymously calls field2obs
+"""
+E = field2obs
+
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
     Track the pathways of a user-defined water mass.
@@ -1047,13 +1552,8 @@ end
 """
 function trackpathways(Alu,latbox,lonbox,γ)
 
-    d = surfacepatch(lonbox,latbox,γ)
-
-    # do matrix inversion to get quantity of dyed water throughout ocean:
-    c = tracerinit(γ.wet); # pre-allocate c
-
-    # make methods that make the "wet" index unnecessary
-    c[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
+    b = surfacepatch(lonbox,latbox,γ)
+    c = steadyinversion(Alu,b,γ)
 
     return c
 end
@@ -1074,13 +1574,15 @@ end
 """
 function watermassdistribution(TMIversion,Alu,region,γ)
 
-    d = surfaceregion(TMIversion,region,γ)
+    
+    b = surfaceregion(TMIversion,region,γ)
+    g = steadyinversion(Alu,b,γ)
 
-    # do matrix inversion to get quantity of dyed water throughout ocean:
-    g = tracerinit(γ.wet); # pre-allocate c
+    # # do matrix inversion to get quantity of dyed water throughout ocean:
+    # g = tracerinit(γ.wet); # pre-allocate c
 
-    # make methods that make the "wet" index unnecessary
-    g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
+    # # make methods that make the "wet" index unnecessary
+    # g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
 
     return g
 end
@@ -1226,14 +1728,15 @@ end
 """
 function regeneratedphosphate(TMIversion,Alu,γ)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
-        
-    #A, Alu, γ, inputfile = config(TMIversion)
-    qPO₄ = readtracer(inputfile,"qPO₄")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
-    # PO₄ᴿ = cumulative regenerated phosphate
-    PO₄ᴿ = tracerinit(γ.wet); # pre-allocate 
-    PO₄ᴿ[γ.wet] = -(Alu\qPO₄[γ.wet])
+    ## read phosphate source
+    qPO₄ = readfield(TMIfile,"qPO₄",γ)
+
+    # zero boundary condition
+    b₀ = zerosurfaceboundary(γ)
+    PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+
     return PO₄ᴿ
 end
 
@@ -1252,29 +1755,29 @@ end
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI.grid
 # Output
-- `volume`: global ocean volume filled by a surface region
+- `volume`: log10 of global ocean volume filled by a surface region, exists at surface, therefore given BoundaryCondition type
 """
-function volumefilled(TMIversion,Alu,γ)
+function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
 
-    #A, Alu, γ = config(TMIversion)
-    
     v = cellvolume(γ)
     area = cellarea(γ)
     
     # effectively take inverse of transpose A matrix.
-    dVdd = tracerinit(γ.wet); # pre-allocate c
+    dVdd = zeros(γ.wet); # pre-allocate array
     dVdd[γ.wet] = Alu'\v[γ.wet]
 
     # scale the sensitivity value by surface area so that converging meridians are taken into account.
     I = γ.I
-    volume = zeros(Float64,length(γ.lon),length(γ.lat))
-    #volume = Matrix{Float64}(undef,length(γ.lon),length(γ.lat))
-    #fill!(volume,0.0)
-
+    #volume = zeros(Float64,length(γ.lon),length(γ.lat))
+    volume = zeros(γ.wet[:,:,1])
     # this step could use a function with γ.I argument
     [volume[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
-    return volume
+    volume = log10.(volume)
+
+    ∂V∂b  = BoundaryCondition(volume,3,1,γ.wet[:,:,1])
+    
+    return  ∂V∂b 
 end
 
 """ 
@@ -1292,13 +1795,12 @@ end
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI grid
 # Output
-- `origin`: surface map of fraction of source water for a given location
+- `origin`: surface map of fraction of source water for a given location, log10 of effective depth, in terms of a BoundaryCondition
 """
-function surfaceorigin(loc,Alu,γ)
+function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
 
     #A, Alu, γ = config(TMIversion)
-
-    ctmp = tracerinit(γ.wet)
+    #ctmp = tracerinit(γ.wet)
     δ = interpweights(loc,γ)
     
     # Find nearest neighbor on grid
@@ -1306,11 +1808,14 @@ function surfaceorigin(loc,Alu,γ)
     #δ = nearestneighbormask(loc,γ)
     # Note: ctrue[γ.wet]'*δ[γ.wet] returns interpolated value
 
-    dvlocdd = tracerinit(γ.wet); # pre-allocate c
+    dvlocdd = zeros(γ.wet); # pre-allocate c
     dvlocdd[γ.wet] = Alu'\δ[γ.wet]
 
     # origin is defined at sea surface
-    origin = view(dvlocdd,:,:,1)
+    #origin = view(dvlocdd,:,:,1)
+    dvlocdd = log10.(dvlocdd[:,:,1])
+    origin = BoundaryCondition(dvlocdd,3,1,γ.wet[:,:,1])
+    
     return origin
 end
 
@@ -1367,7 +1872,7 @@ function interpweights(loc,γ)
 
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
-    δ = tracerinit(γ.wet)
+    δ = zeros(γ.wet)
 
     # changes in δwrap i=91 are translated back to δ i=1
     δwrap = view(δ,list,:,:)
@@ -1414,13 +1919,16 @@ function steadyclimatology(u₀,fg!,iterations)
 
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
 end
 
 """
-function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
+    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid;iterations=10) where T <: Real
+
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1434,21 +1942,19 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 # Arguments
 - `u₀`:
 - `Alu`:
-- `d₀`: first guess of boundary conditions and interior sources
+- `b`: first guess of boundary conditions and interior sources
 - `y`: observations on 3D grid
 - `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-#function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
-    # ### added this
-     fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where T <: Real
+
+     fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
-#    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
 
     return out    
 end
@@ -1467,24 +1973,29 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
-    θtrue = readtracer(inputfile,variable)
-    σθ = readtracer(inputfile,"σ"*variable)
+    θtrue = readfield(TMIfile,variable,γ)
+    σθ = readfield(TMIfile,"σ"*variable,γ)
 
-    ntrue = tracerinit(γ.wet)
-    ntrue[γ.wet] = rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+    #ntrue = zeros(γ)
+    #ntrue = zeros(γ.wet)
+    #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ)
+    ntrue *= σθ
 
-    y = θtrue .+ ntrue
+    y = θtrue + ntrue
+    
+    #y = θtrue .+ ntrue
 
     # get cost function (J) based on model misfit
     # here the data-model misfit is weighted by the expected error
 
     # weighting matrix
     #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
-    W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ[γ.wet].^2)
+    W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ.tracer[γ.wet].^2)
     return y, W⁻, θtrue
 end
  
@@ -1505,16 +2016,16 @@ end
 """
 function synthetic_observations(TMIversion,variable,γ,N)
 
-    inputfile = pkgdatadir("TMI_"*TMIversion*".nc")
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
     
-    θtrue = readtracer(inputfile,variable)
-    replace!(θtrue,NaN=>0.0)
+    θtrue = readfield(TMIfile,variable,γ)
+    replace!(θtrue.tracer,NaN=>0.0)
     
-    σθ = readtracer(inputfile,"σ"*variable)
-    replace!(σθ,NaN=>0.0)
+    σθ = readfield(TMIfile,"σ"*variable,γ)
+    replace!(σθ.tracer,NaN=>0.0)
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
@@ -1535,30 +2046,48 @@ function synthetic_observations(TMIversion,variable,γ,N)
     # weighting matrix
     #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
     W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
-    return y, W⁻, ytrue, locs, wis
+    return y, W⁻, θtrue, ytrue, locs, wis
 end
 
 """
     function observe
     Take a observation at location given by weights wis
 """
-function observe(field,wis,γ)
+function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},γ::Grid)::Vector{T} where T <: Real
 
-    # look at total weight, < 1 if there are land points
+        # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
-    #N = length(wis)
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
     [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # sample the true field at these random locations
-    field_sample = Vector{Float64}(undef,length(wis))
-    replace!(field,NaN=>0.0)
-    field_wrap = view(field,list,:,:)
-    [field_sample[i] = field_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    y = Vector{Float64}(undef,length(wis))
+    replace!(c.tracer,NaN=>0.0)
+    ywrap = view(c.tracer,list,:,:)
+    [y[i] = ywrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
-    return field_sample
+    return y
+end
+
+
+"""
+    function gobserve(gy::Vector{T},c::Field{T},wis,γ) where T <: Real
+
+    ADJOINT Take a observation at location given by weights wis
+    Arguments not symmetric with `observe` due to splat operator
+"""
+function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
+
+    #initialize gc this sneaky way
+    gc = 0.0 * c
+    for ii in eachindex(gy)
+        # interpweights repeats some calculations
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ)[c.γ.wet]
+    end
+
+    return gc
 end
 
 function location_obs(field, locs, γ)
@@ -1598,98 +2127,73 @@ function location_obs(field, locs, γ)
 end
 
 """ 
-    function costfunction_obs(u,Alu,dfld,yfld,Wⁱ,γ)
-    squared model-data misfit for gridded data
-    controls are a vector input for Optim.jl
-# Arguments
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `y`: observations on grid
-- `d`: model constraints
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wet`: BitArray ocean mask
-# Output
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-"""
-function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-    #u = tracerinit(γ.wet[:,:,1],T)
-    #u[γ.wet[:,:,1]] = uvec
+    function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
-    d = dfld[γ.wet]
-    y = view(yfld,γ.wet)
-    
-    #ỹ = tracerinit(γ.wet,T)
-    #n = tracerinit(γ.wet,T)
-    #dJdn = tracerinit(γ.wet,T)
-    dJdd = tracerinit(γ.wet,T)
-    
-    # first-guess reconstruction of observations
-    #Δd = d + Γ(u,wet)
-    #ỹ[wet] =  Alu\Δd[wet]
-    #n = y .- ỹ
-    #d[γ.wet] = Alu\d[γ.wet]
-
-    # use in-place functions to make this more performant
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores -ỹ
-    d .-= y # d stores n
-    J = d'* (Wⁱ * d)
-    # move this to its own function
-    #J += u[wet[:,:,1]]'* (Qⁱ * u[wet[:,:,1]])
-
-    #dJdn[wet] = 2Wⁱ*[wet]
-    #dJdd[wet] = Alu'\dJdn[wet]
-    gd = 2*(Wⁱ*d)
-    ldiv!(Alu',gd)
-
-    # "transpose" of control2state! operation
-    gJ = gd[surfaceindex(γ.I)]
-
-    return J, gJ
-end
-
-""" 
-    function costfunction_obs(u,Alu,y,d,Wⁱ,wet)
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
 # Arguments
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
-- `u`: controls, vector format
+- `u`: controls, field format
 - `Alu`: LU decomposition of water-mass matrix
-- `d`: model constraints
+- `b`: boundary conditions
 - `y`: observations on grid
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},yfld::Array{T,3},Wⁱ::Diagonal{T, Vector{T}},γ::grid) where T <: Real
+    function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
-    d = dfld[γ.wet]
-    y = view(yfld,γ.wet)
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d)
-    d .-= y # .- d
+    # turn uvec into a boundary condition
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+    J = y ⋅ (Wⁱ * y) # dot product
 
-    if gJ != nothing
-        gd = Vector{T}(undef,length(d))
-        gd = 2Wⁱ*d
-        ldiv!(Alu',gd)
+    # adjoint equations
+    gy = -2Wⁱ * y
+    gu = gsteadyinversion( gy, Alu, b, γ)
+    #gu = gb
 
-        list = surfaceindex(γ.I)
-        [gJ[ii] = gd[list[ii]] for ii in 1:length(list)]
-        #gJ = gd[surfaceindex(γ.I)]
-        #[gJ[γ.R[ii]] = gd[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    guvec = gu.tracer[gu.wet]
+        
+    return J, guvec
+end
+    
+""" 
+    function costfunction_obs!(J,gJ,u::BoundaryCondition{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
 
-        #pick out I[3]==1
-        #gJ = -dJdd[:,:,1][γ.wet[:,:,1]]
+    squared model-data misfit for gridded data
+    controls are a vector input for Optim.jl
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: controls, field format
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary conditions
+- `y`: observations on grid
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `γ`: grid
+"""
+function costfunction_obs!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+
+    # turn uvec into a boundary condition
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+
+    if guvec != nothing
+        gy = -2Wⁱ * y
+        gu = gsteadyinversion( gy, Alu, b, γ)
+        #gu = gb
+        guvec .= gu.tracer[gu.wet]
     end
     
     if J !=nothing
-        return  d'* (Wⁱ * d)       
+        return  y ⋅ (Wⁱ * y) # dot product
     end
 end
 
@@ -1710,7 +2214,7 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
@@ -1718,7 +2222,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
     J = ỹ'* (Wⁱ * ỹ)
     #println(J)
@@ -1728,7 +2232,7 @@ function costfunction_obs(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::D
     #gd = Vector{T}(undef,sum(γ.wet))
     gd = zeros(T,sum(γ.wet))
     
-    # transpose of "E" operation in state2obs
+    # transpose of "E" operation in field2obs
     for ii in eachindex(y)
         # interpweights repeats some calculations
         gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
@@ -1757,7 +2261,7 @@ end
 - `locs`: data locations (lon,lat,depth)
 - `γ`: grid
 """
-function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::grid) where T <: Real
+function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,γ::Grid) where T <: Real
 
     d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
 
@@ -1765,7 +2269,7 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
     control2state!(d,u,γ) # d stores Δd
     ldiv!(Alu,d) # d stores c̃
 
-    ỹ = state2obs(d,wis,γ)
+    ỹ = field2obs(d,wis,γ)
     ỹ .-= y # stores n, data-model misfit
 
     if gJ != nothing    
@@ -1791,14 +2295,16 @@ function costfunction_obs!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},W
 end
 
 """ 
-    function costfunction(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+    function costfunction(J,gJ,uvec,Alu,b,y,Wⁱ,wis,Q⁻,γ)
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
-    Issue: couldn't figure out how to nest with costfunction_obs!
+    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    Issue #2: Update for BoundaryCondition types
+    
 # Arguments
-- `u`: controls, vector format
+- `uvec`: controls, vector format
 - `Alu`: LU decomposition of water-mass matrix
-- `dfld`: model constraints
+- `b`: boundary condition
 - `y`: pointwise observations
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `wis`: weights for interpolation (data sampling, E)
@@ -1809,38 +2315,38 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction(u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
+function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
-    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
-    list = surfaceindex(γ.I)
-    gJ = Vector{T}(undef,size(u))
-    [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-    Jcontrol = u'*(Q⁻*u)
+    # control penalty and gradient
+    Jcontrol = uvec'*(Q⁻*uvec)
+    guvec = 2*(Q⁻*uvec)
 
-    # use in-place functions: more performant
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores c̃
+    # data misfit and gradient
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
 
-    ỹ = state2obs(d,wis,γ)
-    ỹ .-= y # stores n, data-model misfit
+    # observe at right spots
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
+    
+    Jdata = n ⋅ (Wⁱ * n) # dot product
+    J = Jdata + Jcontrol
 
-    gỹ = 2*(Wⁱ*ỹ)
+    gn = 2Wⁱ * n
 
-    #gd = Array{T,3}(undef,size(dfld))
-    #gd = Vector{T}(undef,sum(γ.wet))
-    gd = zeros(T,sum(γ.wet))
-    for ii in eachindex(y)
-        # interpweights repeats some calculations
-        gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
-    end
-    # do Eᵀ gỹ 
-    ldiv!(Alu',gd)
-    list = surfaceindex(γ.I)
-    #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-    [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
+    gỹ = gn
+    
+    gc = gobserve(gỹ,c,locs)
 
-    J = ỹ'* (Wⁱ * ỹ) + Jcontrol
-    return J, gJ
+    gb = gsteadyinversion(gc, Alu, b, γ)
+    gu = gb
+
+    guvec .+= gu.tracer[gu.wet]
+    
+    return J, guvec
 end
 
 """ 
@@ -1848,136 +2354,111 @@ end
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue: couldn't figure out how to nest with costfunction_obs!
-    Issue: why are wis and locs both needed?
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `dfld`: model constraints
-- `y`: pointwise observations
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wis`: weights for interpolation (data sampling, E)
-- `locs`: data locations (lon,lat,depth)
-- `Q⁻`: weights for control vector
-- `γ`: grid
+    Issue: why are wis and locs both needed? `gobserve` function
+
 """
-function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::grid) where T <: Real
+function costfunction!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
-    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
-
-    if gJ != nothing
-        #gJ = 2*(Q⁻*u)
-    end
-    if J != nothing
-
-    end
-
-    # use in-place functions: more performant
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores c̃
-
-    ỹ = state2obs(d,wis,γ)
-    ỹ .-= y # stores n, data-model misfit
-
-    if gJ != nothing    
-        gỹ = 2*(Wⁱ*ỹ)
-
-        gd = zeros(T,sum(γ.wet))
-        for ii in eachindex(y)
-            # interpweights repeats some calculations
-            gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
-        end
-        # do Eᵀ gỹ 
-        ldiv!(Alu',gd)
-        list = surfaceindex(γ.I)
-
-        [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-        [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
-
-    end
-
-    if J != nothing
-        Jcontrol = u'*(Q⁻*u)
-        return  ỹ'* (Wⁱ * ỹ) + Jcontrol
-    end
-end
-
-""" 
-    function steady_inversion(u,Alu,d,γ.wet)
-    invert for a steady-state tracer distribution
-# Arguments
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `d`: model constraints
-- `wet`: BitArray ocean mask
-# Output
-- `c`: steady-state tracer distribution
-"""
-function steady_inversion(uvec::Vector{T},Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-    u = tracerinit(wet[:,:,1],T)
-    u[wet[:,:,1]] = uvec
-
-    c = tracerinit(wet,T)
-    n = tracerinit(wet,T)
+    # data misfit and gradient
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
     
-    # first-guess reconstruction of observations
-    Δd = d + control2state(u,wet)
-    c[wet] =  Alu\Δd[wet]
+    b += u # easy case where u and b are on the same boundary
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
 
-    return c
+    # observe at right spots
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
+
+    if guvec != nothing    
+        guvectmp = 2*(Q⁻*uvec)
+        gn = 2Wⁱ * n
+
+        gỹ = gn
+        
+        gc = gobserve(gỹ,c,locs)
+
+        gb = gsteadyinversion(gc, Alu, b, γ)
+        gu = gb 
+
+        for ii in 1:sum(gu.wet)
+            # force guvec to change?
+            guvec[ii] = gu.tracer[u.wet][ii]
+            guvec[ii] += guvectmp[ii]
+        end
+    end
+
+    if J != nothing
+        Jcontrol = uvec'*(Q⁻*uvec)
+        Jdata = n ⋅ (Wⁱ * n) # dot product
+        return Jdata + Jcontrol
+    end
 end
 
 """ 
-    function steady_inversion(Alu,d,γ.wet)
+    function steadyinversion(Alu,b;q=nothing,r=1.0)
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
-- `d`: model constraints
-- `wet`: BitArray ocean mask
-# Output
-- `c`: steady-state tracer distribution
-"""
-function steady_inversion(Alu,d::Array{T,3},wet::BitArray{3}) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
-
-    c = tracerinit(wet,T)
-    c[wet] =  Alu\d[wet]
-
-    return c
-end
-
-""" 
-    function steady_inversion(Alu,dsfc,qint,γ.wet)
-    invert for a steady-state tracer distribution
-# Arguments
-- `Alu`: LU decomposition of water-mass matrix
-- `dsfc`: surface boundary condition
+- `b`: boundary condition
+- `γ`::Grid
+# Optional Arguments
 - `q`: interior sources/sinks of phosphate
 - `r`: stochiometric ratio of tracer:phosphate
-- `wet`: BitArray ocean mask
 # Output
-- `c`: steady-state tracer distribution
+- `c`::Field, steady-state tracer distribution
 """
-function steady_inversion(Alu,dsfc::Array{T,2},q::Array{T,3},r::T,wet::BitArray{3}) where T <: Real
-    # a first guess: observed surface boundary conditions are perfect.
-    # set surface boundary condition to the observations.
-    # below surface = 0 % no internal sinks or sources.
+function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
-    # use qint to store "d"
-    d = tracerinit(wet,T)
-    d = -r * q
-    d[:,:,1] += dsfc
-        
-    c = tracerinit(wet,T)
-    c[wet] =  Alu\d[wet]
+    #println("running steady inversion")
 
+    # preallocate Field for equation constraints
+    d = zeros(γ)
+    
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    # define ldiv with fields
+    c = zeros(d.γ)
+    #c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
+    c = Alu \ d
+    
     return c
+end
+
+""" 
+    function steadyinversion(Alu,b;q=nothing,r=1.0)
+    invert for a steady-state tracer distribution
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `γ`::Grid
+# Optional Arguments
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
+# Output
+- `c`::Field, steady-state tracer distribution
+"""
+function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
+
+    #println("running adjoint steady inversion")
+
+    gd = Alu' \ gc
+
+    # still need to develop this
+    # and to find a way to return the value
+    if !isnothing(q)
+        gq = gsetsource!(gd,d,q,r)
+    end
+
+    gb = gsetboundarycondition(gd,b)
+    return gb
 end
 
 """
@@ -2491,30 +2972,20 @@ function grid2nc(TMIversion,γ)
 end
 
 """
-Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+     function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
+
+    Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+    Return a BoundaryCondition
 """
-function surfaceregion(TMIversion,region,γ)
+function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
 
     file = pkgdatadir("TMI_"*TMIversion*".nc")
-    T = eltype(γ.lon)
     tracername = "d_"*region
+
+    # Didn't use readfiled because dsfc is 2d.
     dsfc = ncread(file,tracername)
-    println("sumdsfc",sum(filter(!isnan,dsfc)))
-    println("maxdsfc",maximum(filter(!isnan,dsfc)))
-    # expand dsfc to cover 3D.
-    # will not use control2state, because the control
-    # make include non-surface regions in future.
-
-    # preallocate
-    d = Array{T}(undef,size(γ.wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    d[γ.wet] .= zero(T)
-    d[.!γ.wet] .= zero(T)/zero(T)
-    d[:,:,1] = dsfc
-    println(count(!isnan,d))
-    return d
+    b = BoundaryCondition(dsfc,3,1,γ.wet[:,:,1])
+    return b
 end
 
 #read surface layer
