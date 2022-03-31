@@ -36,7 +36,9 @@ export config, config_from_mat, config_from_nc,
     getsurfaceboundary, zerosurfaceboundary,
     onesurfaceboundary,
     setboundarycondition!, setsource!,
-    zeros, ones, maximum, minimum, (+), (-), (*), dot
+    zeros, ones, maximum, minimum, (+), (-), (*), dot,
+    Grid, Field, BoundaryCondition
+
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 import Base: zeros, ones, maximum, minimum, (\)
