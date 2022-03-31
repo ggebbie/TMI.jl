@@ -1927,7 +1927,8 @@ function steadyclimatology(u₀,fg!,iterations)
 end
 
 """
-function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
+    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid,iterations) where T <: Real
+
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -1941,21 +1942,20 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 # Arguments
 - `u₀`:
 - `Alu`:
-- `d₀`: first guess of boundary conditions and interior sources
+- `b`: first guess of boundary conditions and interior sources
 - `y`: observations on 3D grid
 - `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
 #function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
+function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid,iterations) where T <: Real
 
      fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
-
 
     return out    
 end
@@ -2054,9 +2054,9 @@ end
     function observe
     Take a observation at location given by weights wis
 """
-function observe(c::Field{T},wis,γ) where T <: Real
+function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},γ::Grid)::Vector{T} where T <: Real
 
-    # look at total weight, < 1 if there are land points
+        # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
@@ -2064,12 +2064,31 @@ function observe(c::Field{T},wis,γ) where T <: Real
     [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
 
     # sample the true field at these random locations
-    c_sample = Vector{Float64}(undef,length(wis))
+    y = Vector{Float64}(undef,length(wis))
     replace!(c.tracer,NaN=>0.0)
-    c_wrap = view(c.tracer,list,:,:)
-    [c_sample[i] = c_wrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    ywrap = view(c.tracer,list,:,:)
+    [y[i] = ywrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
-    return c_sample
+    return y
+end
+
+
+"""
+    function gobserve(gy::Vector{T},c::Field{T},wis,γ) where T <: Real
+
+    ADJOINT Take a observation at location given by weights wis
+    Arguments not symmetric with `observe` due to splat operator
+"""
+function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
+
+    #initialize gc this sneaky way
+    gc = 0.0 * c
+    for ii in eachindex(gy)
+        # interpweights repeats some calculations
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ)[c.γ.wet]
+    end
+
+    return gc
 end
 
 function location_obs(field, locs, γ)
@@ -2301,7 +2320,7 @@ function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W
 
     # control penalty and gradient
     Jcontrol = uvec'*(Q⁻*uvec)
-    gu = 2*(Q⁻*uvec)
+    guvec = 2*(Q⁻*uvec)
 
     # data misfit and gradient
     u = zerosurfaceboundary(γ)
@@ -2311,24 +2330,23 @@ function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W
     c = steadyinversion(Alu,b,γ)  # gives the misfit
 
     # observe at right spots
-    n = y - observe(c,wis,γ) 
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
     
     Jdata = n ⋅ (Wⁱ * n) # dot product
-
-    gy = -2Wⁱ * n
-    #preallocate in prep for next step
-    gd = zeros(T,sum(γ.wet))
-    for ii in eachindex(y)
-        # interpweights repeats some calculations
-        gd .+= gy[ii] * interpweights(locs[ii],γ)[γ.wet]
-    end
-
-    gb = gsteadyinversion(gd, Alu, b, γ)
-    gu .+= gb
-
-    guvec = gu.tracer[gu.wet]
-
     J = Jdata + Jcontrol
+
+    gn = 2Wⁱ * n
+
+    gỹ = gn
+    
+    gc = gobserve(gỹ,c,locs)
+
+    gb = gsteadyinversion(gc, Alu, b, γ)
+    gu = gb
+
+    guvec .+= gu.tracer[gu.wet]
+    
     return J, guvec
 end
 
@@ -2337,61 +2355,46 @@ end
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue: couldn't figure out how to nest with costfunction_obs!
-    Issue: why are wis and locs both needed?
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-- `u`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `dfld`: model constraints
-- `y`: pointwise observations
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wis`: weights for interpolation (data sampling, E)
-- `locs`: data locations (lon,lat,depth)
-- `Q⁻`: weights for control vector
-- `γ`: grid
+    Issue: why are wis and locs both needed? `gobserve` function
+
 """
-function costfunction!(J,gJ,u::Vector{T},Alu,dfld::Array{T,3},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
-    d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
+    # data misfit and gradient
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
 
-    if gJ != nothing
-        #gJ = 2*(Q⁻*u)
-    end
-    if J != nothing
+    # observe at right spots
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
 
-    end
+    if guvec != nothing    
+        guvectmp = 2*(Q⁻*uvec)
+        gn = 2Wⁱ * n
 
-    # use in-place functions: more performant
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores c̃
+        gỹ = gn
+        
+        gc = gobserve(gỹ,c,locs)
 
-    ỹ = field2obs(d,wis,γ)
-    ỹ .-= y # stores n, data-model misfit
+        gb = gsteadyinversion(gc, Alu, b, γ)
+        gu = gb 
 
-    if gJ != nothing    
-        gỹ = 2*(Wⁱ*ỹ)
-
-        gd = zeros(T,sum(γ.wet))
-        for ii in eachindex(y)
-            # interpweights repeats some calculations
-            gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+        for ii in 1:sum(gu.wet)
+            # force guvec to change?
+            guvec[ii] = gu.tracer[u.wet][ii]
+            guvec[ii] += guvectmp[ii]
         end
-        # do Eᵀ gỹ 
-        ldiv!(Alu',gd)
-        list = surfaceindex(γ.I)
-
-        [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-        [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
-
     end
 
     if J != nothing
-        Jcontrol = u'*(Q⁻*u)
-        return  ỹ'* (Wⁱ * ỹ) + Jcontrol
+        Jcontrol = uvec'*(Q⁻*uvec)
+        Jdata = n ⋅ (Wⁱ * n) # dot product
+        return Jdata + Jcontrol
     end
 end
-
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
@@ -2448,7 +2451,6 @@ function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.
     #println("running adjoint steady inversion")
 
     gd = Alu' \ gc
-    println("complete ldiv")
 
     # still need to develop this
     # and to find a way to return the value

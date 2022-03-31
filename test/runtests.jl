@@ -171,21 +171,21 @@ using TMI, Test
         # check with forward differences
         fg(x) = costfunction(x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
         f(x) = fg(x)[1]
+        J0 = f(u₀)
         J̃₀,gJ₀ = fg(u₀)
-        fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+        fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
 
         ϵ = 1e-3 # size of finite perturbation
         # Note: ϵ=1e-5 fails tests sometimes due to no finite difference at all
         # Problem with types or rounding or precision?
         
         ii = rand(1:sum(γ.wet[:,:,1]))
-        ii = 1804
         println("gradient check location=",ii)
         δu = copy(u₀); δu[ii] += ϵ
         ∇f_finite = (f(δu) - f(u₀))/ϵ
         println("∇f_finite=",∇f_finite)
 
-        fg!(J̃₀,gJ₀,(u₀+δu)./2) # J̃₀ is not overwritten
+        fg!(J̃₀,gJ₀,(u₀+δu)./4) # J̃₀ is not overwritten
         ∇f = gJ₀[ii]
         println("∇f=",∇f)
 
@@ -195,7 +195,7 @@ using TMI, Test
 
         iterations = 5
         # optimize the sparse data map with an Optim.jl method
-        out = sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
+        out = sparsedatamap(u₀,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
 
         # was cost function decreased?
         @test out.minimum < J̃₀
