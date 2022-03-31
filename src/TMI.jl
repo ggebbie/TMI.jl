@@ -1949,14 +1949,14 @@ function sparsedatamap(u₀,Alu,y,d₀,W⁻,γ)
 - `γ`: grid
 """
 #function sparsedatamap(u₀,fg!)
-function sparsedatamap(u₀,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ,iterations)
-    # ### added this
-     fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+function sparsedatamap(u₀,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
+
+     fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
-#    out = optimize(Optim.only_fg!(fg!), u₀, GradientDescent(),Optim.Options(show_trace=true, iterations = 5))
+
 
     return out    
 end
@@ -2189,7 +2189,6 @@ function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T
     y -= steadyinversion(Alu,b,γ)  # gives the misfit
     J = y ⋅ (Wⁱ * y) # dot product
 
-
     # adjoint equations
     gy = -2Wⁱ * y
     gu = gsteadyinversion( gy, Alu, b, γ)
@@ -2357,38 +2356,39 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction(u::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
-    list = surfaceindex(γ.I)
-    gJ = Vector{T}(undef,size(u))
-    [gJ[ii] = 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-    Jcontrol = u'*(Q⁻*u)
+    # control penalty and gradient
+    Jcontrol = uvec'*(Q⁻*uvec)
+    gu = 2*(Q⁻*uvec)
 
-    # use in-place functions: more performant
-    #d = dfld[γ.wet] # couldn't use view b.c. of problem with function below
-    control2state!(d,u,γ) # d stores Δd
-    ldiv!(Alu,d) # d stores c̃
+    # data misfit and gradient
+    u = zerosurfaceboundary(γ)
+    u.tracer[u.wet] = uvec
+    
+    b += u # easy case where u and b are on the same boundary
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
 
-    ỹ = field2obs(d,wis,γ)
-    ỹ .-= y # stores n, data-model misfit
+    # observe at right spots
+    n = y - observe(c,wis,γ) 
+    
+    Jdata = n ⋅ (Wⁱ * n) # dot product
 
-    gỹ = 2*(Wⁱ*ỹ)
-
-    #gd = Array{T,3}(undef,size(dfld))
-    #gd = Vector{T}(undef,sum(γ.wet))
+    gy = -2Wⁱ * n
+    #preallocate in prep for next step
     gd = zeros(T,sum(γ.wet))
     for ii in eachindex(y)
         # interpweights repeats some calculations
-        gd .+= gỹ[ii] * interpweights(locs[ii],γ)[γ.wet]
+        gd .+= gy[ii] * interpweights(locs[ii],γ)[γ.wet]
     end
-    # do Eᵀ gỹ 
-    ldiv!(Alu',gd)
-    list = surfaceindex(γ.I)
-    #[gJ[ii] = gd[list[ii]] + 2*(Q⁻*u[ii]) for ii in eachindex(list)]
-    [gJ[ii] += gd[list[ii]] for ii in eachindex(list)]
 
-    J = ỹ'* (Wⁱ * ỹ) + Jcontrol
-    return J, gJ
+    gb = gsteadyinversion(gd, Alu, b, γ)
+    gu .+= gb
+
+    guvec = gu.tracer[gu.wet]
+
+    J = Jdata + Jcontrol
+    return J, guvec
 end
 
 """ 

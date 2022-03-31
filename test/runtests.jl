@@ -158,30 +158,18 @@ using TMI, Test
     #########################################
     ## globalmap
     @testset "sparsedatamap" begin
-        # first guess of change to surface boundary conditions
-        # how many randomly sampled observations?
+
         N = 20
-
-        # ocean values are 0
-        u₀ = zeros(Float64,sum(γ.wet[:,:,1]))
-
-        # take synthetic, noisy observations
+        u = zerosurfaceboundary(γ)
+        u₀ = u.tracer[u.wet]
         y, W⁻, ctrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
+        b = mean(y) * onesurfaceboundary(γ)
+        σb = 5.0
+        Q⁻ = 1.0/(σb^2)
 
-        # does this help optimization stay stable?
-        #W⁻ *= 1.0/100.0
-            
-        # make a silly first guess for surface
-        d₀ = tracerinit(γ.wet)
-        [d₀[γ.I[ii]] = 15.0 for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-
-        # permit surface deviations on order of 5°C
-        Q⁻ = 1.0/(5.0^2)
-        #Q⁻ = 10.0
-        
         # gradient check
         # check with forward differences
-        fg(x) = costfunction(x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)
+        fg(x) = costfunction(x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
         f(x) = fg(x)[1]
         J̃₀,gJ₀ = fg(u₀)
         fg!(F,G,x) = costfunction!(F,G,x,Alu,d₀,y,W⁻,wis,locs,Q⁻,γ)

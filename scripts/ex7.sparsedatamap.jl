@@ -28,7 +28,7 @@ N = 20
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u = zerosurfaceboundary(γ)
+u = TMI.zerosurfaceboundary(γ)
 uvec = u.tracer[u.wet]
 
 # take synthetic, noisy observations
