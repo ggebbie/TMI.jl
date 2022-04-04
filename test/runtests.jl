@@ -68,7 +68,16 @@ using TMI, Test
         @test maximum(PO₄ᴿ) < 5
         @test minimum(PO₄ᴿ) ≥ 0
     end
-    
+
+    #######################################
+    ## example: mean age
+    @testset "meanage" begin
+
+        a = meanage(TMIversion,Alu,γ)
+        @test maximum(a) < 3000
+        @test minimum(a) ≥ 0
+    end
+
     ########################################
     ## example: howoceansfilled
     @testset "howoceansfilled" begin

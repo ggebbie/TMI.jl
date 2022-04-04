@@ -23,8 +23,9 @@ export config, config_from_mat, config_from_nc,
     cartesianindex, Γ,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
-    trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, synthetic_observations, observe,
+    trackpathways, regeneratedphosphate, meanage,
+    volumefilled, surfaceorigin, synthetic_observations,
+    observe,
     steadyclimatology, steadyinversion,
     interpweights, interpindex,
     wetlocation, iswet,
@@ -162,13 +163,16 @@ function config_from_nc(TMIversion)
 
     end 
     
+    # get properties of grid
+    lon,lat,depth = gridprops(TMIfile)
+
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
 
     # make a mask
-    wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
-    #wet = BitArray{3}(undef,maximum(I)[1],maximum(I)[2],maximum(I)[3])
-    #fill!(wet,0)
+    # first choice: smaller but inconsistent with input grid
+    #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
+    wet = falses(length(lon),length(lat),length(depth))
     wet[I] .= 1
 
     R = linearindex(wet)
@@ -180,8 +184,6 @@ function config_from_nc(TMIversion)
     println("Alu")
     @time Alu = lu(A)
     
-    # get properties of grid
-    lat,lon,depth = gridprops(TMIfile)
     γ = Grid(lon,lat,depth,I,R,wet)
 
     # would be good to make this optional
@@ -280,7 +282,7 @@ function cartesianindex(file::String)
         haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
         haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
-        I = CartesianIndex.(it,jt,kt) # should this be reversed?
+        I = CartesianIndex.(it,jt,kt) 
     end
     return I
 end
@@ -326,8 +328,8 @@ end
 function gridprops(file)
     if file[end-1:end] == "nc"
         
-        lat = convert(Vector{Float64},ncread(file,"lat"))
         lon = convert(Vector{Float64},ncread(file,"lon"))
+        lat = convert(Vector{Float64},ncread(file,"lat"))
         depth = convert(Vector{Float64},ncread(file,"depth"))
 
     elseif file[end-2:end] == "mat"
@@ -340,7 +342,7 @@ function gridprops(file)
 
     end
     
-    return lat,lon,depth
+    return lon,lat,depth
 end
 
 """
@@ -824,6 +826,11 @@ end
 """
 function section(c::Field{T},lon)::Array{T,2} where T <: Real
 
+    # handle longitudinal ambiguities
+    if lon < minimum(c.γ.lon)
+        lon += 360
+    end
+    
     isec = findall(==(lon),c.γ.lon)
 
     # use view so that a new array is not allocated
@@ -1740,6 +1747,44 @@ function regeneratedphosphate(TMIversion,Alu,γ)
     PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
 
     return PO₄ᴿ
+end
+
+""" 
+    function meanage(TMIversion,Alu,γ)
+    Mean or ideal age
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `γ`: TMI grid
+# Output
+- `a`: mean age [yr]
+"""
+function meanage(TMIversion,Alu,γ)
+
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    if TMIfile[end-1:end] == "nc"
+
+        #F = ncread(file,"F")
+        ## read age source
+        F₀ = readfield(TMIfile,"F₀",γ)
+        qPO₄ = readfield(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+
+        # better to define a Source type
+        Iq = findall(x -> x > 0,qPO₄.tracer)
+
+        qa = zeros(γ)
+        qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
+        # zero boundary condition
+        b₀ = zerosurfaceboundary(γ)
+        a = steadyinversion(Alu,b₀,γ,q=qa)
+
+    else
+        
+        error("not implemented for mat input file")
+    end
+        
+    return a
 end
 
 """ 
