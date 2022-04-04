@@ -23,8 +23,9 @@ export config, config_from_mat, config_from_nc,
     cartesianindex, Γ,
     costfunction_obs, costfunction_obs!,
     costfunction, costfunction!,
-    trackpathways, regeneratedphosphate, volumefilled,
-    surfaceorigin, synthetic_observations, observe,
+    trackpathways, regeneratedphosphate, meanage,
+    volumefilled, surfaceorigin, synthetic_observations,
+    observe,
     steadyclimatology, steadyinversion,
     interpweights, interpindex,
     wetlocation, iswet,
@@ -825,6 +826,11 @@ end
 """
 function section(c::Field{T},lon)::Array{T,2} where T <: Real
 
+    # handle longitudinal ambiguities
+    if lon < minimum(c.γ.lon)
+        lon += 360
+    end
+    
     isec = findall(==(lon),c.γ.lon)
 
     # use view so that a new array is not allocated
