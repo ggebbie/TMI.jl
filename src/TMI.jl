@@ -281,7 +281,7 @@ function cartesianindex(file::String)
         haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
         haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
-        I = CartesianIndex.(it,jt,kt) # should this be reversed?
+        I = CartesianIndex.(it,jt,kt) 
     end
     return I
 end
@@ -1764,16 +1764,11 @@ function meanage(TMIversion,Alu,γ)
         F₀ = readfield(TMIfile,"F₀",γ)
         qPO₄ = readfield(TMIfile,"qPO₄",γ) # use this to define mixed-layer
 
-        I = cartesianindex(TMIfile)
+        # better to define a Source type
+        Iq = findall(x -> x > 0,qPO₄.tracer)
 
-        # make a mask
-        # problem: input grid may have more depths
-        wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
-    wet[I] .= 1
-
-        
-        
-        qa = 1 ./F₀
+        qa = zeros(γ)
+        qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
         # zero boundary condition
         b₀ = zerosurfaceboundary(γ)
         a = steadyinversion(Alu,b₀,γ,q=qa)
