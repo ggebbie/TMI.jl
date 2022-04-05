@@ -21,16 +21,19 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u = zerosurfaceboundary(γ)
-uvec = u.tracer[u.wet]
-    
+#u = zerosurfaceboundary(γ)
+#uvec = u.tracer[u.wet]
+u = (;surface = zerosurfaceboundary(γ))
+uvec = vec(u)
+   
 # take synthetic, noisy observations
 y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
-b = getsurfaceboundary(y)
+#b = getsurfaceboundary(y)
+b = (;surface = getsurfaceboundary(y))
 
 # get sample J value
 F,G = costfunction_obs(uvec,Alu,b,y,W⁻,γ)
