@@ -179,52 +179,50 @@ using TMI, Test
         using Statistics, Interpolations
         
         N = 20
-        u = zerosurfaceboundary(γ)
-        u₀ = u.tracer[u.wet]
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
-        b = mean(y) * onesurfaceboundary(γ)
-        σb = 5.0
-        Q⁻ = 1.0/(σb^2)
 
-        # gradient check
-        # check with forward differences
-        fg(x) = costfunction(x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
-        f(x) = fg(x)[1]
-        J0 = f(u₀)
-        J̃₀,gJ₀ = fg(u₀)
-        fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
+        for ii = 1:2
+            if ii == 1
+                println("NamedTuple type")
+                u = (;surface = zerosurfaceboundary(γ))
+                b = (;surface = mean(y) * onesurfaceboundary(γ))
+            else
+                println("BoundaryCondition type")
+                u = zerosurfaceboundary(γ)
+                b = mean(y) * onesurfaceboundary(γ)
+            end
+            uvec = vec(u)
+            σb = 5.0
+            Q⁻ = 1.0/(σb^2)
+            fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+            f(x) = fg(x)[1]
+            J0 = f(uvec)
+            J̃₀,gJ₀ = fg(uvec)
+            fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
-        ϵ = 1e-3 # size of finite perturbation
-        # Note: ϵ=1e-5 fails tests sometimes due to no finite difference at all
-        # Problem with types or rounding or precision?
-        
-        #ii = rand(1:sum(γ.wet[:,:,1]))
-        ii = 1000
-        println("gradient check location=",ii)
-        δu = copy(u₀); δu[ii] += ϵ
-        ∇f_finite = (f(δu) - f(u₀))/ϵ
-        println("∇f_finite=",∇f_finite)
+            ϵ = 1e-3 # size of finite perturbation
+            ii = rand(1:sum(γ.wet[:,:,1]))
+            println("gradient check location=",ii)
+            δu = copy(uvec); δu[ii] += ϵ
+            ∇f_finite = (f(δu) - f(uvec))/ϵ
+            println("∇f_finite=",∇f_finite)
 
-        fg!(J̃₀,gJ₀,(u₀+δu)./4) # J̃₀ is not overwritten
-        ∇f = gJ₀[ii]
-        println("∇f=",∇f)
+            fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+            ∇f = gJ₀[ii]
+            println("∇f=",∇f)
 
-        # error less than 10 percent?
-        println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-
-        iterations = 5
-        # optimize the sparse data map with an Optim.jl method
-        out = sparsedatamap(u₀,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
-
-        # was cost function decreased?
-        @test out.minimum < J̃₀
-
-        # reconstruct by hand to double-check.
-        ũ = out.minimizer
-        J̃,gJ̃ = fg(ũ)
-        @test J̃ < J̃₀
-
+            # error less than 10 percent?
+            println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+            @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+            iterations = 5
+            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+            # was cost function decreased?
+            @test out.minimum < J̃₀
+            # reconstruct by hand to double-check.
+            ũ = out.minimizer
+            J̃,gJ̃ = fg(ũ)
+            @test J̃ < J̃₀
+        end
     end
 
     @testset "transientsimulation" begin
