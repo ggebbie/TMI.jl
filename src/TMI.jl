@@ -2398,14 +2398,13 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_gridded_obs(uvec,Alu,b::BoundaryCondition{T},utemplate::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
+function costfunction_gridded_obs(uvec,Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(utemplate,uvec)
+    u = unvec(u₀,uvec)
 
-    bnew = adjustboundarycondition(b,u) #b += u # easy case where u and b are on the same boundary
-    println("max b ",maximum(b))
-    n = steadyinversion(Alu,bnew,γ) - y  # gives the misfit
+    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
+    n = steadyinversion(Alu,b,γ) - y  # gives the misfit
     J = n ⋅ (Wⁱ * n) # dot product
 
     # adjoint equations
@@ -2417,14 +2416,14 @@ function costfunction_gridded_obs(uvec,Alu,b::BoundaryCondition{T},utemplate::Bo
     return J, guvec
 end
 
-function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},utemplate::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     # turn uvec into a boundary condition
-    u = unvec(utemplate,uvec)
+    u = unvec(u₀,uvec)
 
-    bnew = adjustboundarycondition(b,u) #b += u # easy c
+    b = adjustboundarycondition(b₀,u) #b += u # easy c
     #adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,bnew,γ)  # gives the misfit
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
 
     if guvec != nothing
         # adjoint equations
@@ -2448,10 +2447,10 @@ end
 """
     function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_obs(uvec,Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},utemplate::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_obs(uvec,Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(utemplate,uvec)
+    u = unvec(u₀,uvec)
 
     b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
     y -= steadyinversion(Alu,b,γ)  # gives the misfit
