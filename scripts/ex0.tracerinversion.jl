@@ -25,7 +25,10 @@ yPO₄ = readfield(TMIfile,"PO₄",γ)
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
-bPO₄ = getsurfaceboundary(yPO₄)
+
+# choice: BoundaryCondition or NamedTuple(BoundaryCondition)
+#bPO₄ = getsurfaceboundary(yPO₄)
+bPO₄ = (;surface = getsurfaceboundary(yPO₄))
 
 ## preformed phosphate
 PO₄pre = steadyinversion(Alu,bPO₄,γ)
@@ -33,8 +36,9 @@ PO₄pre = steadyinversion(Alu,bPO₄,γ)
 ## read phosphate source
 qPO₄ = readfield(TMIfile,"qPO₄",γ)
 
-# zero boundary condition
-b₀ = zerosurfaceboundary(γ)
+# zero boundary condition, choose one line of next two
+#b₀ = zerosurfaceboundary(γ)
+b₀ = (;surface = zerosurfaceboundary(γ))
 PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
 PO₄total = PO₄ᴿ + PO₄pre
 
