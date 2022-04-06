@@ -2682,9 +2682,9 @@ function wetlocation(γ)
     confirmwet = false
     neighbors  = 8
     while !confirmwet
-        loc = (rand(0.0:0.1:360.0),
-               rand(-90.0:0.1:90.0),
-               rand(0.0:1.0:5750.0))
+        loc = (rand(minimum(γ.lon):0.1:maximum(γ.lon)),
+               rand(minimum(γ.lat):0.1:maximum(γ.lat)),
+               rand(minimum(γ.depth):1.0:maximum(γ.depth)))
 
         iswet(loc,γ) && return loc
         println("dry point, try again")
