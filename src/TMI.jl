@@ -1511,6 +1511,26 @@ function unvec!(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector
 end
 
 """
+    function unvec(utemplate,uvec)
+
+    Undo the operations by vec(u)
+    Needs to update u because attributes of 
+    u need to be known at runtime.
+"""
+function unvec(utemplate::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
+
+    counter = 0
+    vals = Vector{BoundaryCondition}(undef,N)
+    for (ii,vv) in enumerate(utemplate)
+        n = sum(vv.wet)
+        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
+        counter += n
+    end
+    u = (;zip(keys(utemplate), vals)...)
+    return u
+end
+
+"""
     function unvec!(u,uvec)
 
     Undo the operations by vec(u)
@@ -1593,6 +1613,21 @@ function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryConditi
         b[ukey].tracer[b[ukey].wet] += u[ukey].tracer[b[ukey].wet] 
     end
     
+end
+
+"""
+    function adjustboundarycondition(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where N1, N2, T <: Real
+
+    adjust all boundary conditions b that are described in u
+"""
+function adjustboundarycondition(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+
+    bnew = deepcopy(b)
+    ukeys = keys(u)
+    for ukey in keys(u)
+        bnew[ukey].tracer[bnew[ukey].wet] += u[ukey].tracer[bnew[ukey].wet] 
+    end
+    return bnew
 end
 
 """
@@ -2417,12 +2452,12 @@ end
 """
     function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_obs(uvec,Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},utemplate::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(u,uvec)
+    u = unvec(utemplate,uvec)
 
-    adjustboundarycondition!(b,u) #b += u # easy case where u and b are on the same boundary
+    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
     y -= steadyinversion(Alu,b,γ)  # gives the misfit
     J = y ⋅ (Wⁱ * y) # dot product
 
@@ -2435,12 +2470,12 @@ function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,Bounda
     return J, guvec
 end
 
-function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(u,uvec)
+    u = unvec(u₀,uvec)
     
-    adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
+    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
     y -= steadyinversion(Alu,b,γ)  # gives the misfit
 
     if guvec != nothing
