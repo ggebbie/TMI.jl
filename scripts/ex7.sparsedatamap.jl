@@ -28,30 +28,50 @@ N = 20
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-u = zerosurfaceboundary(γ)
-uvec = u.tracer[u.wet]
+#u = zerosurfaceboundary(γ)
+u = (;surface = zerosurfaceboundary(γ))
+uvec = vec(u)
 
 # take synthetic, noisy observations
 y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
-b = mean(y) * onesurfaceboundary(γ)
+#b = mean(y) * onesurfaceboundary(γ)
+b = (;surface = mean(y) * onesurfaceboundary(γ))
 
 # assume temperature known ± 5°C
 σb = 5.0
 Q⁻ = 1.0/(σb^2)
 
-iterations = 25
+## gradient checks
+# check with forward differences
+fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+f(x) = fg(x)[1]
+J0 = f(uvec)
+J̃₀,gJ₀ = fg(uvec)
+fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+
+ϵ = 1e-3 # size of finite perturbation
+ii = rand(1:sum(γ.wet[:,:,1]))
+println("gradient check location=",ii)
+δu = copy(uvec); δu[ii] += ϵ
+∇f_finite = (f(δu) - f(uvec))/ϵ
+println("∇f_finite=",∇f_finite)
+
+fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+∇f = gJ₀[ii]
+println("∇f=",∇f)
+
+# error less than 10 percent?
+println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 
 # optimize the sparse data map with an Optim.jl method
-out = sparsedatamap(uvec,Alu,b,y,W⁻,wis,locs,Q⁻,γ,iterations)
+iterations = 10
+out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
 
 # reconstruct by hand to double-check.
-ũ = zerosurfaceboundary(γ)
-ũ.tracer[u.wet] = out.minimizer
-
-# apply to the boundary conditions
-b̃ = b + ũ
+ũ = unvec(u,out.minimizer)
+b̃ = adjustboundarycondition(b,ũ)
 
 # reconstruct tracer map
 c₀ = steadyinversion(Alu,b,γ)

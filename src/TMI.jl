@@ -22,7 +22,7 @@ export config, config_from_mat, config_from_nc,
     readtracer, readfield,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
-    costfunction, costfunction!,
+    costfunction_point_obs, costfunction_point_obs!,
     trackpathways, regeneratedphosphate, meanage,
     volumefilled, surfaceorigin, synthetic_observations,
     observe,
@@ -2184,7 +2184,7 @@ function steadyclimatology(u₀,fg!,iterations)
 end
 
 """
-    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid;iterations=10) where T <: Real
+    function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},u::BoundaryCondition{T},y::Vector{T},W⁻,wis,locs,Q⁻,γ::Grid;iterations=10) where T <: Real
 
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
@@ -2205,9 +2205,9 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where T <: Real
+function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
-     fg!(F,G,x) = costfunction!(F,G,x,Alu,b,y,W⁻,wis,locs,Q⁻,γ)
+     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -2489,59 +2489,12 @@ function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{
     end
 end
 
-
-# """
-# function costfunction_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-#     squared model-data misfit for pointwise data
-#     controls are a vector input for Optim.jl
-#     Issue: couldn't figure out how to nest with costfunction_obs!
-#     Issue: why are wis and locs both needed? `gobserve` function
-# """
-# function costfunction_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-#     # data misfit and gradient
-
-#     unvec!(u,uvec) # need to know which controls are present
-
-#     adjustboundarycondition!(b,u) # map u -> b
-#     c = steadyinversion(Alu,b,γ)  # gives the misfit
-
-#     # observe at right spots
-#     ỹ = observe(c,wis,γ)
-#     n = ỹ - y
-
-#     Jcontrol = uvec'*(Q⁻*uvec)
-#     Jdata = n ⋅ (Wⁱ * n) # dot product
-#     J = Jdata + Jcontrol
-
-#     guvectmp = 2*(Q⁻*uvec)
-#     gn = 2Wⁱ * n
-#     gỹ = gn
-
-#     gc = TMI.gobserve(gỹ,c,locs)
-#     gb = gsteadyinversion(gc, Alu, b, γ)
-
-#     # gadjust_boundary_condition!
-#     #gu = gb
-
-#     # for ii in 1:sum(gu.wet)
-#     #     # force guvec to change?
-#     #     guvec[ii] = gu.tracer[u.wet][ii]
-#     #     guvec[ii] += guvectmp[ii]
-#     # end
-#     #end
-#     guvec = []
-#     return J, guvec
-
-# end
-
 """ 
-    function costfunction(J,gJ,uvec,Alu,b,y,Wⁱ,wis,Q⁻,γ)
+    function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
     Issue #1: couldn't figure out how to nest with costfunction_obs!
-    Issue #2: Update for BoundaryCondition types
     
 # Arguments
 - `uvec`: controls, vector format
@@ -2557,17 +2510,15 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
 
     # control penalty and gradient
     Jcontrol = uvec'*(Q⁻*uvec)
     guvec = 2*(Q⁻*uvec)
 
-    # data misfit and gradient
-    u = zerosurfaceboundary(γ)
-    u.tracer[u.wet] = uvec
-    
-    b += u # easy case where u and b are on the same boundary
+    u = unvec(u₀,uvec)
+    b = adjustboundarycondition(b₀,u) # combine b₀, u
+
     c = steadyinversion(Alu,b,γ)  # gives the misfit
 
     # observe at right spots
@@ -2578,64 +2529,216 @@ function costfunction(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},W
     J = Jdata + Jcontrol
 
     gn = 2Wⁱ * n
-
     gỹ = gn
     
     gc = gobserve(gỹ,c,locs)
-
     gb = gsteadyinversion(gc, Alu, b, γ)
-    gu = gb
-
-    guvec .+= gu.tracer[gu.wet]
+    gu = gadjustboundarycondition(gb,u)
+    guvec += vec(gu)
     
     return J, guvec
 end
 
 """ 
-    function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+    function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+
     squared model-data misfit for pointwise data
     controls are a vector input for Optim.jl
-    Issue: couldn't figure out how to nest with costfunction_obs!
-    Issue: why are wis and locs both needed? `gobserve` function
-
-"""
-function costfunction!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
-
-    # data misfit and gradient
-    u = zerosurfaceboundary(γ)
-    u.tracer[u.wet] = uvec
+    Issue #1: couldn't figure out how to nest with costfunction_obs!
     
-    b += u # easy case where u and b are on the same boundary
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `guvec`: derivative of cost function wrt to controls
+- `uvec`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `Q⁻`: weights for control vector
+- `γ`: grid
+"""
+function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+
+    u = unvec(u₀,uvec)
+    b = adjustboundarycondition(b₀,u) # combine b₀, u
     c = steadyinversion(Alu,b,γ)  # gives the misfit
 
     # observe at right spots
     ỹ = observe(c,wis,γ)
     n = ỹ - y
 
-    if guvec != nothing    
-        guvectmp = 2*(Q⁻*uvec)
+    if guvec != nothing
+        # adjoint equations
+        gtmp = 2*(Q⁻*uvec)
         gn = 2Wⁱ * n
-
         gỹ = gn
-        
         gc = gobserve(gỹ,c,locs)
-
         gb = gsteadyinversion(gc, Alu, b, γ)
-        gu = gb 
-
-        for ii in 1:sum(gu.wet)
-            # force guvec to change?
-            guvec[ii] = gu.tracer[u.wet][ii]
-            guvec[ii] += guvectmp[ii]
+        gu = gadjustboundarycondition(gb,u)
+        gtmp += vec(gu)
+        for (ii,vv) in enumerate(gtmp)
+            guvec[ii] = vv
         end
     end
 
-    if J != nothing
+    if J !=nothing
+        # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
         return Jdata + Jcontrol
     end
 end
+
+""" 
+    function costfunction_point_obs(uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    
+# Arguments
+- `uvec`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `Q⁻`: weights for control vector
+- `γ`: grid
+# Output
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+"""
+function costfunction_point_obs(uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+
+    # control penalty and gradient
+    Jcontrol = uvec'*(Q⁻*uvec)
+    guvec = 2*(Q⁻*uvec)
+
+    u = unvec(u₀,uvec)
+    b = adjustboundarycondition(b₀,u) # combine b₀, u
+
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
+
+    # observe at right spots
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
+    
+    Jdata = n ⋅ (Wⁱ * n) # dot product
+    J = Jdata + Jcontrol
+
+    gn = 2Wⁱ * n
+    gỹ = gn
+    
+    gc = gobserve(gỹ,c,locs)
+    gb = gsteadyinversion(gc, Alu, b, γ)
+    gu = gadjustboundarycondition(gb,u)
+    guvec += vec(gu)
+    
+    return J, guvec
+end
+
+""" 
+    function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+
+    squared model-data misfit for pointwise data
+    controls are a vector input for Optim.jl
+    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    
+# Arguments
+- `J`: cost function of sum of squared misfits
+- `guvec`: derivative of cost function wrt to controls
+- `uvec`: controls, vector format
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: boundary condition
+- `y`: pointwise observations
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `wis`: weights for interpolation (data sampling, E)
+- `locs`: data locations (lon,lat,depth)
+- `Q⁻`: weights for control vector
+- `γ`: grid
+"""
+function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+
+    u = unvec(u₀,uvec)
+    b = adjustboundarycondition(b₀,u) # combine b₀, u
+    c = steadyinversion(Alu,b,γ)  # gives the misfit
+
+    # observe at right spots
+    ỹ = observe(c,wis,γ)
+    n = ỹ - y
+
+    if guvec != nothing
+        # adjoint equations
+        gtmp = 2*(Q⁻*uvec)
+        gn = 2Wⁱ * n
+        gỹ = gn
+        gc = gobserve(gỹ,c,locs)
+        gb = gsteadyinversion(gc, Alu, b, γ)
+        gu = gadjustboundarycondition(gb,u)
+        gtmp += vec(gu)
+        for (ii,vv) in enumerate(gtmp)
+            guvec[ii] = vv
+        end
+    end
+
+    if J !=nothing
+        Jcontrol = uvec'*(Q⁻*uvec)
+        Jdata = n ⋅ (Wⁱ * n) # dot product
+        return Jdata + Jcontrol
+    end
+
+    return J, guvec
+end
+
+# """ 
+#     function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
+#     squared model-data misfit for pointwise data
+#     controls are a vector input for Optim.jl
+#     Issue: couldn't figure out how to nest with costfunction_obs!
+#     Issue: why are wis and locs both needed? `gobserve` function
+
+# """
+# function costfunction!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+
+#     # data misfit and gradient
+#     u = zerosurfaceboundary(γ)
+#     u.tracer[u.wet] = uvec
+    
+#     b += u # easy case where u and b are on the same boundary
+#     c = steadyinversion(Alu,b,γ)  # gives the misfit
+
+#     # observe at right spots
+#     ỹ = observe(c,wis,γ)
+#     n = ỹ - y
+
+#     if guvec != nothing    
+#         guvectmp = 2*(Q⁻*uvec)
+#         gn = 2Wⁱ * n
+
+#         gỹ = gn
+        
+#         gc = gobserve(gỹ,c,locs)
+
+#         gb = gsteadyinversion(gc, Alu, b, γ)
+#         gu = gb 
+
+#         for ii in 1:sum(gu.wet)
+#             # force guvec to change?
+#             guvec[ii] = gu.tracer[u.wet][ii]
+#             guvec[ii] += guvectmp[ii]
+#         end
+#     end
+
+#     if J != nothing
+#         Jcontrol = uvec'*(Q⁻*uvec)
+#         Jdata = n ⋅ (Wⁱ * n) # dot product
+#         return Jdata + Jcontrol
+#     end
+# end
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
