@@ -21,7 +21,7 @@ export config, config_from_mat, config_from_nc,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield,
     cartesianindex, Γ,
-    costfunction_obs, costfunction_obs!,
+    costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction, costfunction!,
     trackpathways, regeneratedphosphate, meanage,
     volumefilled, surfaceorigin, synthetic_observations,
@@ -35,11 +35,11 @@ export config, config_from_mat, config_from_nc,
     matrix_zyx2xyz, varying!, readopt, ces_ncwrite,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
-    onesurfaceboundary,
-    setboundarycondition!, adjustboundarycondition!,
-    setsource!,
+    onesurfaceboundary, setboundarycondition!,
+    adjustboundarycondition, adjustboundarycondition!,
+    gsetboundarycondition, setsource!,
     zeros, ones, maximum, minimum, (+), (-), (*), dot,
-    Grid, Field, BoundaryCondition, vec, unvec!
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
     #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
@@ -1404,7 +1404,7 @@ end
 - `b`::BoundaryCondition
 """
 function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
-    gb = zerosurfaceboundary(gd.γ)
+    gb = 0.0 * b # initialize to zero
     if b.dim == 1
         gb.tracer = gd.tracer[b.dimval,:,:]
     elseif b.dim == 2
@@ -1426,6 +1426,27 @@ function setboundarycondition!(d::Field{T},b::NamedTuple{<:Any, NTuple{N,Boundar
     for b1 in b
         setboundarycondition!(d,b1)
     end
+end
+
+""" 
+    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    ADJOINT: apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function gsetboundarycondition(gd::Field{T},b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}}) where {N, T<: Real}
+
+    gb1 = Vector{BoundaryCondition{T}}(undef,length(keys(b)))
+    for (ii,vv) in enumerate(b)
+        gb1[ii] = gsetboundarycondition(gd,vv)
+    end
+
+    # https://discourse.julialang.org/t/construct-namedtuple-dynamically/15394/7
+    gb = (;zip(keys(b), gb1)...)
+                                       
+    return gb
 end
 
 """ 
@@ -1498,16 +1519,53 @@ end
 """
 function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
 
-    u.tracer[u.wet] = uvec
+    I = findall(u.wet)
+    counter = 0
+    for i in I
+        counter +=1
+    # doesn't work to pass u back
+        #u.tracer[u.wet] = uvec
+        u.tracer[i] = uvec[counter]
+    end
+    
+end
+
+"""
+    function unvec(u,uvec)
+
+    Replace u with new u
+    Undo the operations by vec(u)
+    Needs to update u because attributes of 
+    u need to be known at runtime.
+"""
+function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
+
+    tracer = zeros(utemplate.wet)
+    tracer[utemplate.wet] = uvec
+    u = BoundaryCondition(tracer,utemplate.dim,utemplate.dimval,utemplate.wet)
+    return u
 end
 
 """
     function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
 
     adjust the (one) boundary condition 
+    problem: passes back a mutated b
 """
 function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    b.tracer[b.wet] .+= u.tracer[u.wet] # write it out so b changes when returned
+    b.tracer[b.wet] += u.tracer[u.wet] # write it out so b changes when returned
+end
+
+"""
+    function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+
+    adjust the (one) boundary condition 
+"""
+function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+
+    bnew = b + u
+    return bnew
+    #u.tracer[b.wet] += u.tracer[u.wet] # write it out so b changes when returned
 end
 
 """
@@ -1545,7 +1603,7 @@ end
     Just copy the variable.
     Keep this function so that calling functions can look alike.
 """
-function gadjustboundarycondition(gb::::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
 end
@@ -2291,7 +2349,7 @@ function location_obs(field, locs, γ)
 end
 
 """ 
-    function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+    function costfunction_gridded_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -2305,80 +2363,102 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
+function costfunction_gridded_obs(uvec,Alu,b::BoundaryCondition{T},utemplate::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
 
+    println("uvec b4",maximum(uvec))
+    println("u b4",maximum(utemplate))
     # turn uvec into a boundary condition
-    u = zerosurfaceboundary(γ)
-    unvec!(u,uvec)
+    u = unvec(utemplate,uvec)
+    println("uvec after",maximum(uvec))
+    println("u after",maximum(u))
 
-    adjustboundarycondition!(b,u) #b += u # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
-    J = y ⋅ (Wⁱ * y) # dot product
+    bnew = adjustboundarycondition(b,u) #b += u # easy case where u and b are on the same boundary
+    println("max b ",maximum(b))
+    n = steadyinversion(Alu,bnew,γ) - y  # gives the misfit
+    J = n ⋅ (Wⁱ * n) # dot product
 
     # adjoint equations
-    gy = -2Wⁱ * y
+    gy = -2Wⁱ * n
     gb = gsteadyinversion( gy, Alu, b, γ)
     gu = gadjustboundarycondition(gb,u)
     guvec = vec(gu)
 
     return J, guvec
 end
-    
-#function costfunction_obs(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
-function costfunction_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},utemplate::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     # turn uvec into a boundary condition
-    u = zerosurfaceboundary(γ)
-    unvec!(u,uvec)
+    u = unvec(utemplate,uvec)
 
-    adjustboundarycondition!(b,u) #b += u # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
-    J = y ⋅ (Wⁱ * y) # dot product
-
-    # adjoint equations
-    gy = -2Wⁱ * y
-    gb = gsteadyinversion( gy, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
-    guvec = vec(gu)
-
-    return J, guvec
-end
-    
-""" 
-    function costfunction_obs!(J,gJ,u::BoundaryCondition{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}}) where T <: Real
-
-    squared model-data misfit for gridded data
-    controls are a vector input for Optim.jl
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-- `u`: controls, field format
-- `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary conditions
-- `y`: observations on grid
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `γ`: grid
-"""
-function costfunction_obs!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
-
-    # turn uvec into a boundary condition
-    u = zerosurfaceboundary(γ)
-    u.tracer[u.wet] = uvec
-    
-    b += u # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+    bnew = adjustboundarycondition(b,u) #b += u # easy c
+    #adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,bnew,γ)  # gives the misfit
 
     if guvec != nothing
+        # adjoint equations
         gy = -2Wⁱ * y
-        gu = gsteadyinversion( gy, Alu, b, γ)
-        #gu = gb
-        guvec .= gu.tracer[gu.wet]
+        gb = gsteadyinversion( gy, Alu, b, γ)
+        gu = gadjustboundarycondition(gb,u)
+        #guvec = vec(gu)
+
+        # next block just to modify the contents
+        tmp = vec(gu)
+        for (ii,vv) in enumerate(tmp)
+            guvec[ii] = vv
+        end
     end
     
     if J !=nothing
         return  y ⋅ (Wⁱ * y) # dot product
     end
 end
+
+"""
+    function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+"""
+function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+
+    # turn uvec into a boundary condition
+    u = unvec(u,uvec)
+
+    adjustboundarycondition!(b,u) #b += u # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+    J = y ⋅ (Wⁱ * y) # dot product
+
+    # adjoint equations
+    gy = -2Wⁱ * y
+    gb = gsteadyinversion( gy, Alu, b, γ)
+    gu = gadjustboundarycondition(gb,u)
+    guvec = vec(gu)
+
+    return J, guvec
+end
+
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+
+    # turn uvec into a boundary condition
+    u = unvec(u,uvec)
+    
+    adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
+    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+
+    if guvec != nothing
+        # adjoint equations
+        gy = -2Wⁱ * y
+        gb = gsteadyinversion( gy, Alu, b, γ)
+        gu = gadjustboundarycondition(gb,u)
+        tmp = vec(gu)
+        for (ii,vv) in enumerate(tmp)
+            guvec[ii] = vv
+        end
+    end
+    
+    if J !=nothing
+        return  y ⋅ (Wⁱ * y) # dot product
+    end
+end
+
 
 # """
 # function costfunction_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
@@ -2564,6 +2644,42 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
     return c
 end
 
+""" 
+    function gsteadyinversion(Alu,b;q=nothing,r=1.0)
+
+    ADJOINT invert for a steady-state tracer distribution
+
+# Arguments
+- `Alu`: LU decomposition of water-mass matrix
+- `b`: BoundaryCondition
+- `γ`::Grid
+# Optional Arguments
+- `q`: interior sources/sinks of phosphate
+- `r`: stochiometric ratio of tracer:phosphate
+# Output
+- `c`::Field, steady-state tracer distribution
+"""
+function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
+
+    #println("running adjoint steady inversion")
+
+    gd = Alu' \ gc
+
+    # still need to develop this
+    # and to find a way to return the value
+    if !isnothing(q)
+        gq = gsetsource!(gd,d,q,r)
+    end
+
+    gb = gsetboundarycondition(gd,b)
+    return gb
+end
+
+"""
+    function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+
+    steady inversion for b::NamedTuple
+"""
 function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     # preallocate Field for equation constraints
@@ -2586,23 +2702,16 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
     return c
 end
 
-""" 
-    function steadyinversion(Alu,b;q=nothing,r=1.0)
-    invert for a steady-state tracer distribution
-# Arguments
-- `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary condition
-- `γ`::Grid
-# Optional Arguments
-- `q`: interior sources/sinks of phosphate
-- `r`: stochiometric ratio of tracer:phosphate
-# Output
-- `c`::Field, steady-state tracer distribution
 """
-function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
+    function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+
+    ADDJOINT steady inversion for b::NamedTuple
+"""
+function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0) where {N, T <: Real}
 
     #println("running adjoint steady inversion")
 
+    # sensitivity of Field of equation constraints
     gd = Alu' \ gc
 
     # still need to develop this
@@ -2611,7 +2720,9 @@ function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.
         gq = gsetsource!(gd,d,q,r)
     end
 
+    # update d with the boundary condition b
     gb = gsetboundarycondition(gd,b)
+
     return gb
 end
 

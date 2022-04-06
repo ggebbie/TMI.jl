@@ -22,7 +22,6 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 # first guess of change to surface boundary conditions
 # ocean values are 0
 #u = zerosurfaceboundary(γ)
-#uvec = u.tracer[u.wet]
 u = (;surface = zerosurfaceboundary(γ))
 uvec = vec(u)
    
@@ -36,8 +35,29 @@ y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 b = (;surface = getsurfaceboundary(y))
 
 # get sample J value
-F,G = costfunction_obs(uvec,Alu,b,y,W⁻,γ)
-fg!(F,G,x) = costfunction_obs!(F,G,x,Alu,b,y,W⁻,γ)
+F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
+fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
+
+fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
+f(x) = fg(x)[1]
+J₀,gJ₀ = fg(uvec)
+
+#### gradient check ###################
+# check with forward differences
+ϵ = 1e-3
+ii = rand(1:sum(γ.wet[:,:,1]))
+println("Location for test =",ii)
+δu = copy(uvec); δu[ii] += ϵ
+∇f_finite = (f(δu) - f(uvec))/ϵ
+println(∇f_finite)
+
+fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+∇f = gJ₀[ii]
+println(∇f)
+
+# error less than 10 percent?
+println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+#### end gradient check #################
 
 # filter the data with an Optim.jl method
 iterations = 15
@@ -48,7 +68,7 @@ ũ = zerosurfaceboundary(γ)
 ũ.tracer[u.wet] = out.minimizer
 
 # apply to the boundary conditions
-b̃ = b + ũ
+b̃ = adjustboundarycondition(b,ũ)
 
 # reconstruct tracer map
 c₀ = steadyinversion(Alu,b,γ)
