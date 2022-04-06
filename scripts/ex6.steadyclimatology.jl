@@ -64,8 +64,7 @@ iterations = 15
 out = steadyclimatology(uvec,fg!,iterations)
 
 # reconstruct by hand to double-check.
-ũ = zerosurfaceboundary(γ)
-ũ.tracer[u.wet] = out.minimizer
+ũ = unvec(u,out.minimizer)
 
 # apply to the boundary conditions
 b̃ = adjustboundarycondition(b,ũ)

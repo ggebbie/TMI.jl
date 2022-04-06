@@ -2400,12 +2400,8 @@ end
 """
 function costfunction_gridded_obs(uvec,Alu,b::BoundaryCondition{T},utemplate::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
 
-    println("uvec b4",maximum(uvec))
-    println("u b4",maximum(utemplate))
     # turn uvec into a boundary condition
     u = unvec(utemplate,uvec)
-    println("uvec after",maximum(uvec))
-    println("u after",maximum(u))
 
     bnew = adjustboundarycondition(b,u) #b += u # easy case where u and b are on the same boundary
     println("max b ",maximum(b))
