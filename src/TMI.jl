@@ -2398,7 +2398,7 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_gridded_obs(uvec,Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {T <: Real}
+function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
     u = unvec(u₀,uvec)
@@ -2416,7 +2416,10 @@ function costfunction_gridded_obs(uvec,Alu,b₀::BoundaryCondition{T},u₀::Boun
     return J, guvec
 end
 
-function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+"""
+    function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+"""
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
     u = unvec(u₀,uvec)
@@ -2433,51 +2436,6 @@ function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCon
         #guvec = vec(gu)
 
         # next block just to modify the contents
-        tmp = vec(gu)
-        for (ii,vv) in enumerate(tmp)
-            guvec[ii] = vv
-        end
-    end
-    
-    if J !=nothing
-        return  y ⋅ (Wⁱ * y) # dot product
-    end
-end
-
-"""
-    function costfunction_gridded_obs(uvec,Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
-"""
-function costfunction_gridded_obs(uvec,Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
-
-    # turn uvec into a boundary condition
-    u = unvec(u₀,uvec)
-
-    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
-    J = y ⋅ (Wⁱ * y) # dot product
-
-    # adjoint equations
-    gy = -2Wⁱ * y
-    gb = gsteadyinversion( gy, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
-    guvec = vec(gu)
-
-    return J, guvec
-end
-
-function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
-
-    # turn uvec into a boundary condition
-    u = unvec(u₀,uvec)
-    
-    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
-
-    if guvec != nothing
-        # adjoint equations
-        gy = -2Wⁱ * y
-        gb = gsteadyinversion( gy, Alu, b, γ)
-        gu = gadjustboundarycondition(gb,u)
         tmp = vec(gu)
         for (ii,vv) in enumerate(tmp)
             guvec[ii] = vv
@@ -2510,7 +2468,7 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction_point_obs(uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
     # control penalty and gradient
     Jcontrol = uvec'*(Q⁻*uvec)
@@ -2559,7 +2517,7 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
@@ -2590,155 +2548,6 @@ function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::BoundaryCondi
         return Jdata + Jcontrol
     end
 end
-
-""" 
-    function costfunction_point_obs(uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-    squared model-data misfit for pointwise data
-    controls are a vector input for Optim.jl
-    Issue #1: couldn't figure out how to nest with costfunction_obs!
-    
-# Arguments
-- `uvec`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary condition
-- `y`: pointwise observations
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wis`: weights for interpolation (data sampling, E)
-- `locs`: data locations (lon,lat,depth)
-- `Q⁻`: weights for control vector
-- `γ`: grid
-# Output
-- `J`: cost function of sum of squared misfits
-- `gJ`: derivative of cost function wrt to controls
-"""
-function costfunction_point_obs(uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-    # control penalty and gradient
-    Jcontrol = uvec'*(Q⁻*uvec)
-    guvec = 2*(Q⁻*uvec)
-
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
-
-    c = steadyinversion(Alu,b,γ)  # gives the misfit
-
-    # observe at right spots
-    ỹ = observe(c,wis,γ)
-    n = ỹ - y
-    
-    Jdata = n ⋅ (Wⁱ * n) # dot product
-    J = Jdata + Jcontrol
-
-    gn = 2Wⁱ * n
-    gỹ = gn
-    
-    gc = gobserve(gỹ,c,locs)
-    gb = gsteadyinversion(gc, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
-    guvec += vec(gu)
-    
-    return J, guvec
-end
-
-""" 
-    function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-    squared model-data misfit for pointwise data
-    controls are a vector input for Optim.jl
-    Issue #1: couldn't figure out how to nest with costfunction_obs!
-    
-# Arguments
-- `J`: cost function of sum of squared misfits
-- `guvec`: derivative of cost function wrt to controls
-- `uvec`: controls, vector format
-- `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary condition
-- `y`: pointwise observations
-- `Wⁱ`: inverse of W weighting matrix for observations
-- `wis`: weights for interpolation (data sampling, E)
-- `locs`: data locations (lon,lat,depth)
-- `Q⁻`: weights for control vector
-- `γ`: grid
-"""
-function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u₀::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
-
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
-    c = steadyinversion(Alu,b,γ)  # gives the misfit
-
-    # observe at right spots
-    ỹ = observe(c,wis,γ)
-    n = ỹ - y
-
-    if guvec != nothing
-        # adjoint equations
-        gtmp = 2*(Q⁻*uvec)
-        gn = 2Wⁱ * n
-        gỹ = gn
-        gc = gobserve(gỹ,c,locs)
-        gb = gsteadyinversion(gc, Alu, b, γ)
-        gu = gadjustboundarycondition(gb,u)
-        gtmp += vec(gu)
-        for (ii,vv) in enumerate(gtmp)
-            guvec[ii] = vv
-        end
-    end
-
-    if J !=nothing
-        Jcontrol = uvec'*(Q⁻*uvec)
-        Jdata = n ⋅ (Wⁱ * n) # dot product
-        return Jdata + Jcontrol
-    end
-
-    return J, guvec
-end
-
-# """ 
-#     function costfunction!(J,gJ,u,Alu,dfld,yfld,Wⁱ,wis,Q⁻,γ)
-#     squared model-data misfit for pointwise data
-#     controls are a vector input for Optim.jl
-#     Issue: couldn't figure out how to nest with costfunction_obs!
-#     Issue: why are wis and locs both needed? `gobserve` function
-
-# """
-# function costfunction!(J,guvec,uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
-
-#     # data misfit and gradient
-#     u = zerosurfaceboundary(γ)
-#     u.tracer[u.wet] = uvec
-    
-#     b += u # easy case where u and b are on the same boundary
-#     c = steadyinversion(Alu,b,γ)  # gives the misfit
-
-#     # observe at right spots
-#     ỹ = observe(c,wis,γ)
-#     n = ỹ - y
-
-#     if guvec != nothing    
-#         guvectmp = 2*(Q⁻*uvec)
-#         gn = 2Wⁱ * n
-
-#         gỹ = gn
-        
-#         gc = gobserve(gỹ,c,locs)
-
-#         gb = gsteadyinversion(gc, Alu, b, γ)
-#         gu = gb 
-
-#         for ii in 1:sum(gu.wet)
-#             # force guvec to change?
-#             guvec[ii] = gu.tracer[u.wet][ii]
-#             guvec[ii] += guvectmp[ii]
-#         end
-#     end
-
-#     if J != nothing
-#         Jcontrol = uvec'*(Q⁻*uvec)
-#         Jdata = n ⋅ (Wⁱ * n) # dot product
-#         return Jdata + Jcontrol
-#     end
-# end
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
