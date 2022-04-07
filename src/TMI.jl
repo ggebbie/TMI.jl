@@ -1467,7 +1467,6 @@ function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
 
 end
 
-
 """
     function vec(u)
 
@@ -1485,29 +1484,30 @@ function vec(u::Field{T}) where T <: Real
     return uvec
 end
 
+# """
+#     function vec(u)
 
-"""
-    function vec(u)
+#     Turn a collection of controls into a vector
+#     for use with Optim.jl.
+#     An in-place version of this function would be handy.
+# """
+# function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
 
-    Turn a collection of controls into a vector
-    for use with Optim.jl.
-    An in-place version of this function would be handy.
-"""
-function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
+#     uvec = Vector{T}(undef,0)
+#     for v in u
+#         append!(uvec,v.tracer[v.wet])
+#     end
+#     return uvec
+# end
 
+#function vec(u::NamedTuple{<:Any,Tuple{Vararg{BoundaryCondition{T}},Vararg{Field{T}}}}) where T <: Real
+#function vec(u::NamedTuple{<:Any,Tuple{Vararg{Any}}}) #where T <: Real
+function vec(u::NamedTuple) #where T <: Real
+
+    T = eltype(u[1].tracer)
     uvec = Vector{T}(undef,0)
     for v in u
-        append!(uvec,v.tracer[v.wet])
-    end
-    return uvec
-end
-
-
-function vec(u::NamedTuple{<:Any,Tuple{N,Union{BoundaryCondition{T}, Field{T}}}}) where {N,T<:Real}
-
-    uvec = Vector{T}(undef,0)
-    for v in u
-        append!(uvec,TMI.vec(v))
+        append!(uvec,vec(v))
     end
     return uvec
 end
