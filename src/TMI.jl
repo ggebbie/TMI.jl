@@ -2299,7 +2299,7 @@ function synthetic_observations(TMIversion,variable,γ,N,σ=nothing)
     [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
     ytrue = observe(θtrue,wis,γ)
-    if !isnothing(σ)
+    if isnothing(σ)
         σtrue = observe(σθ,wis,γ)
     else
         σtrue = σ * ones(N)
