@@ -1468,9 +1468,9 @@ function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
 end
 
 """
-    function vec(u)
+    function vec(u::BoundaryCondition{T}) where T <: Real
 
-    Turn a collection of controls into a vector
+    Turn a BoundaryCondition into a vector
     for use with Optim.jl.
     An in-place version of this function would be handy.
 """
@@ -1479,31 +1479,42 @@ function vec(u::BoundaryCondition{T}) where T <: Real
     return uvec
 end
 
+"""
+    function vec(u::Field{T}) where T <: Real
+
+    Turn a Field into a vector
+    for use with Optim.jl.
+    An in-place version of this function would be handy.
+"""
 function vec(u::Field{T}) where T <: Real
     uvec = u.tracer[u.γ.wet]
     return uvec
 end
 
-# """
-#     function vec(u)
+"""
+    function vec(u)
 
-#     Turn a collection of controls into a vector
-#     for use with Optim.jl.
-#     An in-place version of this function would be handy.
-# """
-# function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
+    Turn a collection of controls into a vector
+    for use with Optim.jl.
+    An in-place version of this function would be handy.
+"""
+function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
 
-#     uvec = Vector{T}(undef,0)
-#     for v in u
-#         append!(uvec,v.tracer[v.wet])
-#     end
-#     return uvec
-# end
+    uvec = Vector{T}(undef,0)
+    for v in u
+        append!(uvec,v.tracer[v.wet])
+    end
+    return uvec
+end
 
 #function vec(u::NamedTuple{<:Any,Tuple{Vararg{BoundaryCondition{T}},Vararg{Field{T}}}}) where T <: Real
 #function vec(u::NamedTuple{<:Any,Tuple{Vararg{Any}}}) #where T <: Real
-function vec(u::NamedTuple) #where T <: Real
+"""
+     function vec(u::NamedTuple) #where T <: Real
 
+    Fallback method for BoundaryCondition Field combos
+"""
+function vec(u::NamedTuple) #where T <: Real
     T = eltype(u[1].tracer)
     uvec = Vector{T}(undef,0)
     for v in u
@@ -1519,9 +1530,10 @@ end
     Undo the operations by vec(u)
     Needs to update u because attributes of
     u need to be known at runtime.
+
+    For Boundary Conditions only
 """
 function unvec!(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
-
     counter = 0
     for v in u
         n = sum(v.wet)
@@ -1536,12 +1548,16 @@ end
     Undo the operations by vec(u)
     Needs to update u because attributes of
     u need to be known at runtime.
-"""
-function unvec(utemplate::NamedTuple{<:Any,Tuple{N,Union{BoundaryCondition{T}, Field{T}}}},uvec::Vector{T}) where {N,T <: Real}
 
+    Fallback method for Boundary Condition Field combos.
+"""
+function unvec(u₀::NamedTuple,uvec::Vector{T}) where {T <: Real}
+#function unvec(utemplate::NamedTuple{<:Any,Tuple{N,Union{BoundaryCondition{T}, Field{T}}}},uvec::Vector{T}) where {N,T <: Real}
+
+    N = length(u₀)
     counter = 0
-    vals = Vector{BoundaryCondition}(undef,N)
-    for (ii,vv) in enumerate(utemplate)
+    vals = Vector{Union{BoundaryCondition{T},Field{T}}}(undef,N)
+    for (ii,vv) in enumerate(u₀)
         print(ii)
         if typeof(vv) == BoundaryCondition{Float64}
             n = sum(vv.wet)
@@ -1550,6 +1566,8 @@ function unvec(utemplate::NamedTuple{<:Any,Tuple{N,Union{BoundaryCondition{T}, F
 
         elseif typeof(vv) == Field{Float64}
             n = sum(vv.γ.wet)
+            println(ii)
+            println(typeof(vv))
             vals[ii] = unvec(vv, uvec[counter+1:counter+n])
             counter += n
 
@@ -1557,20 +1575,20 @@ function unvec(utemplate::NamedTuple{<:Any,Tuple{N,Union{BoundaryCondition{T}, F
 #        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
 #        counter += n
     end
-    u = (;zip(keys(utemplate), vals)...)
+    u = (;zip(keys(u₀), vals)...)
     return u
 end
 
-function unvec(utemplate::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
+function unvec(u₀::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
 
     counter = 0
     vals = Vector{BoundaryCondition}(undef,N)
-    for (ii,vv) in enumerate(utemplate)
+    for (ii,vv) in enumerate(u₀)
         n = sum(vv.wet)
         vals[ii] = unvec(vv, uvec[counter+1:counter+n])
         counter += n
     end
-    u = (;zip(keys(utemplate), vals)...)
+    u = (;zip(keys(u₀), vals)...)
     return u
 end
 
@@ -1591,21 +1609,8 @@ function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
         #u.tracer[u.wet] = uvec
         u.tracer[i] = uvec[counter]
     end
-
 end
 
-function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
-
-    I = findall(u.wet)
-    counter = 0
-    for i in I
-        counter +=1
-    # doesn't work to pass u back
-        #u.tracer[u.wet] = uvec
-        u.tracer[i] = uvec[counter]
-    end
-
-end
 """
     function unvec(u,uvec)
 
