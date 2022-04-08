@@ -22,9 +22,13 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 # first guess of change to surface boundary conditions
 # ocean values are 0
 #u = zerosurfaceboundary(γ)
-u = (;surface = zerosurfaceboundary(γ))
+#u = zeros(γ)
+u = (surface = zerosurfaceboundary(γ), q = zeros(γ))
 uvec = vec(u)
-   
+
+# test unvec
+unvec(u,uvec)
+
 # take synthetic, noisy observations
 y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 
