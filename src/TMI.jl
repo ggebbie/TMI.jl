@@ -2094,19 +2094,47 @@ function interpindex(loc,γ)
 """
 function interpindex(loc,γ)
 
+    # Handle a grid mismatch.
+    loc_on_grid = shiftloc(loc,γ)
+    
     # Handle longitudinal periodic condition (i.e., wraparound)
-
     lon = vcat(copy(γ.lon),γ.lon[1]+360.)
     list = vcat(1:length(γ.lon),1)
     nodes = (lon,γ.lat,γ.depth)
 
     # eliminate need to pass tracer value
-    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes, loc)
+    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes, loc_on_grid)
 
     # issue, some of weighted points may be NaNs in tracer field
     # handle this in the Interpolations.jl routines
     # may involve chaging Gridded(Linear()) above
     return wis
+end
+
+"""
+function  shiftloc(loc)
+
+    sometimes loc longitudes are outside of grid due to different conventions
+    assumption: 360° shift is enough to get back on grid
+"""
+function shiftloc(loc,γ)
+    # accounts for a half grid cell of overlap space
+    newlon = loc[1]
+    westlon = (3/2)*γ.lon[1] - (1/2)*γ.lon[2]
+    eastlon =   (3/2)*γ.lon[end] - (1/2)*γ.lon[end-1]
+    while newlon <  westlon
+        newlon += 360.0
+    end
+    
+    while newlon > eastlon
+        newlon -= 360.0
+    end
+
+    if newlon > eastlon || newlon < westlon
+        error("location not on grid")
+    end
+
+    return (newlon, loc[2], loc[3])    
 end
 
 """
