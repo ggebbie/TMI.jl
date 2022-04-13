@@ -1404,13 +1404,16 @@ end
 - `b`::BoundaryCondition
 """
 function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
-    gb = 0.0 * b # initialize to zero
+    #gb = 0.0 * b # initialize to zero
     if b.dim == 1
-        gb.tracer = gd.tracer[b.dimval,:,:]
+        #gb.tracer = gd.tracer[b.dimval,:,:]
+        gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.dim,b.dimval,b.wet)
     elseif b.dim == 2
-        gb.tracer = gd.tracer[:,b.dimval,:]
+        #gb.tracer = gd.tracer[:,b.dimval,:]
+        gb = BoundaryCondition(gd.tracer[:,b.dimval,:],b.dim,b.dimval,b.wet)
     elseif b.dim == 3
-        gb.tracer .+= gd.tracer[:,:,b.dimval] 
+        #gb.tracer .+= gd.tracer[:,:,b.dimval] 
+        gb = BoundaryCondition(gd.tracer[:,:,b.dimval],b.dim,b.dimval,b.wet)
     else
         error("controls not implemented for 4+ dimensions")
     end
@@ -2271,7 +2274,7 @@ end
 - `locs`: 3-tuples of locations for observations
 - `wis`: weighted indices for interpolation to locs sites
 """
-function synthetic_observations(TMIversion,variable,γ,N)
+function synthetic_observations(TMIversion,variable,γ,N,σ=nothing)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
@@ -2280,9 +2283,11 @@ function synthetic_observations(TMIversion,variable,γ,N)
     
     θtrue = readfield(TMIfile,variable,γ)
     replace!(θtrue.tracer,NaN=>0.0)
-    
-    σθ = readfield(TMIfile,"σ"*variable,γ)
-    replace!(σθ.tracer,NaN=>0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile,"σ"*variable,γ)
+        replace!(σθ.tracer,NaN=>0.0)
+    end
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
@@ -2294,7 +2299,11 @@ function synthetic_observations(TMIversion,variable,γ,N)
     [wis[i] = interpindex(locs[i],γ) for i in 1:N]
 
     ytrue = observe(θtrue,wis,γ)
-    σtrue = observe(σθ,wis,γ)
+    if isnothing(σ)
+        σtrue = observe(σθ,wis,γ)
+    else
+        σtrue = σ * ones(N)
+    end
 
     #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
     ntrue = rand(Normal(),N).*σtrue
@@ -2682,9 +2691,9 @@ function wetlocation(γ)
     confirmwet = false
     neighbors  = 8
     while !confirmwet
-        loc = (rand(0.0:0.1:360.0),
-               rand(-90.0:0.1:90.0),
-               rand(0.0:1.0:5750.0))
+        loc = (rand(minimum(γ.lon):0.1:maximum(γ.lon)),
+               rand(minimum(γ.lat):0.1:maximum(γ.lat)),
+               rand(minimum(γ.depth):1.0:maximum(γ.depth)))
 
         iswet(loc,γ) && return loc
         println("dry point, try again")
