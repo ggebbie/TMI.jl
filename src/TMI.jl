@@ -841,14 +841,59 @@ function planview(c::Field{T},depth,lon₀ = 0) where T <: Real
 
     # repeat one of them twice
     xsec = vcat(lonbreak+1:nx,1:lonbreak)
-    println(xsec)
     
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
     cplan = dropdims(view(c.tracer,xsec,:,isec),dims=3)
     
     lonplan = c.γ.lon[xsec]
-    # keep lonplan between -180 and 180
+    # keep lonplan between -180 and 180 (??)
+    # for ll = 1:length(lonplan)
+    #     if lonplan[ll] > 180
+    #         lonplan[ll] -= 360
+    #     elseif lonplan[ll] < -180
+    #         lonplan[ll] += 360
+    #     end
+    # end
+
+    # or do I need to sort it in ascending order??
+    lonplan[end-lonbreak+1:end] .+= 360
+    
+    return cplan, lonplan
+
+end
+
+"""
+    function planview(c::Field{T},depth,lon₀ = 0)::Array{T,2} where T <: Real
+
+# Arguments
+- `c::BoundaryCondition{T}`: tracer field
+- `depth`: depth of interest, must be on grid
+- `lon₀`: central longitude of planview, default=140 West
+"""
+function planview(c::BoundaryCondition{T},lon₀ = 0) where T <: Real
+ 
+    # find longitude breakpoint (wraparound point)
+    nx = length(c.γ.lon)
+    lonbreak = nx # default: already wraps correctly
+    for xx = 1:nx-1 
+        if (c.γ.lon[xx] ≤ lon₀ - 180 ≤ c.γ.lon[xx+1]) || (c.γ.lon[xx] ≤ lon₀ + 180 ≤ c.γ.lon[xx+1])
+
+            lonbreak = xx
+            println(lonbreak)
+            break
+        end
+    end
+
+    # repeat one of them twice for wraparound?
+    xsec = vcat(lonbreak+1:nx,1:lonbreak)
+    
+    # use view so that a new array is not allocated
+    # note: if cfld changes, so does csection (automatically)
+    cplan = view(c.tracer,xsec,:)
+    
+    lonplan = c.γ.lon[xsec]
+    # keep lonplan between -180 and 180 (??)
     # for ll = 1:length(lonplan)
     #     if lonplan[ll] > 180
     #         lonplan[ll] -= 360
@@ -953,9 +998,6 @@ function planviewplot(c::Field{T}, depth, lims; lon₀ = 0, clabel = "tracer", t
     cplan,lonplan = planview(c,depth,lon₀)
 
     fig_path = GLMakie.Figure(backgroundcolor = :grey95)
-    #fig_path = CairoMakie.Figure(resolution = (1800,1200), backgroundcolor = :grey95)
-    #ax = CairoMakie.Axis(fig_path[1,1], xlabel = "Longitude [°E]", ylabel = "Latitude [°N]", title=titlelabel)
-
     lonticks = collect(lon₀ - 180:60:lon₀+180)
 
     # or do I need to sort it in ascending order?
@@ -996,80 +1038,42 @@ end
 - `γ::Grid`, needed for lat, lon but not in BoundaryCondition! (could refactor)
 - `titlelabel`: optional title label
 """
-function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
+function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;lon₀ = 0,titlelabel="boundary condition plot") where T <: Real
 
     # is the boundary condition oriented correctly?
     if b.dim != 3
         error("boundary condition not horizontal")
     end
     
-    cplan = b.tracer
+    cplan, lonplan = planview(b,lon₀)
+
+    fig_path = GLMakie.Figure(backgroundcolor = :grey95)
+    lonticks = collect(lon₀ - 180:60:lon₀+180)
+
+    # or do I need to sort it in ascending order?
+    for ll = 1:length(lonticks)
+        if lonticks[ll] > 180
+            lonticks[ll] -= 360
+        elseif lonticks[ll] < -180
+            lonticks[ll] += 360
+        end
+    end
+
+    #lonticks[lonticks .> 180] .-= 360
+    ax = GeoAxis(fig_path[1,1], xlabel = "Longitude [°E]", ylabel = "Latitude [°N]", title=titlelabel, dest = "+proj=eqearth +lon_0="*string(lon₀),lonticks=lonticks, latticks = -90:30:90)
+    cnf = GeoMakie.contourf!(ax,lonplan,c.γ.lat,cplan;shading = true, colormap = :coolwarm, colorrange = (lims[begin],lims[end]), levels = lims)
+    cn = GeoMakie.contour!(ax,lonplan,c.γ.lat,cplan;shading = true, color = :black, levels = lims)
+
+    # # add coastline
+    #coastplot = lines!(ax, GeoMakie.coastlines(); color = :black, overdraw = true)
+    #translate!(coastplot, 0, 0, 99) # ensure they are on top of other plotted elements
+
+    GLMakie.Colorbar(fig_path[1,2], cnf ; label = "tracer", height = GLMakie.Relative(0.65))
+
+    #println(fig_path)
+    save("fig_path.png",fig_path)
+    fig_path
     
-    cmap_seismic = get_cmap("seismic")
-    
-    #calc fignum - based on current number of figures
-    figure()
-    contourf(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
-    #fig, ax = plt.subplots()
-    CS = gca().contour(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
-    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
-    ylabel("Latitude [°N]")
-    xlabel("Longitude [°E]")
-    gca().set_title(titlelabel)
-    colorbar(orientation="vertical")
-    
-end
-
-function Proj4_heatmap(dat)	
-	lons = dat.lon
-	lats = dat.lat
-	field = dat.var
-
-	trans = Proj4.Transformation("+proj=longlat +datum=WGS84 +lon_0=180", "+proj=wintri", always_xy=true) 
-
-	ptrans = GeoMakie.Makie.PointTrans{2}(trans)
-	fig = CairoMakie.Figure(resolution = (1200,800), fontsize = 22)
-	ax = CairoMakie.Axis(fig[1,1], aspect = CairoMakie.DataAspect(), title = dat.meta.ttl)
-	# all input data coordinates are projected using this function
-	ax.scene.transformation.transform_func[] = ptrans
-	# add some limits, still it needs to be manual  
-	points = [CairoMakie.Point2f0(lon, lat) for lon in lons, lat in lats]
-	rectLimits = CairoMakie.FRect2D(GeoMakie.Makie.apply_transform(ptrans, points))
-	CairoMakie.limits!(ax, rectLimits)
-
-	hm1 = CairoMakie.surface!(ax, lons, lats, field, shading = false, overdraw = false, 
-	colorrange=dat.meta.colorrange, colormap=dat.meta.cmap)
-
-	hm2 = CairoMakie.lines!(ax, GeoMakie.coastlines(), color = :black, overdraw = true)
-
-    ##
-    lon0 = 0 # starting point for longitude, later would be nice to use 40 E. 
-	lonrange = lon0:60:lon0 + 360
-	latrange = -90.0:30:90
-
-	lonlines = [CairoMakie.Point2f0(j,i) for i in lats, j in lonrange]
-	latlines = [CairoMakie.Point2f0(j,i) for j in lons, i in latrange]
-
-	[CairoMakie.lines!(ax, lonlines[:,i], color = (:black,0.25), 
-	 linestyle = :dash, overdraw = true) for i in 1:size(lonlines)[2]]
-	[CairoMakie.lines!(ax, latlines[:,i], color = (:black,0.25), linestyle = :dash, 
-	 overdraw = true) for i in 1:size(latlines)[2]]
-
-	xticks = first.(trans.(CairoMakie.Point2f0.(lonrange, -90))) 
-	yticks = last.(trans.(CairoMakie.Point2f0.(lon0,latrange)))
-	ax.xticks = (xticks, string.(lonrange, 'ᵒ'))
-	ax.yticks = (yticks, string.(latrange, 'ᵒ'))
-
-	#add colorbar
-	CairoMakie.Colorbar(fig[1,2], hm1, height = CairoMakie.Relative(0.65))
-
-	# hide just original grid 
-	CairoMakie.hidedecorations!(ax, ticks = false, label = false, ticklabels=false)
-	CairoMakie.hidespines!(ax)
-
-	##		
-
-	fig
 end
 
 """

@@ -56,15 +56,15 @@ PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
 
 ## Plot a plan view
 # view the surface
-cntrs = 0:0.2:3.5
+cntrs = 0:0.2:3.4
 
 # what model depth level?
 level = 15
 depth = γ.depth[level]
-label = "depth = "*string(depth)*" m"
+label = "PO₄ [μmol/kg], depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-TMI.planviewplot2(PO₄total, depth, cntrs, titlelabel=label) 
+planviewplot(PO₄total, depth, cntrs, titlelabel=label) 
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
@@ -79,7 +79,8 @@ O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
 # but different contours
-cntrs = 0:10:400 # μmol/kg
+cntrs = 0:20:400 # μmol/kg
+label = "O₂ [μmol/kg], depth = "*string(depth)*" m"
 planviewplot(O₂, depth, cntrs, titlelabel=label) 
 
 # Section view of oxygen on same phosphate section.
