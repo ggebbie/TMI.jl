@@ -12,8 +12,8 @@
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
 
-using Revise, TMI, GoogleDrive
-using PyPlot, PyCall, Test
+using Revise, TMI, GoogleDrive, GLMakie
+using Test
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"
@@ -56,7 +56,7 @@ PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
 
 ## Plot a plan view
 # view the surface
-cntrs = 0:0.05:3.5
+cntrs = 0:0.2:3.5
 
 # what model depth level?
 level = 15
@@ -64,11 +64,11 @@ depth = γ.depth[level]
 label = "depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-planviewplot(PO₄total, depth, cntrs, titlelabel=label) 
+TMI.planviewplot2(PO₄total, depth, cntrs, titlelabel=label) 
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
-lims = 0:0.05:3.0
+lims = 0:0.2:3.0
 sectionplot(PO₄total,lon_section,lims)
 
 ## oxygen distribution
