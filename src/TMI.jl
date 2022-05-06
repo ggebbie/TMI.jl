@@ -871,13 +871,13 @@ end
 - `depth`: depth of interest, must be on grid
 - `lon₀`: central longitude of planview, default=140 West
 """
-function planview(c::BoundaryCondition{T},lon₀ = 0) where T <: Real
+function planview(b::BoundaryCondition{T},γ::Grid,lon₀ = 0) where T <: Real
  
     # find longitude breakpoint (wraparound point)
-    nx = length(c.γ.lon)
+    nx = length(γ.lon)
     lonbreak = nx # default: already wraps correctly
     for xx = 1:nx-1 
-        if (c.γ.lon[xx] ≤ lon₀ - 180 ≤ c.γ.lon[xx+1]) || (c.γ.lon[xx] ≤ lon₀ + 180 ≤ c.γ.lon[xx+1])
+        if (γ.lon[xx] ≤ lon₀ - 180 ≤ γ.lon[xx+1]) || (γ.lon[xx] ≤ lon₀ + 180 ≤ γ.lon[xx+1])
 
             lonbreak = xx
             println(lonbreak)
@@ -890,9 +890,9 @@ function planview(c::BoundaryCondition{T},lon₀ = 0) where T <: Real
     
     # use view so that a new array is not allocated
     # note: if cfld changes, so does csection (automatically)
-    cplan = view(c.tracer,xsec,:)
+    bplan = view(b.tracer,xsec,:)
     
-    lonplan = c.γ.lon[xsec]
+    lonplan = γ.lon[xsec]
     # keep lonplan between -180 and 180 (??)
     # for ll = 1:length(lonplan)
     #     if lonplan[ll] > 180
@@ -905,7 +905,7 @@ function planview(c::BoundaryCondition{T},lon₀ = 0) where T <: Real
     # or do I need to sort it in ascending order??
     lonplan[end-lonbreak+1:end] .+= 360
     
-    return cplan, lonplan
+    return bplan, lonplan
 
 end
 
@@ -1016,6 +1016,32 @@ function planviewplot(c::Field{T}, depth, lims; lon₀ = 0, clabel = "tracer", t
 
     #sf = surface!(ax,c.γ.lon,c.γ.lat,cplan;shading = true, colormap = :seismic)
 
+    # ######################################################
+    # # contour labels: a workaround
+    # beginnings = Point2f[]; colors = RGBAf[]
+    # # First plot in contour is the line plot, first arguments are the points of the contour
+    # segments = cn.plots[1][1][]
+    # for (i, p) in enumerate(segments)
+    #     # the segments are separated by NaN, which signals that a new contour starts
+    #     if isnan(p) && i > 1
+    #         push!(beginnings, segments[i-1])
+    #         #push!(beginnings, segments[i])
+    #     end
+    # end
+    # sc = scatter!(ax, beginnings, markersize=50, color=(:white, 0.1), strokecolor=:white)
+    # translate!(sc, 0, 0, 1)
+    # # Reshuffle the plot order, so that the scatter plot gets drawn before the line plot
+    # delete!(ax, sc)
+    # delete!(ax, cn)
+    # push!(ax.scene, sc)
+    # push!(ax.scene, cn)
+    # anno = text!(ax, [(string(i), p) for (i, p) in enumerate(beginnings)], 
+    #              align=(:center, :center))
+    
+    # # move, so that text is in front
+    # translate!(anno, 0, 0, 2)
+    ######################################################################
+    
     # # add coastline
     #coastplot = lines!(ax, GeoMakie.coastlines(); color = :black, overdraw = true)
     #translate!(coastplot, 0, 0, 99) # ensure they are on top of other plotted elements
@@ -1045,7 +1071,7 @@ function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;lon₀ = 0,titlelab
         error("boundary condition not horizontal")
     end
     
-    cplan, lonplan = planview(b,lon₀)
+    bplan, lonplan = planview(b,γ,lon₀)
 
     fig_path = GLMakie.Figure(backgroundcolor = :grey95)
     lonticks = collect(lon₀ - 180:60:lon₀+180)
@@ -1061,9 +1087,36 @@ function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;lon₀ = 0,titlelab
 
     #lonticks[lonticks .> 180] .-= 360
     ax = GeoAxis(fig_path[1,1], xlabel = "Longitude [°E]", ylabel = "Latitude [°N]", title=titlelabel, dest = "+proj=eqearth +lon_0="*string(lon₀),lonticks=lonticks, latticks = -90:30:90)
-    cnf = GeoMakie.contourf!(ax,lonplan,c.γ.lat,cplan;shading = true, colormap = :coolwarm, colorrange = (lims[begin],lims[end]), levels = lims)
-    cn = GeoMakie.contour!(ax,lonplan,c.γ.lat,cplan;shading = true, color = :black, levels = lims)
+    cnf = GeoMakie.contourf!(ax,lonplan,γ.lat,bplan;shading = true, colormap = :coolwarm, colorrange = (lims[begin],lims[end]), levels = lims)
+    cn = GeoMakie.contour!(ax,lonplan,γ.lat,bplan;shading = true, color = :black, levels = lims)
 
+
+    ##########################################################################
+    # contour labels: a workaround
+    # beginnings = Point2f0[]; colors = RGBAf0[]
+    # # First plot in contour is the line plot, first arguments are the points of the contour
+    # segments = cn.plots[1][1][]
+    # for (i, p) in enumerate(segments)
+    #     # the segments are separated by NaN, which signals that a new contour starts
+    #     if isnan(p)
+    #         push!(beginnings, segments[i-1])
+    #     end
+    # end
+    # sc = scatter!(ax, beginnings, markersize=50, color=(:white, 0.1), strokecolor=:white)
+    # translate!(sc, 0, 0, 1)
+    # # Reshuffle the plot order, so that the scatter plot gets drawn before the line plot
+    # delete!(ax, sc)
+    # delete!(ax, cn)
+    # push!(ax.scene, sc)
+    # push!(ax.scene, cn)
+    # anno = text!(ax, [(string(i), p) for (i, p) in enumerate(beginnings)], 
+    #              align=(:center, :center))
+    
+    # # move, so that text is in front
+    # translate!(anno, 0, 0, 2)
+    # #display(fig)
+    #################################################################
+    
     # # add coastline
     #coastplot = lines!(ax, GeoMakie.coastlines(); color = :black, overdraw = true)
     #translate!(coastplot, 0, 0, 99) # ensure they are on top of other plotted elements
