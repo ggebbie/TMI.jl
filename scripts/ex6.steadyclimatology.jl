@@ -12,8 +12,7 @@
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
 
-using Revise, TMI, GoogleDrive
-using PyPlot, PyCall, Test
+using Revise, TMI, GoogleDrive, Test
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"

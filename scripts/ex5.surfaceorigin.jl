@@ -11,8 +11,7 @@
  % Very similar mathematically to determining how the ocean is filled.                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 =#
-using Revise
-using TMI, PyPlot, PyCall
+using Revise, TMI
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
@@ -28,6 +27,6 @@ loc = (xlon,xlat,xdepth)
 origin = surfaceorigin(loc, Alu, γ)
 
 # view the surface
-cntrs = -8:1:0
+cntrs = -10:1:0
 tlabel="Surface origin of interior location [log10(fraction)]"
 planviewplot(origin,cntrs,γ,titlelabel=tlabel) 
