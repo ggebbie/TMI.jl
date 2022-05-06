@@ -17,24 +17,7 @@ Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu
 
 # Requirements
 
-Compatibility with the built-in tests requires Julia 1.6.x. 
-
-TMI.jl uses matplotlib and cartopy. Direct the python environment to an existing system-wide version of python with these already installed:
-`ENV["PYTHON"]="python/directory/on/your/machine"`
-
-Or use a Julia-specific python environment built from scratch following these directions from the Julia REPL:
-`ENV["PYTHON"]=""` \
-`import Pkg; Pkg.add("PyCall")`\
-`import Pkg; Pkg.build("PyCall")`
-
-Restart the REPL.\
-`import Pkg; Pkg.add("Conda")`\
-`import Conda`\
-`Conda.add("matplotlib",channel="conda-forge")`\
-`Conda.add("shapely",channel="conda-forge")`\
-`Conda.add("cartopy",channel="conda-forge")`
-
-This should set up cartopy v0.20.0 which can download coastlines from Amazon Web Services.
+Compatibility with the built-in tests requires Julia 1.6.+ 
 
 # Setting up project environment
 
