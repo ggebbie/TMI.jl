@@ -8,7 +8,7 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 using Revise
-using TMI, BenchmarkTools, PyPlot, PyCall
+using TMI, BenchmarkTools
 
 #TMIversion = "modern_180x90x33_GH10_GH12"
 TMIversion = "modern_90x45x33_GH10_GH12"
