@@ -4,8 +4,7 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT, NCDatasets,
-    OrdinaryDiffEq, PreallocationTools
+    Interpolations, LineSearches, MAT, NCDatasets
 
 export config, config_from_mat, config_from_nc,
     vec2fld, fld2vec, surfaceindex,
@@ -41,7 +40,6 @@ export config, config_from_mat, config_from_nc,
     zeros, ones, maximum, minimum, (+), (-), (*), dot,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
-    #pkgdir, pkgdatadir, pkgsrcdir, not needed?
 
 import Base: zeros, ones, maximum, minimum, (\)
 import Base: (+), (-), (*), vec
@@ -82,7 +80,7 @@ struct Grid
 end
 
 """
-    struct Tracer
+    struct Field
 
     This structure permits the grid to be 
     automatically passed to functions with
@@ -1343,37 +1341,6 @@ geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.�
 getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ.wet)::BoundaryCondition
 getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ.wet)::BoundaryCondition
 
-### TURN THIS INTO SET BOUNDARY CONDITION COMMAND.
-# """ 
-#     function constraint(b::BoundaryCondition,γ)
-#     turn control adjustment into adjustment of constraint for all 3d grid points    
-# # Arguments
-# - `b`:: BoundaryCondition
-# - `γ`:: TMI.Grid
-# # Output
-# - `d`:: right hand side adjustment
-# """
-# function constraint(b::BoundaryCondition,γ::Grid) 
-#     # preallocate
-#     T = eltype(b.tracer)
-#     d = Array{T}(undef,size(γ.wet))
-
-#     # set ocean to zero, land to NaN
-#     # consider whether land should be nothing or missing
-#     d[γ.wet]   .= zero(T)
-#     d[.!γ.wet] .= zero(T)/zero(T)
-#     if b.dim == 1
-#         d[b.dimval,:,:] = b.tracer
-#     elseif b.dim == 2
-#         d[:,b.dimval,:] = b.tracer
-#     elseif b.dim == 3
-#         d[:,:,b.dimval] = b.tracer
-#     else
-#         error("controls not implemented for 4+ dimensions")
-#     end
-#     return d
-# end
-
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)
     apply boundary condition to the equation constraints
@@ -1466,7 +1433,6 @@ function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
     d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
 
 end
-
 
 """
     function vec(u)
@@ -2365,7 +2331,6 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
     return y
 end
 
-
 """
     function gobserve(gy::Vector{T},c::Field{T},wis,γ) where T <: Real
 
@@ -2802,7 +2767,6 @@ function ces_ncwrite(γ,time,sol_array)
     v.attrib["units"] = "potential temperature anomaly"
     close(ds)
 end
-
     
 function iswet(loc,γ,neighbors)
     # two approaches
