@@ -15,6 +15,13 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Top-level functions" => "top.md",
+        "Configuration" => "config.md",
+        "Grid" => "grid.md",
+        "Boundary Conditions" => "boundaries.md",
+        "Plots" => "plots.md",
+        "Utilities" => "utils.md",
+        "Older functions" => "legacy.md",
     ],
 )
 
