@@ -27,4 +27,6 @@ TMI.optim2nc
 TMI.circulationmatrix2nc
 TMI.boundarymatrix2nc
 TMI.grid2nc
+TMI.cartesianindex
+TMI.gridprops
 ```
