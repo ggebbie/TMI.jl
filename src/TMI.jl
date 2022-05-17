@@ -102,17 +102,24 @@ end
     struct BoundaryCondition
 
     a plane defined at `dim=dimval`
-    Can array have other element types?
-    Are indices needed?
+
+# Attributes
+    `tracer::Array{T,2}`: values on plane
+    `i::Vector{T}`: coordinate values on local x-plane
+    `j::Vector{T}`: coordinate values on local y-plane
+    `k::T`: fixed coordinate value on local z-plane that defines the Boundary Condition plane
+    `dim::Int64`: dimension (1,2, or 3) along which the plane's index is fixed
+    `dimval::Int64`: plane defined at dim = dimval where dimval is a 1-based index number
+    `wet::BitArray{2}`: ocean mask for boundary condition
 """
 struct BoundaryCondition{T}
     tracer::Array{T,2}
-    #I::Vector{CartesianIndex{3}} # index
-    #R::Array{Int,3}
+    i::Vector{T}
+    j::Vector{T}
+    k::T
     dim::Int64
     dimval::Int64
     wet::BitArray{2}
-    #T::DataType
 end
 
 # Credit to DrWatson.jl for these functions
@@ -279,7 +286,7 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
 
     volume = log10.(volume)
 
-    ∂V∂b  = BoundaryCondition(volume,3,1,γ.wet[:,:,1])
+    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
     
     return  ∂V∂b 
 end
@@ -318,7 +325,7 @@ function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
     # origin is defined at sea surface
     #origin = view(dvlocdd,:,:,1)
     dvlocdd = log10.(dvlocdd[:,:,1])
-    origin = BoundaryCondition(dvlocdd,3,1,γ.wet[:,:,1])
+    origin = BoundaryCondition(dvlocdd,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
     
     return origin
 end
@@ -604,7 +611,8 @@ function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
     [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
 
     # 3,1 to identify surface
-    b = BoundaryCondition(patch,3,1,γ.wet[:,:,1])
+    b = BoundaryCondition(patch,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    
     return b
 end
 
@@ -852,76 +860,98 @@ function zeros(wet,ltype=Float64)
 end
 
 """
-   Initialize boundary condition with zeroes
-"""
-function zeros(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
+    function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
 
-    dimsize = size(wet)
+       Help initialize boundary condition by getting some attributes
+"""
+function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
+
+    dimsize = size(γ.wet)
     # dumb way to do it
     if dim == 1
-        wet2d = wet[dimval,:,:]
+        wet2d = γ.wet[dimval,:,:]
+        i = γ.lat
+        j = γ.depth
+        k = γ.lon[dimval]
     elseif dim == 2
-        wet2d = wet[:,dimval,:]
+        wet2d = γ.wet[:,dimval,:]
+        i = γ.lon
+        j = γ.depth
+        k = γ.lat[dimval]
     elseif dim == 3
-        wet2d = wet[:,:,dimval]
+        wet2d = γ.wet[:,:,dimval]
+        i = γ.lon
+        j = γ.lat
+        k = γ.depth[dimval]
     else
         error("boundary condition not implemented in 4+ dimensions")
     end
+    return i,j,k,wet2d
     
-    tracer = Array{Float64}(undef,size(wet2d))
-    tracer[wet2d] .= zero(Float64)
-    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
-    
-    b = BoundaryCondition(tracer,dim,dimval,wet2d)
+end
+
+"""
+    function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+
+       Initialize boundary condition with zeroes
+"""
+function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+
+    i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
+
+    tracer = Array{Float64}(undef,size(wet))
+    tracer[wet] .= zero(Float64)
+    tracer[.!wet] .= zero(Float64)/zero(Float64)
+    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet)
 
 end
 
 """
-   Initialize boundary condition with ones
-"""
-function ones(dim::Int64,dimval::Int64,wet::BitArray{3})::BoundaryCondition
+    function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
 
-    dimsize = size(wet)
-    # dumb way to do it
-    if dim == 1
-        wet2d = wet[dimval,:,:]
-    elseif dim == 2
-        wet2d = wet[:,dimval,:]
-    elseif dim == 3
-        wet2d = wet[:,:,dimval]
-    else
-        error("boundary condition not implemented in 4+ dimensions")
-    end
-    
-    tracer = Array{Float64}(undef,size(wet2d))
-    tracer[wet2d] .= ones(Float64)
-    tracer[.!wet2d] .= zero(Float64)/zero(Float64)
-    
-    b = BoundaryCondition(tracer,dim,dimval,wet2d)
+       Initialize boundary condition with ones
+"""
+function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+
+    i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
+
+    tracer = Array{Float64}(undef,size(wet))
+    tracer[wet] .= ones(Float64)
+    tracer[.!wet] .= zero(Float64)/zero(Float64)
+    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet)
 
 end
 
 """
    Get boundary condition by extracting from 3D tracer
 """
-function getboundarycondition(tracer3d,dim,dimval,wet)::BoundaryCondition
+function getboundarycondition(tracer3d,dim,dimval,γ::Grid)::BoundaryCondition
 
-    dimsize = size(wet)
+    dimsize = size(γ.wet)
     # dumb way to do it
     if dim == 1
-        wet2d = wet[dimval,:,:]
+        wet2d = γ.wet[dimval,:,:]
         tracer2d = tracer3d[dimval,:,:]
+        i = γ.lat
+        j = γ.depth
+        k = γ.lon[dimval]
     elseif dim == 2
-        wet2d = wet[:,dimval,:]
+        wet2d = γ.wet[:,dimval,:]
         tracer2d = tracer3d[:,dimval,:]
+        i = γ.lon
+        j = γ.depth
+        k = γ.lat[dimval]
     elseif dim == 3
-        wet2d = wet[:,:,dimval]
+        wet2d = γ.wet[:,:,dimval]
         tracer2d = tracer3d[:,:,dimval]
+        i = γ.lon
+        j = γ.lat
+        k = γ.depth[dimval]
     else
         error("boundary condition not implemented in 4+ dimensions")
     end
     
-    b = BoundaryCondition(tracer2d,dim,dimval,wet2d)
+    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d)
 
 end
 
@@ -956,7 +986,7 @@ function +(c::BoundaryCondition{T},d::BoundaryCondition{T})::BoundaryCondition{T
         error("BoundaryCondition's not conformable for addition")
     end
     array = zeros(c.wet)
-    e = BoundaryCondition(array,c.dim,c.dimval,c.wet)
+    e = BoundaryCondition(array,c.i,c.j,c.k,c.dim,c.dimval,c.wet)
     
     # a strange formulation to get
     # return e to be correct
@@ -1015,7 +1045,7 @@ end
 """
 function *(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
     array = zeros(d.wet)
-    e = BoundaryCondition(array,d.dim,d.dimval,d.wet)
+    e = BoundaryCondition(array,d.i,d.j,d.k,d.dim,d.dimval,d.wet)
     e.tracer[e.wet] += C*d.tracer[d.wet]
     return e
 end
@@ -1155,7 +1185,7 @@ function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
 
     tracer = zeros(utemplate.wet)
     tracer[utemplate.wet] = uvec
-    u = BoundaryCondition(tracer,utemplate.dim,utemplate.dimval,utemplate.wet)
+    u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
     return u
 end
 
@@ -1736,19 +1766,19 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ) = zeros(3,1,γ.wet)::BoundaryCondition
-zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ.wet)::BoundaryCondition
-zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ.wet)::BoundaryCondition
-zerosouthboundary(γ) = zeros(2,1,γ.wet)::BoundaryCondition
-zerowestboundary(γ) = zeros(1,1,γ.wet)::BoundaryCondition
+zerosurfaceboundary(γ) = zeros(3,1,γ)::BoundaryCondition
+zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ)::BoundaryCondition
+zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ)::BoundaryCondition
+zerosouthboundary(γ) = zeros(2,1,γ)::BoundaryCondition
+zerowestboundary(γ) = zeros(1,1,γ)::BoundaryCondition
 
-onesurfaceboundary(γ) = ones(3,1,γ.wet)::BoundaryCondition
+onesurfaceboundary(γ) = ones(3,1,γ)::BoundaryCondition
 
-getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ.wet)::BoundaryCondition
-getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ.wet)::BoundaryCondition
-geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ.wet)::BoundaryCondition
-getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ.wet)::BoundaryCondition
-getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ.wet)::BoundaryCondition
+getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ)::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ)::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ)::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ)::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ)::BoundaryCondition
 
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)
@@ -1783,13 +1813,13 @@ function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: R
     #gb = 0.0 * b # initialize to zero
     if b.dim == 1
         #gb.tracer = gd.tracer[b.dimval,:,:]
-        gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.dim,b.dimval,b.wet)
+        gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.i,b.j,b.k,b.dim,b.dimval,b.wet)
     elseif b.dim == 2
         #gb.tracer = gd.tracer[:,b.dimval,:]
-        gb = BoundaryCondition(gd.tracer[:,b.dimval,:],b.dim,b.dimval,b.wet)
+        gb = BoundaryCondition(gd.tracer[:,b.dimval,:],b.i,b.j,b.k,b.dim,b.dimval,b.wet)
     elseif b.dim == 3
         #gb.tracer .+= gd.tracer[:,:,b.dimval] 
-        gb = BoundaryCondition(gd.tracer[:,:,b.dimval],b.dim,b.dimval,b.wet)
+        gb = BoundaryCondition(gd.tracer[:,:,b.dimval],b.i,b.j,b.k,b.dim,b.dimval,b.wet)
     else
         error("controls not implemented for 4+ dimensions")
     end
@@ -1847,7 +1877,7 @@ function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}
 
     bnew = b + u
     return bnew
-    #u.tracer[b.wet] += u.tracer[u.wet] # write it out so b changes when returned
+
 end
 
 """
