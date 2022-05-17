@@ -414,7 +414,7 @@ function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCond
 
     # Didn't use readfiled because dsfc is 2d.
     dsfc = ncread(file,tracername)
-    b = BoundaryCondition(dsfc,3,1,γ.wet[:,:,1])
+    b = BoundaryCondition(dsfc,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
     return b
 end
 
