@@ -33,7 +33,39 @@ function config_from_nc(TMIversion)
         end
 
     end 
+
+    γ = Grid(TMIfile)
     
+    println("A")
+    @time A = watermassmatrix(TMIfile)
+
+    # LU factorization for efficient matrix inversions
+    println("Alu")
+    @time Alu = lu(A)
+
+    # would be good to make this optional
+    println("L=")
+    @time L = circulationmatrix(TMIfile,A,γ)
+
+    println("B=")
+    @time B = boundarymatrix(TMIfile,γ)
+    
+    return  A, Alu, γ, TMIfile, L, B
+
+end
+
+"""
+function gridinit(TMIfile)
+
+    Construct the Grid given a file name
+
+# Arguments
+- `TMIfile::String`: NetCDF file name for TMI version
+
+# Output
+- `γ::Grid`: TMI grid struct
+"""
+function Grid(TMIfile::String)
     # get properties of grid
     lon,lat,depth = gridprops(TMIfile)
 
@@ -47,25 +79,10 @@ function config_from_nc(TMIversion)
     wet[I] .= 1
 
     R = linearindex(wet)
-
-    println("A")
-    @time A = watermassmatrix(TMIfile)
-
-    # LU factorization for efficient matrix inversions
-    println("Alu")
-    @time Alu = lu(A)
     
     γ = Grid(lon,lat,depth,I,R,wet)
 
-    # would be good to make this optional
-    println("L=")
-    @time L = circulationmatrix(TMIfile,A,γ)
-
-    println("B=")
-    @time B = boundarymatrix(TMIfile,γ)
-    
-    return  A, Alu, γ, TMIfile, L, B
-
+    return γ
 end
 
 """
