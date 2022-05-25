@@ -2046,10 +2046,11 @@ function sectionplot(field::Field{T}, lon, lims;titlelabel="section plot") where
 end
 
 """
-    function planviewplot
+    function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where T <: Real
+
     Plot of plan view (lon-lat) in ocean
 # Arguments
-- `field::Field`, 3d filed of values to be plotted
+- `field::Field`, 3d field of values to be plotted
 - `depth`: depth of plan view
 - `lims`: contour levels
 - `titlelabel`: optional title label
@@ -2074,7 +2075,8 @@ function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where 
 end
 
 """
-    function planviewplot
+    function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
+
     Plot of plan view (lon-lat) in ocean
 # Arguments
 - `field::BoundaryCondition`, 3d filed of values to be plotted
@@ -2083,7 +2085,7 @@ end
 - `γ::Grid`, needed for lat, lon but not in BoundaryCondition! (could refactor)
 - `titlelabel`: optional title label
 """
-function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
+function planviewplot(b::BoundaryCondition{T}, lims;titlelabel="surface plot") where T <: Real
 
     # is the boundary condition oriented correctly?
     if b.dim != 3
@@ -2096,9 +2098,9 @@ function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface
     
     #calc fignum - based on current number of figures
     figure()
-    contourf(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    contourf(b.i,b.j, cplan', lims, cmap=cmap_seismic)
     #fig, ax = plt.subplots()
-    CS = gca().contour(γ.lon,γ.lat, cplan', lims, cmap=cmap_seismic)
+    CS = gca().contour(b.i,b.j, cplan', lims, cmap=cmap_seismic)
     gca().clabel(CS, CS.levels, inline=true, fontsize=10)
     ylabel("Latitude [°N]")
     xlabel("Longitude [°E]")
@@ -2108,7 +2110,7 @@ function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface
 end
 
 """ 
-n    function control2state(tracer2D,γ)
+    function control2state(tracer2D,γ)
     turn 2D surface field into 3D field with zeroes below surface    
 # Arguments
 - `tracer2D`:: 2D surface tracer field
