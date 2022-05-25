@@ -7,6 +7,7 @@ using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     Interpolations, LineSearches, MAT, NCDatasets
 
 export config, config_from_mat, config_from_nc,
+    download_ncfile, download_matfile,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
     surfacepatch, 

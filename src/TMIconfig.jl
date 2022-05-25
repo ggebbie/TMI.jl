@@ -110,25 +110,7 @@ Configure TMI environment from original MATLAB output
 """
 function config_from_mat(TMIversion)
 
-    #- `url`: Google Drive URL for data
-    url = maturl(TMIversion)
-    TMIfile = pkgdatadir("TMI_"*TMIversion*".mat")
-    TMIfilegz = TMIfile*".gz"
-    println(TMIfile)
-    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
-    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,pkgdatadir()) : nothing
-
-    if TMIversion == "modern_180x90x33_GH11_GH12"
-        println("workaround for 2° x 2°")
-        shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
-        run(`sh $shellscript`)
-        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
-    else
-        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
-    end
-    
-    # cloak mat file in gz to get Google Drive spam filter to shut down
-    isfile(TMIfilegz) & !isfile(TMIfile) && run(`gunzip $TMIfilegz`) 
+    TMIfile = download_matfile(TMIversion)
     
     # # make a sample field from zyx cartesian indices
     Izyx = cartesianindex(TMIfile)
@@ -162,6 +144,44 @@ function config_from_mat(TMIversion)
     # return Izyx or I or neither?
     #return  A, Alu, γ, TMIfile, I, L, B
     return  A, Alu, γ, TMIfile, L, B
+end
+
+"""
+    function download_matfile(TMIversion::String)
+
+    Download MATLAB file for given TMI version
+
+# Arguments
+- `TMIversion::String`
+
+# Output
+- `TMIfile::String`: TMI file name
+
+# Side-effect
+- download TMI input file if necessary
+"""
+function download_matfile(TMIversion::String)
+
+    #- `url`: Google Drive URL for data
+    url = maturl(TMIversion)
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".mat")
+    TMIfilegz = TMIfile*".gz"
+    println(TMIfile)
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,pkgdatadir()) : nothing
+
+    if TMIversion == "modern_180x90x33_GH11_GH12"
+        println("workaround for 2° x 2°")
+        shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
+        run(`sh $shellscript`)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
+    else
+        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
+    end
+    
+    # cloak mat file in gz to get Google Drive spam filter to shut down
+    isfile(TMIfilegz) & !isfile(TMIfile) && run(`gunzip $TMIfilegz`) 
+    return TMIfile
 end
 
 """
@@ -502,7 +522,8 @@ end
 """
 function maturl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
-        url = "https://docs.google.com/uc?export=download&id=1Z2knDctAmZHO2lcWTBCdR8zjkmbcyCGg"
+        #        url = "https://docs.google.com/uc?export=download&id=1Z2knDctAmZHO2lcWTBCdR8zjkmbcyCGg"
+        url = "https://docs.google.com/uc?export=download&id=11-b4L6D1bnDdIIgSg8SaiCkOuPk64pSY"
     elseif TMIname == "modern_180x90x33_GH11_GH12"
         url = "https://docs.google.com/uc?export=download&id=11zD1nOfT6V7G0qIHdjK2pDGHFk-ExXwU"
     elseif TMIname == "modern_90x45x33_unpub12"
