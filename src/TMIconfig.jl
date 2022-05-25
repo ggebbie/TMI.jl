@@ -12,27 +12,7 @@
 """
 function config_from_nc(TMIversion)
 
-    #make datdir() if it doesn't exist 
-    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
-    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
-
-    #if TMIfile doesn't exist, get GDrive url and download 
-    if !isfile(TMIfile)
-
-        # add a workaround for large files
-        if TMIversion == "modern_180x90x33_GH11_GH12"
-            println("workaround for 2° x 2°")
-            shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
-            run(`sh $shellscript`)
-            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
-        else
-            println("read via GoogleDrive.jl")
-            #- `url`: Google Drive URL for data
-            url = ncurl(TMIversion)
-            google_download(url,pkgdatadir())
-        end
-
-    end 
+    TMIfile = download_ncfile(TMIversion)
 
     γ = Grid(TMIfile)
     
@@ -53,6 +33,46 @@ function config_from_nc(TMIversion)
     return  A, Alu, γ, TMIfile, L, B
 
 end
+
+"""
+    function download_ncfile(TMIversion::String)
+
+    Download NetCDF file for given TMI version
+
+# Arguments
+- `TMIversion::String`
+
+# Output
+- `TMIfile::String`: TMI file name
+
+# Side-effect
+- download TMI input file if necessary
+"""
+function download_ncfile(TMIversion::String)
+
+    #make datdir() if it doesn't exist 
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    #if TMIfile doesn't exist, get GDrive url and download 
+    if !isfile(TMIfile)
+
+        # add a workaround for large files
+        if TMIversion == "modern_180x90x33_GH11_GH12"
+            println("workaround for 2° x 2°")
+            shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
+            run(`sh $shellscript`)
+            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+        else
+            println("read via GoogleDrive.jl")
+            #- `url`: Google Drive URL for data
+            url = ncurl(TMIversion)
+            google_download(url,pkgdatadir())
+        end
+    end
+    return TMIfile
+end
+
 
 """
 function gridinit(TMIfile)
