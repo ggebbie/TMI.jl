@@ -671,7 +671,6 @@ fieldsatts() =
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/s)/(kg gridcell)"))
 
-
 """
 Read vectors from mat file, translate to 3D,
  and save surface field to NetCDF file.

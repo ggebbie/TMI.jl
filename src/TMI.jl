@@ -4,7 +4,8 @@ using Revise
 using LinearAlgebra, SparseArrays, NetCDF, Downloads,
     GoogleDrive, Distances, GibbsSeaWater,  
     PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT, NCDatasets
+    Interpolations, LineSearches, MAT,
+    NCDatasets, DataStructures
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -450,40 +451,6 @@ end
 """
     function readfield(file,tracername,γ)
     Read a tracer field from NetCDF but return it 
-    as a Field. 
-# Arguments
-- `file`: TMI NetCDF file name
-- `tracername`: name of tracer
-- `γ::Grid`, TMI grid specification
-# Output
-- `c`::Field
-"""
-function readfield(file,tracername,γ::Grid)
-    tracer = ncread(file,tracername)
-
-    # perform a check of file compatibility
-    # with grid
-    if sum(isnan.(tracer[γ.wet])) > 0
-        println("readfield warning: NaN on grid")
-    end
-    # check for non NaN or nonzero off grid
-    # Need to rethink how to do this.
-    # if sum( !iszero(tracer[.!γ.wet])) > 0 
-    #     println("readfield warning: nonzero value off grid")
-    # end
-
-    longname = ncgetatt(file,tracername,"longname")
-    units = ncgetatt(file,tracername,"units")
-    
-    #c = Field(tracer,γ)
-    c = Field(tracer,γ,Symbol(tracername),longname,units)
-    
-    return c
-end
-
-"""
-    function readfield2(file,tracername,γ)
-    Read a tracer field from NetCDF but return it 
     as a Field.
 
     Use NCDatasets so that Unicode is correct
@@ -495,7 +462,7 @@ end
 # Output
 - `c`::Field
 """
-function readfield2(file,tracername,γ::Grid)
+function readfield(file,tracername,γ::Grid)
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
 
     ds = Dataset(file,"r")
@@ -525,6 +492,61 @@ function readfield2(file,tracername,γ::Grid)
     c = Field(tracer,γ,Symbol(tracername),longname,units)
     
     return c
+end
+
+"""
+    function writefield(file,field)
+
+    Write a Field to NetCDF.
+ 
+    Use NCDatasets so that Unicode is correct
+
+# Arguments
+- `file`: TMI NetCDF file name
+- `field::Field`: a TMI.Field struct
+# Output
+- none
+# Side-effect
+- write to `file`
+"""
+function writefield(file,field::Field{T}) where T <: Real
+
+    if !isfile(file)
+        # create new NetCDF file
+        ds = Dataset(file,"c")
+
+        TMIgrids, TMIgridsatts = griddicts(field.γ)
+
+        # Define the dimension "lon" and "lat" with the size 100 and 110 resp.
+        defDim(ds,"lon",length(field.γ.lon))
+        defDim(ds,"lat",length(field.γ.lat))
+        defDim(ds,"depth",length(field.γ.depth))
+
+        # Define a global attribute
+        ds.attrib["title"] = "TMI output"
+
+        vlon = defVar(ds,"lon",Float64,["lon"],
+               attrib = OrderedDict(TMIgridsatts["lon"]))
+        vlon[:] = field.γ.lon
+
+        vlat = defVar(ds,"lat",Float64,["lat"],
+               attrib = OrderedDict(TMIgridsatts["lat"]))
+        vlat[:] = field.γ.lat
+
+        vdepth = defVar(ds,"depth",Float64,["depth"],
+               attrib = OrderedDict(TMIgridsatts["depth"]))
+        vdepth[:] = field.γ.depth
+
+        # Define the variables temperature with the attribute units
+        v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
+                  attrib = OrderedDict("longname" => field.longname,
+                                "units" => field.units))
+        v[:,:,:] = field.tracer
+
+        close(ds)
+    end
+    
+    return nothing
 end
 
 """
