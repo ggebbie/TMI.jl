@@ -2028,11 +2028,12 @@ end
 function sectionplot(field::Field{T}, lon, lims;titlelabel="section plot") where T <: Real
 
     Psection = section(field,lon)
-    cmap_seismic = get_cmap("seismic")
+    cmap_seismic = get_cmap("inferno_r")
     z = field.γ.depth/1000.0
     
     #calc fignum - based on current number of figures
-    figure()
+    figure(202)
+    clf()
     contourf(field.γ.lat, z, Psection', lims, cmap=cmap_seismic)
     #fig, ax = plt.subplots()
     CS = gca().contour(field.γ.lat, z, Psection', lims,colors="k")
