@@ -93,10 +93,19 @@ end
 
     This structure assumes the Tracer type to be 
     three-dimensional.
+
+    tracer::Array{T,3}
+    γ::Grid
+    name::Symbol
+    longname::String
+    units::String
 """
 struct Field{T}
     tracer::Array{T,3}
     γ::Grid
+    name::Symbol
+    longname::String
+    units::String
 end
 
 """
@@ -122,6 +131,7 @@ struct BoundaryCondition{T}
     dimval::Int64
     wet::BitArray{2}
 end
+
 
 # Credit to DrWatson.jl for these functions
 # Didn't want to add dependency for these small functions
@@ -461,8 +471,59 @@ function readfield(file,tracername,γ::Grid)
     # if sum( !iszero(tracer[.!γ.wet])) > 0 
     #     println("readfield warning: nonzero value off grid")
     # end
-           
-    c = Field(tracer,γ)
+
+    longname = ncgetatt(file,tracername,"longname")
+    units = ncgetatt(file,tracername,"units")
+    
+    #c = Field(tracer,γ)
+    c = Field(tracer,γ,Symbol(tracername),longname,units)
+    
+    return c
+end
+
+"""
+    function readfield2(file,tracername,γ)
+    Read a tracer field from NetCDF but return it 
+    as a Field.
+
+    Use NCDatasets so that Unicode is correct
+
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+- `γ::Grid`, TMI grid specification
+# Output
+- `c`::Field
+"""
+function readfield2(file,tracername,γ::Grid)
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
+
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+
+    # load all data
+    tracer = v[:,:,:]
+
+    # load an attribute
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    
+    close(ds)
+
+    # perform a check of file compatibility
+    # with grid
+    if sum(isnan.(tracer[γ.wet])) > 0
+        println("readfield warning: NaN on grid")
+    end
+    # check for non NaN or nonzero off grid
+    # Need to rethink how to do this.
+    # if sum( !iszero(tracer[.!γ.wet])) > 0 
+    #     println("readfield warning: nonzero value off grid")
+    # end
+    
+    #c = Field(tracer,γ)
+    c = Field(tracer,γ,Symbol(tracername),longname,units)
+    
     return c
 end
 
@@ -835,7 +896,7 @@ function zeros(γ::Grid)::Field
     tracer[γ.wet] .= zero(T)
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
-    d = Field(tracer,γ)
+    d = Field(tracer,γ,:none,"unknown name","unknown units")
 
     return d
 end
@@ -1271,7 +1332,7 @@ function synthetic_observations(TMIversion,variable,γ)
     #ntrue = zeros(γ)
     #ntrue = zeros(γ.wet)
     #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
-    ntrue = Field(rand(Normal(),size(γ.wet)),γ)
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ,:none,"unknown name","unknown units")
     ntrue *= σθ
 
     y = θtrue + ntrue
