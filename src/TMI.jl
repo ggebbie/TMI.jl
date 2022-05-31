@@ -536,16 +536,26 @@ function writefield(file,field::Field{T}) where T <: Real
         vdepth = defVar(ds,"depth",Float64,["depth"],
                attrib = OrderedDict(TMIgridsatts["depth"]))
         vdepth[:] = field.γ.depth
+    
 
-        # Define the variables temperature with the attribute units
         v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
                   attrib = OrderedDict("longname" => field.longname,
                                 "units" => field.units))
         v[:,:,:] = field.tracer
 
         close(ds)
+
+    else
+        # assumption: on the same grid
+        ds = Dataset(file,"a")
+
+        v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
+                  attrib = OrderedDict("longname" => field.longname,
+                                "units" => field.units))
+        v[:,:,:] = field.tracer
+        close(ds)
     end
-    
+        
     return nothing
 end
 
