@@ -131,6 +131,9 @@ struct BoundaryCondition{T}
     dim::Int64
     dimval::Int64
     wet::BitArray{2}
+    name::Symbol
+    longname::String
+    units::String
 end
 
 
@@ -906,7 +909,8 @@ function interpweights(loc,γ)
 end
 
 """ 
-    function zeros(γ::Grid)
+    function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
       initialize tracer field on TMI grid
       using a Field struct and constructor
 # Arguments
@@ -914,7 +918,7 @@ end
 # Output
 - `d`::Field,  3d tracer field with NaN on dry points
 """
-function zeros(γ::Grid)::Field
+function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # use depth (could have been lon, lat)
     # to get element type
@@ -928,7 +932,7 @@ function zeros(γ::Grid)::Field
     tracer[γ.wet] .= zero(T)
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
-    d = Field(tracer,γ,:none,"unknown name","unknown units")
+    d = Field(tracer,γ,name,longname,units)
 
     return d
 end
@@ -985,18 +989,28 @@ function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
 end
 
 """
-    function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+    function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
 
        Initialize boundary condition with zeroes
+# Arguments
+- `dim`:
+- `dimval`
+- `γ::Grid`
+- `name::Symbol`
+- `longname::String`
+- `units::String`
+
+# Output
+- `b::BoundaryCondition`
 """
-function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
 
     i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
 
     tracer = Array{Float64}(undef,size(wet))
     tracer[wet] .= zero(Float64)
     tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet)
+    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet,name,longname,units)
 
 end
 
@@ -1049,6 +1063,48 @@ function getboundarycondition(tracer3d,dim,dimval,γ::Grid)::BoundaryCondition
 
 end
 
+
+"""
+    function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+   Get boundary condition by extracting from Field (i.e., 3D tracer)
+# Arguments
+- `field::Field`: 3D tracer field with metadata and grid
+- `dim`: dimension number (1,2,3) that the boundary plane has constant value
+- `dimval`: index number in dimension `dim` that defines boundary plane
+# Output
+- `b::BoundaryCondition`: boundary condition on a plane with metadata and grid
+"""
+function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+
+    dimsize = size(field.γ.wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = field.γ.wet[dimval,:,:]
+        tracer2d = field.tracer[dimval,:,:]
+        i = field.γ.lat
+        j = field.γ.depth
+        k = field.γ.lon[dimval]
+    elseif dim == 2
+        wet2d = field.γ.wet[:,dimval,:]
+        tracer2d = field.tracer[:,dimval,:]
+        i = field.γ.lon
+        j = field.γ.depth
+        k = field.γ.lat[dimval]
+    elseif dim == 3
+        wet2d = field.γ.wet[:,:,dimval]
+        tracer2d = field.tracer[:,:,dimval]
+        i = field.γ.lon
+        j = field.γ.lat
+        k = field.γ.depth[dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d,
+                          field.name,field.longname,field.units)
+
+end
+
 # Define maximum for Field to not include NaNs
 maximum(c::Field) = maximum(c.tracer[c.γ.wet])
 minimum(c::Field) = minimum(c.tracer[c.γ.wet])
@@ -1065,7 +1121,7 @@ minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
 """
 function \(A,d::Field{T})::Field{T} where T <: Real
     # initialize output
-    c = zeros(d.γ)
+    c = zeros(d.γ,d.name,d.longname,d.units)
     c.tracer[c.γ.wet] = A\d.tracer[d.γ.wet]
     return c
 end
@@ -1098,7 +1154,12 @@ function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
     if c.γ.wet != d.γ.wet # check conformability
         error("Fields not conformable for addition")
     end
-    e = zeros(d.γ)
+
+    if !isequal(d.units,c.units)
+        error("Units not consistent")
+    end
+
+    e = zeros(d.γ,d.name,d.longname,d.units)
 
     # a strange formulation to get
     # return e to be correct
@@ -1708,8 +1769,9 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
     end
 
     # define ldiv with fields
-    c = zeros(d.γ)
-    #c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
+    println(b.units)
+    #c = zeros(d.γ,b.name,b.longname,b.units)
+    #println(c.units)
     c = Alu \ d
     
     return c
@@ -1754,7 +1816,7 @@ end
 function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     # preallocate Field for equation constraints
-    d = zeros(γ)
+    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
 
     # update d with the boundary condition b
     setboundarycondition!(d,b)
@@ -1765,10 +1827,12 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
         setsource!(d,q,r)
     end
 
+    # Warning: doesn't this need to loop over the NamedTuple?
+    
+
     # define ldiv with fields
-    c = zeros(d.γ)
-    c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
-    #c = Alu \ d
+    #c = zeros(d.γ,b.name,b.longname,b.units)
+    c = Alu \ d
 
     return c
 end
@@ -1860,19 +1924,24 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ) = zeros(3,1,γ)::BoundaryCondition
-zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ)::BoundaryCondition
-zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ)::BoundaryCondition
-zerosouthboundary(γ) = zeros(2,1,γ)::BoundaryCondition
-zerowestboundary(γ) = zeros(1,1,γ)::BoundaryCondition
+zerosurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
 
+zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
+
+zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
+
+## Warning: need to update this next function
 onesurfaceboundary(γ) = ones(3,1,γ)::BoundaryCondition
 
-getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ)::BoundaryCondition
-getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ)::BoundaryCondition
-geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ)::BoundaryCondition
-getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ)::BoundaryCondition
-getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ)::BoundaryCondition
+getsurfaceboundary(c::Field) = getboundarycondition(c,3,1)::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c,2,maximum(latindex(c.γ.I)))::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c,1,maximum(lonindex(c.γ.I)))::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c,2,1)::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c,1,1)::BoundaryCondition
 
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)
