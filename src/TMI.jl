@@ -2222,18 +2222,18 @@ function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where 
 
     cplan = planview(c::Field{T},depth)
 
-    cmap_seismic = get_cmap("seismic")
+    cmap_infernor = get_cmap("inferno_r")
     
     #calc fignum - based on current number of figures
     figure()
-    contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
+    contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_infernor)
     #fig, ax = plt.subplots()
-    CS = gca().contour(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_seismic)
-    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
+    CS = gca().contour(c.γ.lon,c.γ.lat, cplan', lims,colors="black")
+    gca().clabel(CS, CS.levels, inline=true, fontsize=10, colors="black")
     ylabel("Latitude [°N]")
     xlabel("Longitude [°E]")
     gca().set_title(titlelabel)
-    colorbar(orientation="vertical")
+    colorbar(orientation="horizontal",label=string(c.name)*" ["*c.units*"]")
     
 end
 
