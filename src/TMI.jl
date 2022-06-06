@@ -110,6 +110,21 @@ struct Field{T}
 end
 
 """
+    function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+
+    Outer constructor for Field if there's no worry about
+    tracer type, long name, or units.
+# Arguments
+- `tracer::Array{T,3}`
+- `γ::Grid`
+# Output
+- `field::Field`
+"""
+function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+    return Field(tracer,γ,:none,"unknown","unknown")
+end
+
+"""
     struct BoundaryCondition
 
     a plane defined at `dim=dimval`
@@ -134,6 +149,28 @@ struct BoundaryCondition{T}
     name::Symbol
     longname::String
     units::String
+end
+
+"""
+    function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
+
+    Outer constructor for BoundaryCondition if there's no worry about
+    tracer type, long name, or units.
+# Arguments
+- `tracer::Array{T,3}`
+- `i`
+- `j`
+- `k`
+- `dim`
+- `dimval`
+- `wet`
+# Output
+- `bc::BoundaryCondition`
+"""
+# an outer constructor that ignores units
+function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
+
+    return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
 end
 
 
@@ -1156,7 +1193,7 @@ function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
     end
 
     if !isequal(d.units,c.units)
-        error("Units not consistent")
+        error("Units not consistent:",d.units," vs ",c.units)
     end
 
     e = zeros(d.γ,d.name,d.longname,d.units)
@@ -1210,8 +1247,16 @@ end
     Field by field multiplication is element-by-element.
 """
 function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    if c.γ.wet != d.γ.wet # check conformability
+        error("Fields not conformable for addition")
+    end
 
-    e = zeros(d.γ)
+    if !isequal(d.units,c.units)
+        error("Units not consistent:",d.units," vs ",c.units)
+    end
+
+    e = zeros(d.γ,d.name,d.longname,d.units)
     e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
     return e
 end
@@ -1425,7 +1470,11 @@ function synthetic_observations(TMIversion,variable,γ)
     #ntrue = zeros(γ)
     #ntrue = zeros(γ.wet)
     #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
-    ntrue = Field(rand(Normal(),size(γ.wet)),γ,:none,"unknown name","unknown units")
+
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
+    println(θtrue.units)
+    println(ntrue.units)
+
     ntrue *= σθ
 
     y = θtrue + ntrue
@@ -1769,7 +1818,7 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
     end
 
     # define ldiv with fields
-    println(b.units)
+    # println(b.units)
     #c = zeros(d.γ,b.name,b.longname,b.units)
     #println(c.units)
     c = Alu \ d
