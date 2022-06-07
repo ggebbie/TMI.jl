@@ -975,6 +975,35 @@ function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 end
 
 """ 
+    function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
+      initialize tracer field of ones on TMI grid
+      using a Field struct and constructor
+# Arguments
+- `γ`::TMI.Grid
+# Output
+- `d`::Field,  3d tracer field with NaN on dry points
+"""
+function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    T = eltype(γ.depth)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer[γ.wet] .= one(T)
+    tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,γ,name,longname,units)
+
+    return d
+end
+
+""" 
     function zeros(wet,ltype=Float64)
     initialize tracer field on TMI grid
     This version will give an array
