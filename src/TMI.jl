@@ -39,10 +39,10 @@ export config, config_from_mat, config_from_nc,
     onesurfaceboundary, setboundarycondition!,
     adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
-    zeros, one, ones, maximum, minimum, (+), (-), (*), dot,
+    zeros, one, oneunit, ones, maximum, minimum, (+), (-), (*), dot,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
-import Base: zeros, one, ones, maximum, minimum, (\)
+import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
 import Base: (+), (-), (*), vec
 import LinearAlgebra: dot
 
@@ -120,9 +120,9 @@ end
 # Output
 - `field::Field`
 """
-function Field(tracer::Array{T,3},γ::Grid) where T <: Real
-   return Field(tracer,γ,:none,"unknown","unknown")
-end
+#function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+#   return Field(tracer,γ,:none,"unknown","unknown")
+#end
 
 """
     struct BoundaryCondition
@@ -1000,6 +1000,55 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
     d = Field(tracer,γ,name,longname,units)
+
+    return d
+end
+
+
+""" 
+   function oneunit, help for gridded Interpolations
+"""
+function oneunit(field::Field{T})::Field{T} where T <: Real
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= Base.one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
+
+""" 
+   function oneunit, help for gridded Interpolations
+"""
+function one(field::Field{T})::Field{T} where T <: Real
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= Base.one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
 
     return d
 end
