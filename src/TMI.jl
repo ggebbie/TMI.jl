@@ -39,10 +39,10 @@ export config, config_from_mat, config_from_nc,
     onesurfaceboundary, setboundarycondition!,
     adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
-    zeros, ones, maximum, minimum, (+), (-), (*), dot,
+    zeros, one, ones, maximum, minimum, (+), (-), (*), dot,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
-import Base: zeros, ones, maximum, minimum, (\)
+import Base: zeros, one, ones, maximum, minimum, (\)
 import Base: (+), (-), (*), vec
 import LinearAlgebra: dot
 
@@ -121,7 +121,7 @@ end
 - `field::Field`
 """
 function Field(tracer::Array{T,3},γ::Grid) where T <: Real
-    return Field(tracer,γ,:none,"unknown","unknown")
+   return Field(tracer,γ,:none,"unknown","unknown")
 end
 
 """
@@ -995,13 +995,23 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    tracer[γ.wet] .= one(T)
+    println("calling one with ",T)
+    tracer[γ.wet] .= Base.one(T) # add Base: error "should import Base"
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
     d = Field(tracer,γ,name,longname,units)
 
     return d
 end
+
+# """
+#     function one(field::Field)
+
+#     needed for interpolation interface
+# """
+#function one(Field{Float64}::Type) 
+#     return ones(field.γ)
+#end
 
 """ 
     function zeros(wet,ltype=Float64)
