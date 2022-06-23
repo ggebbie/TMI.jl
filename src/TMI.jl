@@ -1032,7 +1032,9 @@ end
 """ 
    function oneunit, help for gridded Interpolations
 """
-function one(field::Field{T})::Field{T} where T <: Real
+one(T::Type{Field}) = TMI.ones(γ)
+
+function one(field::Field)::Field
 
     # use depth (could have been lon, lat)
     # to get element type
@@ -1040,12 +1042,13 @@ function one(field::Field{T})::Field{T} where T <: Real
     #println(T)
     
     # preallocate
+    T = Float64
     tracer = Array{T}(undef,size(field.γ.wet))
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
     println("calling one with ",T)
-    tracer[field.γ.wet] .= Base.one(T) # add Base: error "should import Base"
+    tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
     tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
     d = Field(tracer,field.γ,field.name,field.longname,field.units)
