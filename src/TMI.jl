@@ -1004,7 +1004,6 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
     return d
 end
 
-
 """ 
    function oneunit, help for gridded Interpolations
 """
@@ -1032,7 +1031,13 @@ end
 """ 
    function oneunit, help for gridded Interpolations
 """
-one(T::Type{Field}) = TMI.ones(γ)
+function one(T::Type{Field})
+    TMIversion = "modern_90x45x33_GH10_GH12"
+    TMIfile = download_ncfile(TMIversion)
+    γ = Grid(TMIfile)
+
+    return TMI.ones(γ)
+end
 
 function one(field::Field)::Field
 
