@@ -1039,7 +1039,7 @@ function one(T::Type{Field})
     return TMI.ones(γ)
 end
 
-function one(field::Field)::Field
+function one(field::Field{Float64})
 
     # use depth (could have been lon, lat)
     # to get element type
@@ -1061,14 +1061,44 @@ function one(field::Field)::Field
     return d
 end
 
-# """
-#     function one(field::Field)
+function Field(field::Field{Float64})
 
-#     needed for interpolation interface
-# """
-#function one(Field{Float64}::Type) 
-#     return ones(field.γ)
-#end
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    T = Float64
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
+
+function /(field::Field{Float64},scalar::Float64)
+
+    # preallocate
+    T = Float64
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] ./= scalar # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
 
 """ 
     function zeros(wet,ltype=Float64)
