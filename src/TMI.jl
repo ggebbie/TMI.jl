@@ -43,7 +43,7 @@ export config, config_from_mat, config_from_nc,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
 import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
-import Base: (+), (-), (*), vec
+import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
 #Python packages - initialize them to null globally
