@@ -7,6 +7,6 @@ if lowercase(get(ENV, "CI", "false")) == "true"
 
     Conda.add("matplotlib",channel="conda-forge")
     Conda.add("shapely",channel="conda-forge")
-    Conda.add("cartopy=0.20.0",channel="conda-forge")
+    Conda.add("cartopy",channel="conda-forge")
 
 end
