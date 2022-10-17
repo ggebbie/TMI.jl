@@ -11,9 +11,15 @@
 %
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
+import Pkg; Pkg.activate(".")
 
-using Revise, TMI, GoogleDrive
-using PyPlot, PyCall, Test
+using Revise
+using TMI
+using Test
+using GGplot
+
+#GoogleDrive: in TMI.jl
+#using PyPlot, PyCall: in GGplot.jl
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
