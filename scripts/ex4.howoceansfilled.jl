@@ -11,8 +11,13 @@
 %
 % See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
 =#
+
+import Pkg; Pkg.activate(".")
+
 using Revise
-using TMI, PyPlot, PyCall
+using TMI
+using Test
+using GGplot
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
