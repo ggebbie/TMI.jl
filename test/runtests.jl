@@ -1,4 +1,5 @@
-using TMI, Test
+using Test
+using TMI
 
 @testset "TMI.jl" begin
 
