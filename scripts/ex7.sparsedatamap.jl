@@ -17,7 +17,15 @@
 - `W⁻`: weighting matrix best chosen as inverse error covariance matrix
 - `wet`: BitArray mask of ocean points
 =#
-using Revise, TMI, Interpolations, Statistics
+#using Revise, TMI, Interpolations, Statistics
+
+import Pkg; Pkg.activate(".")
+
+using Revise
+using TMI
+using Test
+using GGplot
+using Interpolations
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)

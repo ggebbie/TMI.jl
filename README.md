@@ -17,24 +17,7 @@ Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu
 
 # Requirements
 
-Compatibility with the built-in tests requires Julia 1.6.x. 
-
-TMI.jl uses matplotlib and cartopy. Direct the python environment to an existing system-wide version of python with these already installed:
-`ENV["PYTHON"]="python/directory/on/your/machine"`
-
-Or use a Julia-specific python environment built from scratch following these directions from the Julia REPL:
-`ENV["PYTHON"]=""` \
-`import Pkg; Pkg.add("PyCall")`\
-`import Pkg; Pkg.build("PyCall")`
-
-Restart the REPL.\
-`import Pkg; Pkg.add("Conda")`\
-`import Conda`\
-`Conda.add("matplotlib",channel="conda-forge")`\
-`Conda.add("shapely",channel="conda-forge")`\
-`Conda.add("cartopy",channel="conda-forge")`
-
-This should set up cartopy v0.20.0 which can download coastlines from Amazon Web Services.
+The built-in tests are automatically checked with Julia 1.8. 
 
 # Setting up project environment
 
@@ -63,12 +46,37 @@ Type backspace to return to command mode.
 
 * Using an editor like Atom/Juno or Visual Studio Code, activate the environment on one of the frame panels. The default environment is @v1.x and should be changed.
 
-# Running a script (not interactively)
+# Scripts/Examples
 
-An example:\
+Examples for what TMI can do are found in the `scripts` directory.
+
+See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example. Scripts beginning with "ex" are tested and can serve as good templates for new work. Other scripts are a work in progress.
+
+Scripts can be run non-interactively like this:\
 `cd TMI.jl`\
-`julia --project=@. scripts/ex1.trackpathways.jl`
+`julia --project=scripts scripts/ex1.trackpathways.jl`
 
+To show graphical results, TMI.jl uses `GGplot.jl` for plotting routines. In particular, matplotlib and cartopy are handled by `GGplot` so that they are not dependencies in `TMI.jl`. Thus the `scripts` directory has its own environment distinct from the TMI project. If you are working interactively, try the following commands to activate the scripts environment: \
+
+`cd("scripts")`\
+`import Pkg; Pkg.activate(".")`
+
+If you use the examples and `GGplot`, you will need a python environment in Julia. Direct the python environment to an existing system-wide version of python with these already installed:
+`ENV["PYTHON"]="python/directory/on/your/machine"`
+
+Or use a Julia-specific python environment built from scratch following these directions from the Julia REPL:
+`ENV["PYTHON"]=""` \
+`import Pkg; Pkg.add("PyCall")`\
+`import Pkg; Pkg.build("PyCall")`
+
+Restart the REPL.\
+`import Pkg; Pkg.add("Conda")`\
+`import Conda`\
+`Conda.add("matplotlib",channel="conda-forge")`\
+`Conda.add("shapely",channel="conda-forge")`\
+`Conda.add("cartopy",channel="conda-forge")`
+
+This should set up a version of cartopy (v0.20.0+) that can download coastlines from Amazon Web Services.
 
 # Data files
 
@@ -111,11 +119,6 @@ The Julia code is designed to download input files from Google Drive and to plac
 
 Available functions are listed in the documentation at https://ggebbie.github.io/TMI.jl/dev/ .
 
-# Scripts
-
-See examples in `scripts/ex*`, where `ex1.trackpathways.jl` gives Example 1 of tracking water-mass pathways, for example.
-
-Scripts beginning with "ex" are tested and can serve as good templates for new work. Other scripts are a work in progress.
 
 # How this Julia package was started
 
