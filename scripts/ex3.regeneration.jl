@@ -1,9 +1,14 @@
 #=
 % Example: Determine the total amount of remineralized phosphate   %
 =#
-using Revise
-using TMI, PyPlot, PyCall
 
+import Pkg; Pkg.activate(".")
+
+using Revise
+using TMI
+using Test
+using GGplot
+using BenchmarkTools
 
 # A, Alu, γ, inputfile = config(url,inputdir)
 # ΔPO₄ = readtracer(inputfile,"qpo4")

@@ -12,8 +12,12 @@
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
 
-using Revise, TMI, GoogleDrive
-using PyPlot, PyCall, Test
+import Pkg; Pkg.activate(".")
+
+using Revise
+using TMI
+using Test
+using GGplot
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"

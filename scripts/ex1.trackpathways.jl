@@ -8,8 +8,13 @@
             surface region.
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
+
+import Pkg; Pkg.activate(".")
+
 using Revise
-using TMI, PyPlot, PyCall
+using TMI
+using Test
+using GGplot
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)

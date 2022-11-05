@@ -1,11 +1,19 @@
 module TMI
 
-using Revise
-using LinearAlgebra, SparseArrays, NetCDF, Downloads,
-    GoogleDrive, Distances, GibbsSeaWater,  
-    PyPlot, PyCall, Distributions, Optim,
-    Interpolations, LineSearches, MAT,
-    NCDatasets, DataStructures
+using LinearAlgebra
+using SparseArrays
+using NetCDF
+using Downloads
+using GoogleDrive
+using Distances
+using GibbsSeaWater  
+using Distributions
+using Optim
+using Interpolations
+using LineSearches
+using MAT
+using NCDatasets
+using DataStructures
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -13,9 +21,9 @@ export config, config_from_mat, config_from_nc,
     lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
-    planview, planviewplot,
-    section, sectionplot,
-    plotextent, tracerinit,
+    planview, 
+    section,
+    tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
@@ -45,30 +53,6 @@ export config, config_from_mat, config_from_nc,
 import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
-
-#Python packages - initialize them to null globally
-#const patch = PyNULL()
-#const ccrs = PyNULL()
-
-# following example at ClimatePlots.jl
-const mpl = PyNULL()
-const plt = PyNULL()
-const cmocean = PyNULL()
-const cartopy = PyNULL()
-
-#Initialize all Python packages - install with conda through Julia
-function __init__()
-    #copy!(patch, pyimport_conda("matplotlib.patches", "patches"))
-    #copy!(ccrs, pyimport_conda("cartopy.crs", "ccrs"))
-
-    # following ClimatePlots.jl
-    copy!(mpl, pyimport_conda("matplotlib", "matplotlib", "conda-forge"))
-    #copy!(plt, pyimport_conda("matplotlib.pyplot", "matplotlib", "conda-forge"))
-    #copy!(cmocean, pyimport_conda("cmocean", "cmocean", "conda-forge"))
-    copy!(cartopy, pyimport_conda("cartopy", "cartopy", "conda-forge"))
-
-    println("Python libraries installed")
- end
 
 """
     struct Grid
@@ -863,7 +847,7 @@ function interpindex(loc,γ)
     nodes = (lon,γ.lat,γ.depth)
 
     # eliminate need to pass tracer value
-    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes, loc_on_grid)
+    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes,loc_on_grid)
 
     # issue, some of weighted points may be NaNs in tracer field
     # handle this in the Interpolations.jl routines
@@ -1683,13 +1667,13 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
     # sample the true field at these random locations
     y = Vector{Float64}(undef,length(wis))
     replace!(c.tracer,NaN=>0.0)
     ywrap = view(c.tracer,list,:,:)
-    [y[i] = ywrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    [y[i] = Interpolations.InterpGetindex(ywrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
     return y
 end
@@ -1724,7 +1708,7 @@ function location_obs(field, locs, γ)
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
     
     field_sample = Matrix{Float64}(undef,(length(wis),tlength))
     replace!(field,NaN=>0.0)
@@ -2094,7 +2078,7 @@ function iswet(loc,γ)
     # will be greater than 0.
     # this criterion only requires on land point nearby,
     # where nearby is one of the 8 corners of the cube that contains loc
-    return wetwrap[wis...] > wetness
+    return Interpolations.InterpGetindex(wetwrap)[wis...] > wetness
 end
 
 # define the correct dimension and index for each control plane
@@ -2307,146 +2291,6 @@ function planview(c::Field{T},depth)::Array{T,2} where T <: Real
     return cplan
 end
 
-"""
-    function plotextent
-    Generate image showing user-specified ROI
-# Arguments
-- `latbox`: in format [lat_start, lat_stop]
-- `lonbox`: in format [lon_start, lon_stop]
-
-"""
-function plotextent(latbox, lonbox)
-    
-#    ccrs = pyimport("cartopy.crs")
-    lower_left = [minimum(lonbox), minimum(latbox)] #array of lower left of box
-
-    #calc width and height of box
-    w = maximum(lonbox) - minimum(lonbox)
-    h = maximum(latbox) - minimum(latbox)
-
-    #init GeoAxes
-    fig = figure()
-    ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
-
-    #plot rectangle
-    ax.add_patch(TMI.mpl.patches.Rectangle(xy=lower_left,
-                                 width=w, height=h,
-                                 facecolor="blue",
-                                 alpha=0.2,
-                                 transform=TMI.cartopy.crs.PlateCarree()))
-    #define extent of figure
-    pad = 10 #how many deg lat and lon to show outside of bbox
-    pad_add = [-pad, pad] #add this to latbox and lonbox
-    padded_lat = latbox + pad_add
-    padded_lon = lonbox + pad_add
-    ext = vcat(padded_lon, padded_lat) #make into one vector
-    ax.set_extent(ext)
-
-    # using cartopy 0.18 and NaturalEarth is missing
-    ax.coastlines() #show coastlines
-
-    #add gridlines
-    gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
-    gl.top_labels = false
-    gl.right_labels = false
-
-    ax.set_title("User-defined surface patch")
-end
-
-"""
-    function sectionplot
-    Plot of section (lat-depth) in ocean
-# Arguments
-- `field::Field`, 3d filed of values to be plotted
-- `lon`: longitude of section
-- `lims`: contour levels
-- `titlelabel`: optional title labeln
-"""
-function sectionplot(field::Field{T}, lon, lims;titlelabel="section plot") where T <: Real
-
-    Psection = section(field,lon)
-    cmap_seismic = get_cmap("inferno_r")
-    z = field.γ.depth/1000.0
-    
-    #calc fignum - based on current number of figures
-    figure(202)
-    clf()
-    contourf(field.γ.lat, z, Psection', lims, cmap=cmap_seismic)
-    #fig, ax = plt.subplots()
-    CS = gca().contour(field.γ.lat, z, Psection', lims,colors="k")
-    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
-    xlabel("Latitude [°N]")
-    ylabel("Depth [km]")
-    gca().set_title(titlelabel)
-    gca().invert_yaxis()
-    colorbar(orientation="horizontal")
-    
-end
-
-"""
-    function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where T <: Real
-
-    Plot of plan view (lon-lat) in ocean
-# Arguments
-- `field::Field`, 3d field of values to be plotted
-- `depth`: depth of plan view
-- `lims`: contour levels
-- `titlelabel`: optional title label
-"""
-function planviewplot(c::Field{T}, depth, lims;titlelabel="section plot") where T <: Real
-
-    cplan = planview(c::Field{T},depth)
-
-    cmap_infernor = get_cmap("inferno_r")
-    
-    #calc fignum - based on current number of figures
-    figure()
-    contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_infernor)
-    #fig, ax = plt.subplots()
-    CS = gca().contour(c.γ.lon,c.γ.lat, cplan', lims,colors="black")
-    gca().clabel(CS, CS.levels, inline=true, fontsize=10, colors="black")
-    ylabel("Latitude [°N]")
-    xlabel("Longitude [°E]")
-    gca().set_title(titlelabel)
-    colorbar(orientation="horizontal",label=string(c.name)*" ["*c.units*"]")
-    
-end
-
-"""
-    function planviewplot(b::BoundaryCondition{T}, lims,γ::Grid;titlelabel="surface plot") where T <: Real
-
-    Plot of plan view (lon-lat) in ocean
-# Arguments
-- `field::BoundaryCondition`, 3d filed of values to be plotted
-- `depth`: depth of plan view
-- `lims`: contour levels
-- `γ::Grid`, needed for lat, lon but not in BoundaryCondition! (could refactor)
-- `titlelabel`: optional title label
-"""
-function planviewplot(b::BoundaryCondition{T}, lims;titlelabel="surface plot") where T <: Real
-
-    # is the boundary condition oriented correctly?
-    if b.dim != 3
-        error("boundary condition not horizontal")
-    end
-    
-    cplan = b.tracer
-    
-    cmap_seismic = get_cmap("seismic")
-    
-    #calc fignum - based on current number of figures
-    figure()
-    contourf(b.i,b.j, cplan', lims, cmap=cmap_seismic)
-    #fig, ax = plt.subplots()
-    CS = gca().contour(b.i,b.j, cplan', lims, cmap=cmap_seismic)
-    gca().clabel(CS, CS.levels, inline=true, fontsize=10)
-    ylabel("Latitude [°N]")
-    xlabel("Longitude [°E]")
-    gca().set_title(titlelabel)
-    colorbar(orientation="vertical")
-    
-end
-
 """ 
     function control2state(tracer2D,γ)
     turn 2D surface field into 3D field with zeroes below surface    
@@ -2540,7 +2384,7 @@ function field2obs(cvec,wis,γ)
 
     # some interpolation weights on land, oh no
     # sum up all weights in ocean
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
     # reconstruct the observations
     ỹ = Vector{Float64}(undef,N)
@@ -2550,7 +2394,7 @@ function field2obs(cvec,wis,γ)
     cwrap = view(c̃,list,:,:)
 
     # divide by sum of all ocean weights so that this is still a true average
-    [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    [ỹ[i] = Interpolations.InterpGetindex(cwrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
 
