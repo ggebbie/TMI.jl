@@ -713,7 +713,7 @@ function interpindex(loc,γ)
     nodes = (lon,γ.lat,γ.depth)
 
     # eliminate need to pass tracer value
-    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes, loc_on_grid)
+    wis = Interpolations.weightedindexes((Interpolations.value_weights,),((Gridded(Linear()), Gridded(Linear()), Gridded(Linear()))),nodes,loc_on_grid)
 
     # issue, some of weighted points may be NaNs in tracer field
     # handle this in the Interpolations.jl routines
@@ -1337,13 +1337,13 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
     # sample the true field at these random locations
     y = Vector{Float64}(undef,length(wis))
     replace!(c.tracer,NaN=>0.0)
     ywrap = view(c.tracer,list,:,:)
-    [y[i] = ywrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    [y[i] = Interpolations.InterpGetindex(ywrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
 
     return y
 end
@@ -1378,7 +1378,7 @@ function location_obs(field, locs, γ)
     sumwis = Vector{Float64}(undef,length(wis))
     list = vcat(1:length(γ.lon),1)
     wetwrap = view(γ.wet,list,:,:)
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
     
     field_sample = Matrix{Float64}(undef,(length(wis),tlength))
     replace!(field,NaN=>0.0)
@@ -1745,7 +1745,7 @@ function iswet(loc,γ)
     # will be greater than 0.
     # this criterion only requires on land point nearby,
     # where nearby is one of the 8 corners of the cube that contains loc
-    return wetwrap[wis...] > wetness
+    return Interpolations.InterpGetindex(wetwrap)[wis...] > wetness
 end
 
 # define the correct dimension and index for each control plane
@@ -2047,7 +2047,7 @@ function field2obs(cvec,wis,γ)
 
     # some interpolation weights on land, oh no
     # sum up all weights in ocean
-    [sumwis[i] = wetwrap[wis[i]...] for i in eachindex(wis)]
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
     # reconstruct the observations
     ỹ = Vector{Float64}(undef,N)
@@ -2057,7 +2057,7 @@ function field2obs(cvec,wis,γ)
     cwrap = view(c̃,list,:,:)
 
     # divide by sum of all ocean weights so that this is still a true average
-    [ỹ[i] = cwrap[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    [ỹ[i] = Interpolations.InterpGetindex(cwrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
     return ỹ
 end
 
