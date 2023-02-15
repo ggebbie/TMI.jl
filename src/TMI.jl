@@ -1255,6 +1255,8 @@ end
 # Define maximum for Field to not include NaNs
 maximum(c::Field) = maximum(c.tracer[c.γ.wet])
 minimum(c::Field) = minimum(c.tracer[c.γ.wet])
+
+# uncomment this
 #mean(x::Field) = mean(x.tracer[x.γ.wet])
 
 # Define max/min for BoundaryCondition
