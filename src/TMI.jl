@@ -152,7 +152,7 @@ end
 - `bc::BoundaryCondition`
 """
 # an outer constructor that ignores units
-function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
+function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) #where T <: Real
 
     return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
 end
