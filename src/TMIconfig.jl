@@ -12,6 +12,44 @@
 """
 function config_from_nc(TMIversion)
 
+    TMIfile = download_ncfile(TMIversion)
+
+    γ = Grid(TMIfile)
+    
+    println("A")
+    @time A = watermassmatrix(TMIfile)
+
+    # LU factorization for efficient matrix inversions
+    println("Alu")
+    @time Alu = lu(A)
+
+    # would be good to make this optional
+    println("L=")
+    @time L = circulationmatrix(TMIfile,A,γ)
+
+    println("B=")
+    @time B = boundarymatrix(TMIfile,γ)
+    
+    return  A, Alu, γ, TMIfile, L, B
+
+end
+
+"""
+    function download_ncfile(TMIversion::String)
+
+    Download NetCDF file for given TMI version
+
+# Arguments
+- `TMIversion::String`
+
+# Output
+- `TMIfile::String`: TMI file name
+
+# Side-effect
+- download TMI input file if necessary
+"""
+function download_ncfile(TMIversion::String)
+
     #make datdir() if it doesn't exist 
     !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
@@ -31,9 +69,23 @@ function config_from_nc(TMIversion)
             url = ncurl(TMIversion)
             google_download(url,pkgdatadir())
         end
+    end
+    return TMIfile
+end
 
-    end 
-    
+
+"""
+function gridinit(TMIfile)
+
+    Construct the Grid given a file name
+
+# Arguments
+- `TMIfile::String`: NetCDF file name for TMI version
+
+# Output
+- `γ::Grid`: TMI grid struct
+"""
+function Grid(TMIfile::String)
     # get properties of grid
     lon,lat,depth = gridprops(TMIfile)
 
@@ -47,25 +99,10 @@ function config_from_nc(TMIversion)
     wet[I] .= 1
 
     R = linearindex(wet)
-
-    println("A")
-    @time A = watermassmatrix(TMIfile)
-
-    # LU factorization for efficient matrix inversions
-    println("Alu")
-    @time Alu = lu(A)
     
     γ = Grid(lon,lat,depth,I,R,wet)
 
-    # would be good to make this optional
-    println("L=")
-    @time L = circulationmatrix(TMIfile,A,γ)
-
-    println("B=")
-    @time B = boundarymatrix(TMIfile,γ)
-    
-    return  A, Alu, γ, TMIfile, L, B
-
+    return γ
 end
 
 """
@@ -73,25 +110,7 @@ Configure TMI environment from original MATLAB output
 """
 function config_from_mat(TMIversion)
 
-    #- `url`: Google Drive URL for data
-    url = maturl(TMIversion)
-    TMIfile = pkgdatadir("TMI_"*TMIversion*".mat")
-    TMIfilegz = TMIfile*".gz"
-    println(TMIfile)
-    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
-    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,pkgdatadir()) : nothing
-
-    if TMIversion == "modern_180x90x33_GH11_GH12"
-        println("workaround for 2° x 2°")
-        shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
-        run(`sh $shellscript`)
-        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
-    else
-        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
-    end
-    
-    # cloak mat file in gz to get Google Drive spam filter to shut down
-    isfile(TMIfilegz) & !isfile(TMIfile) && run(`gunzip $TMIfilegz`) 
+    TMIfile = download_matfile(TMIversion)
     
     # # make a sample field from zyx cartesian indices
     Izyx = cartesianindex(TMIfile)
@@ -125,6 +144,44 @@ function config_from_mat(TMIversion)
     # return Izyx or I or neither?
     #return  A, Alu, γ, TMIfile, I, L, B
     return  A, Alu, γ, TMIfile, L, B
+end
+
+"""
+    function download_matfile(TMIversion::String)
+
+    Download MATLAB file for given TMI version
+
+# Arguments
+- `TMIversion::String`
+
+# Output
+- `TMIfile::String`: TMI file name
+
+# Side-effect
+- download TMI input file if necessary
+"""
+function download_matfile(TMIversion::String)
+
+    #- `url`: Google Drive URL for data
+    url = maturl(TMIversion)
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".mat")
+    TMIfilegz = TMIfile*".gz"
+    println(TMIfile)
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    #    !isfile(TMIfilegz) & !isfile(TMIfile) ? google_download(url,pkgdatadir()) : nothing
+
+    if TMIversion == "modern_180x90x33_GH11_GH12"
+        println("workaround for 2° x 2°")
+        shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
+        run(`sh $shellscript`)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
+    else
+        !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
+    end
+    
+    # cloak mat file in gz to get Google Drive spam filter to shut down
+    isfile(TMIfilegz) & !isfile(TMIfile) && run(`gunzip $TMIfilegz`) 
+    return TMIfile
 end
 
 """
@@ -465,7 +522,8 @@ end
 """
 function maturl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
-        url = "https://docs.google.com/uc?export=download&id=1Z2knDctAmZHO2lcWTBCdR8zjkmbcyCGg"
+        #        url = "https://docs.google.com/uc?export=download&id=1Z2knDctAmZHO2lcWTBCdR8zjkmbcyCGg"
+        url = "https://docs.google.com/uc?export=download&id=11-b4L6D1bnDdIIgSg8SaiCkOuPk64pSY"
     elseif TMIname == "modern_180x90x33_GH11_GH12"
         url = "https://docs.google.com/uc?export=download&id=11zD1nOfT6V7G0qIHdjK2pDGHFk-ExXwU"
     elseif TMIname == "modern_90x45x33_unpub12"
@@ -612,7 +670,6 @@ fieldsatts() =
          "δ¹³C" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/s)/(kg gridcell)"))
-
 
 """
 Read vectors from mat file, translate to 3D,

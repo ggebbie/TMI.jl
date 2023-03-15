@@ -43,7 +43,7 @@ qPO₄ = readfield(TMIfile,"qPO₄",γ)
 
 # zero boundary condition, choose one line of next two
 #b₀ = zerosurfaceboundary(γ)
-b₀ = (;surface = zerosurfaceboundary(γ))
+b₀ = (;surface = zerosurfaceboundary(γ,:PO₄,"phosphate","μmol/kg"))
 PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
 PO₄total = PO₄ᴿ + PO₄pre
 
@@ -61,12 +61,12 @@ PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
 
 ## Plot a plan view
 # view the surface
-cntrs = 0:0.05:3.5
+cntrs = 0:0.2:4
 
 # what model depth level?
 level = 15
 depth = γ.depth[level]
-label = "depth = "*string(depth)*" m"
+label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
 planviewplot(PO₄total, depth, cntrs, titlelabel=label) 

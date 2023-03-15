@@ -13,8 +13,10 @@ using Interpolations
 using LineSearches
 using MAT
 using NCDatasets
+using DataStructures
 
 export config, config_from_mat, config_from_nc,
+    download_ncfile, download_matfile,
     vec2fld, fld2vec, surfaceindex,
     lonindex, latindex, depthindex,
     surfacepatch, 
@@ -26,7 +28,7 @@ export config, config_from_mat, config_from_nc,
     circulationmatrix, boundarymatrix,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
-    readtracer, readfield,
+    readtracer, readfield, writefield,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
@@ -45,11 +47,11 @@ export config, config_from_mat, config_from_nc,
     onesurfaceboundary, setboundarycondition!,
     adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
-    zeros, ones, maximum, minimum, (+), (-), (*), dot,
+    zeros, one, oneunit, ones, maximum, minimum, (+), (-), (*), dot,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec
 
-import Base: zeros, ones, maximum, minimum, (\)
-import Base: (+), (-), (*), vec
+import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
+import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
 """
@@ -76,11 +78,35 @@ end
 
     This structure assumes the Tracer type to be 
     three-dimensional.
+
+    tracer::Array{T,3}
+    γ::Grid
+    name::Symbol
+    longname::String
+    units::String
 """
 struct Field{T}
     tracer::Array{T,3}
     γ::Grid
+    name::Symbol
+    longname::String
+    units::String
 end
+
+"""
+    function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+
+    Outer constructor for Field if there's no worry about
+    tracer type, long name, or units.
+# Arguments
+- `tracer::Array{T,3}`
+- `γ::Grid`
+# Output
+- `field::Field`
+"""
+#function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+#   return Field(tracer,γ,:none,"unknown","unknown")
+#end
 
 """
     struct BoundaryCondition
@@ -104,7 +130,33 @@ struct BoundaryCondition{T}
     dim::Int64
     dimval::Int64
     wet::BitArray{2}
+    name::Symbol
+    longname::String
+    units::String
 end
+
+"""
+    function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
+
+    Outer constructor for BoundaryCondition if there's no worry about
+    tracer type, long name, or units.
+# Arguments
+- `tracer::Array{T,3}`
+- `i`
+- `j`
+- `k`
+- `dim`
+- `dimval`
+- `wet`
+# Output
+- `bc::BoundaryCondition`
+"""
+# an outer constructor that ignores units
+function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) #where T <: Real
+
+    return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
+end
+
 
 # Credit to DrWatson.jl for these functions
 # Didn't want to add dependency for these small functions
@@ -423,7 +475,10 @@ end
 """
     function readfield(file,tracername,γ)
     Read a tracer field from NetCDF but return it 
-    as a Field. 
+    as a Field.
+
+    Use NCDatasets so that Unicode is correct
+
 # Arguments
 - `file`: TMI NetCDF file name
 - `tracername`: name of tracer
@@ -432,7 +487,19 @@ end
 - `c`::Field
 """
 function readfield(file,tracername,γ::Grid)
-    tracer = ncread(file,tracername)
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
+
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+
+    # load all data
+    tracer = v[:,:,:]
+
+    # load an attribute
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    
+    close(ds)
 
     # perform a check of file compatibility
     # with grid
@@ -444,9 +511,76 @@ function readfield(file,tracername,γ::Grid)
     # if sum( !iszero(tracer[.!γ.wet])) > 0 
     #     println("readfield warning: nonzero value off grid")
     # end
-           
-    c = Field(tracer,γ)
+    
+    #c = Field(tracer,γ)
+    c = Field(tracer,γ,Symbol(tracername),longname,units)
+    
     return c
+end
+
+"""
+    function writefield(file,field)
+
+    Write a Field to NetCDF.
+ 
+    Use NCDatasets so that Unicode is correct
+
+# Arguments
+- `file`: TMI NetCDF file name
+- `field::Field`: a TMI.Field struct
+# Output
+- none
+# Side-effect
+- write to `file`
+"""
+function writefield(file,field::Field{T}) where T <: Real
+
+    if !isfile(file)
+        # create new NetCDF file
+        ds = Dataset(file,"c")
+
+        TMIgrids, TMIgridsatts = griddicts(field.γ)
+
+        # Define the dimension "lon" and "lat" with the size 100 and 110 resp.
+        defDim(ds,"lon",length(field.γ.lon))
+        defDim(ds,"lat",length(field.γ.lat))
+        defDim(ds,"depth",length(field.γ.depth))
+
+        # Define a global attribute
+        ds.attrib["title"] = "TMI output"
+
+        vlon = defVar(ds,"lon",Float64,["lon"],
+               attrib = OrderedDict(TMIgridsatts["lon"]))
+        vlon[:] = field.γ.lon
+
+        vlat = defVar(ds,"lat",Float64,["lat"],
+               attrib = OrderedDict(TMIgridsatts["lat"]))
+        vlat[:] = field.γ.lat
+
+        vdepth = defVar(ds,"depth",Float64,["depth"],
+               attrib = OrderedDict(TMIgridsatts["depth"]))
+        vdepth[:] = field.γ.depth
+    
+
+        v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
+                  attrib = OrderedDict("longname" => field.longname,
+                                "units" => field.units))
+        v[:,:,:] = field.tracer
+
+        close(ds)
+
+    else
+        # assumption: on the same grid
+        ds = Dataset(file,"a")
+
+        v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
+                  attrib = OrderedDict("longname" => field.longname,
+                                "units" => field.units))
+        v[:,:,:] = field.tracer
+        close(ds)
+    end
+        
+    return nothing
 end
 
 """
@@ -796,7 +930,8 @@ function interpweights(loc,γ)
 end
 
 """ 
-    function zeros(γ::Grid)
+    function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
       initialize tracer field on TMI grid
       using a Field struct and constructor
 # Arguments
@@ -804,7 +939,7 @@ end
 # Output
 - `d`::Field,  3d tracer field with NaN on dry points
 """
-function zeros(γ::Grid)::Field
+function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # use depth (could have been lon, lat)
     # to get element type
@@ -818,7 +953,133 @@ function zeros(γ::Grid)::Field
     tracer[γ.wet] .= zero(T)
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
-    d = Field(tracer,γ)
+    d = Field(tracer,γ,name,longname,units)
+
+    return d
+end
+
+""" 
+    function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
+      initialize tracer field of ones on TMI grid
+      using a Field struct and constructor
+# Arguments
+- `γ`::TMI.Grid
+# Output
+- `d`::Field,  3d tracer field with NaN on dry points
+"""
+function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    T = eltype(γ.depth)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[γ.wet] .= Base.one(T) # add Base: error "should import Base"
+    tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,γ,name,longname,units)
+
+    return d
+end
+
+""" 
+   function oneunit, help for gridded Interpolations
+"""
+function one(field::Field{T})::Field{T} where T <: Real
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= Base.one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
+
+""" 
+   function oneunit, help for gridded Interpolations
+"""
+function one(T::Type{Field})
+    TMIversion = "modern_90x45x33_GH10_GH12"
+    TMIfile = download_ncfile(TMIversion)
+    γ = Grid(TMIfile)
+
+    return TMI.ones(γ)
+end
+
+function one(field::Field{Float64})
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    T = Float64
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
+
+function Field(field::Field{Float64})
+
+    # use depth (could have been lon, lat)
+    # to get element type
+    #T = eltype(field.γ.depth)
+    #println(T)
+    
+    # preallocate
+    T = Float64
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
+
+    return d
+end
+
+function /(field::Field{Float64},scalar::Float64)
+
+    # preallocate
+    T = Float64
+    tracer = Array{T}(undef,size(field.γ.wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    println("calling one with ",T)
+    tracer[field.γ.wet] ./= scalar # add Base: error "should import Base"
+    tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
+    d = Field(tracer,field.γ,field.name,field.longname,field.units)
 
     return d
 end
@@ -875,18 +1136,28 @@ function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
 end
 
 """
-    function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+    function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
 
        Initialize boundary condition with zeroes
+# Arguments
+- `dim`:
+- `dimval`
+- `γ::Grid`
+- `name::Symbol`
+- `longname::String`
+- `units::String`
+
+# Output
+- `b::BoundaryCondition`
 """
-function zeros(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
 
     i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
 
     tracer = Array{Float64}(undef,size(wet))
     tracer[wet] .= zero(Float64)
     tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet)
+    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet,name,longname,units)
 
 end
 
@@ -939,9 +1210,53 @@ function getboundarycondition(tracer3d,dim,dimval,γ::Grid)::BoundaryCondition
 
 end
 
+
+"""
+    function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+   Get boundary condition by extracting from Field (i.e., 3D tracer)
+# Arguments
+- `field::Field`: 3D tracer field with metadata and grid
+- `dim`: dimension number (1,2,3) that the boundary plane has constant value
+- `dimval`: index number in dimension `dim` that defines boundary plane
+# Output
+- `b::BoundaryCondition`: boundary condition on a plane with metadata and grid
+"""
+function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+
+    dimsize = size(field.γ.wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = field.γ.wet[dimval,:,:]
+        tracer2d = field.tracer[dimval,:,:]
+        i = field.γ.lat
+        j = field.γ.depth
+        k = field.γ.lon[dimval]
+    elseif dim == 2
+        wet2d = field.γ.wet[:,dimval,:]
+        tracer2d = field.tracer[:,dimval,:]
+        i = field.γ.lon
+        j = field.γ.depth
+        k = field.γ.lat[dimval]
+    elseif dim == 3
+        wet2d = field.γ.wet[:,:,dimval]
+        tracer2d = field.tracer[:,:,dimval]
+        i = field.γ.lon
+        j = field.γ.lat
+        k = field.γ.depth[dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d,
+                          field.name,field.longname,field.units)
+
+end
+
 # Define maximum for Field to not include NaNs
 maximum(c::Field) = maximum(c.tracer[c.γ.wet])
 minimum(c::Field) = minimum(c.tracer[c.γ.wet])
+
+# uncomment this
 #mean(x::Field) = mean(x.tracer[x.γ.wet])
 
 # Define max/min for BoundaryCondition
@@ -955,7 +1270,7 @@ minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
 """
 function \(A,d::Field{T})::Field{T} where T <: Real
     # initialize output
-    c = zeros(d.γ)
+    c = zeros(d.γ,d.name,d.longname,d.units)
     c.tracer[c.γ.wet] = A\d.tracer[d.γ.wet]
     return c
 end
@@ -988,7 +1303,12 @@ function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
     if c.γ.wet != d.γ.wet # check conformability
         error("Fields not conformable for addition")
     end
-    e = zeros(d.γ)
+
+    if !isequal(d.units,c.units)
+        error("Units not consistent:",d.units," vs ",c.units)
+    end
+
+    e = zeros(d.γ,d.name,d.longname,d.units)
 
     # a strange formulation to get
     # return e to be correct
@@ -1039,8 +1359,16 @@ end
     Field by field multiplication is element-by-element.
 """
 function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+    # initialize output
+    if c.γ.wet != d.γ.wet # check conformability
+        error("Fields not conformable for addition")
+    end
 
-    e = zeros(d.γ)
+    if !isequal(d.units,c.units)
+        error("Units not consistent:",d.units," vs ",c.units)
+    end
+
+    e = zeros(d.γ,d.name,d.longname,d.units)
     e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
     return e
 end
@@ -1254,7 +1582,11 @@ function synthetic_observations(TMIversion,variable,γ)
     #ntrue = zeros(γ)
     #ntrue = zeros(γ.wet)
     #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
-    ntrue = Field(rand(Normal(),size(γ.wet)),γ)
+
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
+    println(θtrue.units)
+    println(ntrue.units)
+
     ntrue *= σθ
 
     y = θtrue + ntrue
@@ -1598,8 +1930,9 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
     end
 
     # define ldiv with fields
-    c = zeros(d.γ)
-    #c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
+    # println(b.units)
+    #c = zeros(d.γ,b.name,b.longname,b.units)
+    #println(c.units)
     c = Alu \ d
     
     return c
@@ -1644,7 +1977,7 @@ end
 function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     # preallocate Field for equation constraints
-    d = zeros(γ)
+    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
 
     # update d with the boundary condition b
     setboundarycondition!(d,b)
@@ -1655,10 +1988,12 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
         setsource!(d,q,r)
     end
 
+    # Warning: doesn't this need to loop over the NamedTuple?
+    
+
     # define ldiv with fields
-    c = zeros(d.γ)
-    c.tracer[c.γ.wet] =  Alu\(d.tracer[d.γ.wet])
-    #c = Alu \ d
+    #c = zeros(d.γ,b.name,b.longname,b.units)
+    c = Alu \ d
 
     return c
 end
@@ -1750,19 +2085,24 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ) = zeros(3,1,γ)::BoundaryCondition
-zeronorthboundary(γ) = zeros(2,maximum(latindex(γ.I)),γ)::BoundaryCondition
-zeroeastboundary(γ) = zeros(1,maximum(lonindex(γ.I)),γ)::BoundaryCondition
-zerosouthboundary(γ) = zeros(2,1,γ)::BoundaryCondition
-zerowestboundary(γ) = zeros(1,1,γ)::BoundaryCondition
+zerosurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
 
+zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
+
+zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
+
+## Warning: need to update this next function
 onesurfaceboundary(γ) = ones(3,1,γ)::BoundaryCondition
 
-getsurfaceboundary(c::Field) = getboundarycondition(c.tracer,3,1,c.γ)::BoundaryCondition
-getnorthboundary(c::Field) = getboundarycondition(c.tracer,2,maximum(latindex(c.γ.I)),c.γ)::BoundaryCondition
-geteastboundary(c::Field) = getboundarycondition(c.tracer,1,maximum(lonindex(c.γ.I)),c.γ)::BoundaryCondition
-getsouthboundary(c::Field) = getboundarycondition(c.tracer,2,1,c.γ)::BoundaryCondition
-getwestboundary(c::Field) = getboundarycondition(c.tracer,1,1,c.γ)::BoundaryCondition
+getsurfaceboundary(c::Field) = getboundarycondition(c,3,1)::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c,2,maximum(latindex(c.γ.I)))::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c,1,maximum(lonindex(c.γ.I)))::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c,2,1)::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c,1,1)::BoundaryCondition
 
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)
@@ -1953,9 +2293,8 @@ function planview(c::Field{T},depth)::Array{T,2} where T <: Real
     return cplan
 end
 
-
 """ 
-n    function control2state(tracer2D,γ)
+    function control2state(tracer2D,γ)
     turn 2D surface field into 3D field with zeroes below surface    
 # Arguments
 - `tracer2D`:: 2D surface tracer field
