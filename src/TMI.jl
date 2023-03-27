@@ -2224,7 +2224,7 @@ end
 """
 function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
 
-    ukeys = keys(u)
+    #ukeys = keys(u)
     for ukey in keys(u)
         b[ukey].tracer[b[ukey].wet] += u[ukey].tracer[b[ukey].wet] 
     end
