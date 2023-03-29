@@ -487,8 +487,8 @@ end
 - `c`::Field
 """
 function readfield(file,tracername,γ::Grid)
-    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
 
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     ds = Dataset(file,"r")
     v = ds[tracername]
 
@@ -504,7 +504,7 @@ function readfield(file,tracername,γ::Grid)
     # perform a check of file compatibility
     # with grid
     if sum(isnan.(tracer[γ.wet])) > 0
-        println("readfield warning: NaN on grid")
+        error("readfield warning: NaN on grid")
     end
     # check for non NaN or nonzero off grid
     # Need to rethink how to do this.
@@ -1915,8 +1915,6 @@ end
 """
 function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
-    #println("running steady inversion")
-
     # preallocate Field for equation constraints
     d = zeros(γ)
     
@@ -1929,12 +1927,7 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
         setsource!(d,q,r)
     end
 
-    # define ldiv with fields
-    # println(b.units)
-    #c = zeros(d.γ,b.name,b.longname,b.units)
-    #println(c.units)
     c = Alu \ d
-    
     return c
 end
 

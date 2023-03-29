@@ -444,6 +444,9 @@ end
 """
     function updatelinearindex(izyx,Izyx,R)
     Linear index translated from z,y,x to x,y,z accounting
+
+    get Izyx Cartesian index stored from legacy MATLAB code
+
 # Arguments
 - `izyx`: index of interest in z,y,x accounting
 - `Izyx`: wet Cartesian Index for z,y,x
@@ -451,12 +454,7 @@ end
 # Output
 - `ixyz`: index of interest in x,y,z accounting
 """
-function updatelinearindex(izyx,Izyx,R)
-    # get Izyx Cartesian index stored from legacy MATLAB code
-    ixyz = R[Izyx[izyx]]
-    return ixyz
-end
-
+updatelinearindex(izyx,Izyx,R) = R[Izyx[izyx]]
 
 """
      function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition

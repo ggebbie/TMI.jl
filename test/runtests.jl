@@ -225,4 +225,55 @@ using TMI
             @test J̃ < J̃₀
         end
     end
+    @testset "sourcemap" begin
+
+        using Statistics, Interpolations
+
+        yPO₄ = readfield(TMIfile,"PO₄",γ)
+        bPO₄ = getsurfaceboundary(yPO₄)
+
+        #PO₄pre = steadyinversion(Alu,bPO₄,γ)
+        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+        #b₀ = bPO₄ #zerosurfaceboundary(γ)
+        #PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+
+        N = 20
+        y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
+
+        #u = (;surface = zerosurfaceboundary(γ))
+        u = (; source = zeros(γ))
+        b = (;surface = bPO₄)
+
+        uvec = vec(u)
+        σb = 5.0
+        Q⁻ = 1.0/(σb^2)
+        fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+        f(x) = fg(x)[1]
+        J0 = f(uvec)
+        J̃₀,gJ₀ = fg(uvec)
+        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+
+        ϵ = 1e-3 # size of finite perturbation
+        ii = rand(1:sum(γ.wet[:,:,1]))
+        println("gradient check location=",ii)
+        δu = copy(uvec); δu[ii] += ϵ
+        ∇f_finite = (f(δu) - f(uvec))/ϵ
+        println("∇f_finite=",∇f_finite)
+
+        fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+        ∇f = gJ₀[ii]
+        println("∇f=",∇f)
+
+        # error less than 10 percent?
+        println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+        iterations = 5
+        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+        # was cost function decreased?
+        @test out.minimum < J̃₀
+        # reconstruct by hand to double-check.
+        ũ = out.minimizer
+        J̃,gJ̃ = fg(ũ)
+        @test J̃ < J̃₀
+    end
 end
