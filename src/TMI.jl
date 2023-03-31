@@ -1934,7 +1934,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu,b::Union{NamedTuple,BoundaryCondition{T}},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ)
@@ -2196,6 +2196,22 @@ function gsetboundarycondition(gd::Field{T},b::NamedTuple{<:Any, NTuple{N,Bounda
 end
 
 """
+    function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+
+    adjust the (one) boundary condition 
+"""
+adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
+function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::NamedTuple) 
+    bnew = deepcopy(b)
+    adjustboundarycondition!(bnew,u)
+    #         bnew[ukey] += u[ukey]
+    #         #bnew[ukey].tracer[bnew[ukey].wet] += u[ukey].tracer[bnew[ukey].wet]
+    #     end
+    # end
+    return bnew
+end
+
+"""
     function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
 
     adjust the (one) boundary condition 
@@ -2205,25 +2221,6 @@ function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
     # write it out so b changes when returned
     b.tracer[b.wet] += u.tracer[u.wet] 
 end
-
-function adjustsource!(b::Field,u::Field)
-    # write it out so b changes when returned
-    b.tracer[b.γ.wet] += u.tracer[u.γ.wet] 
-end
-
-"""
-    function gadjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-
-    adjust the (one) boundary condition 
-    Just copy the variable.
-    Keep this function so that calling functions can look alike.
-    Could probably combine with lower function, use Union type
-"""
-function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    gu  = gb
-    return gu
-end
-
 """
     function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where N1, N2, T <: Real
 
@@ -2248,6 +2245,25 @@ function adjustboundarycondition!(b::BoundaryCondition,u::NamedTuple) #where {N1
         error("adjustboundarycondition: u doesn't have bkey ",bkey)
     end
 end
+
+function adjustsource!(b::Field,u::Field)
+    # write it out so b changes when returned
+    b.tracer[b.γ.wet] += u.tracer[u.γ.wet] 
+end
+
+"""
+    function gadjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+
+    adjust the (one) boundary condition 
+    Just copy the variable.
+    Keep this function so that calling functions can look alike.
+    Could probably combine with lower function, use Union type
+"""
+function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    gu  = gb
+    return gu
+end
+
 
 function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
     for qkey in keys(q)
