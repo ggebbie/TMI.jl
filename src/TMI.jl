@@ -1850,7 +1850,7 @@ function costfunction_point_obs(uvec::Vector,Alu,b₀::Union{BoundaryCondition,N
 
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
-    c = steadyinversion(Alu,b,γ,q,r)  # gives the misfit
+    c = steadyinversion(Alu,b,γ,q=q,r=r)  # gives the misfit
     # observe at right spots
     ỹ = observe(c,wis,γ)
     n = ỹ - y
@@ -1926,7 +1926,7 @@ end
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary condition
+- `b`: boundary condition, assumed to be surface boundary condition
 - `γ`::Grid
 # Optional Arguments
 - `q`: interior sources/sinks of phosphate
@@ -1934,7 +1934,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::Union{NamedTuple,BoundaryCondition{T}},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ)
