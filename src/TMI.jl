@@ -1409,18 +1409,9 @@ end
     for use with Optim.jl. 
     An in-place version of this function would be handy.
 """
-function vec(u::BoundaryCondition{T}) where T <: Real
-    uvec = u.tracer[u.wet]
-    return uvec
-end
+vec(u::Field) = u.tracer[u.γ.wet]
+vec(u::BoundaryCondition) = u.tracer[u.wet]
 
-"""
-    function vec(u)
-
-    Turn a collection of controls into a vector
-    for use with Optim.jl. 
-    An in-place version of this function would be handy.
-"""
 #function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
 function vec(u::NamedTuple) 
 
@@ -1434,9 +1425,6 @@ function vec(u::NamedTuple)
     return uvec
 end
 
-vec(u::Field) = u.tracer[u.γ.wet]
-vec(u::BoundaryCondition) = u.tracer[u.wet]
-
 """
     function unvec!(u,uvec)
 
@@ -1444,10 +1432,16 @@ vec(u::BoundaryCondition) = u.tracer[u.wet]
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec!(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
+function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
 
     counter = 0
     for v in u
+        if v isa BoundaryCondition
+            wet = v.wet
+        elseif v isa Field
+            wet = v.γ.wet
+        end
+        
         n = sum(v.wet)
         v.tracer[v.wet] = uvec[counter+1:counter+n]
         counter += n
@@ -1842,11 +1836,9 @@ end
 - `gJ`: derivative of cost function wrt to controls
 """
 function costfunction_point_obs(uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) 
-#function costfunction_point_obs(uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
-    # control penalty and gradient
+    # control penalty
     Jcontrol = uvec'*(Q⁻*uvec)
-    guvec = 2*(Q⁻*uvec)
 
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
@@ -1858,12 +1850,22 @@ function costfunction_point_obs(uvec::Vector,Alu,b₀::Union{BoundaryCondition,N
     Jdata = n ⋅ (Wⁱ * n) # dot product
     J = Jdata + Jcontrol
 
+    # start adjoint model
+
+    # initialize adjoint control variable with zero
+    gu = unvec(u₀,0 .* uvec)
+    
     gn = 2Wⁱ * n
     gỹ = gn
     
     gc = gobserve(gỹ,c,locs)
     gb = gsteadyinversion(gc, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
+    #gu = gadjustboundarycondition(gb,u)
+    gadjustboundarycondition!(gu,gb)
+
+    # control penalty gradient
+    guvec = 2*(Q⁻*uvec)
+
     guvec += vec(gu)
     
     return J, guvec
@@ -1889,10 +1891,11 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+function costfunction_point_obs!(J,guvec,uvec::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) #where {N1, N2, T <: Real}
+#function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
+    unvec!(u,uvec)
+    adjustboundarycondition!(b,u) # combine b₀, u
     c = steadyinversion(Alu,b,γ)  # gives the misfit
 
     # observe at right spots
@@ -2196,59 +2199,46 @@ function gsetboundarycondition(gd::Field{T},b::NamedTuple{<:Any, NTuple{N,Bounda
 end
 
 """
-    function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
 
-    adjust the (one) boundary condition 
+    adjust all boundary conditions b that are described in u
 """
 adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
-function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::NamedTuple) 
+function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple}) 
     bnew = deepcopy(b)
     adjustboundarycondition!(bnew,u)
-    #         bnew[ukey] += u[ukey]
-    #         #bnew[ukey].tracer[bnew[ukey].wet] += u[ukey].tracer[bnew[ukey].wet]
-    #     end
-    # end
     return bnew
 end
 
 """
-    function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
 
-    adjust the (one) boundary condition 
-    problem: passes back a mutated b
+    adjust all boundary conditions b that are described in u
+
+    warning: if u doesn't contain any boundary condition adjustments,
+    nothing will change.
 """
 function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
     # write it out so b changes when returned
     b.tracer[b.wet] += u.tracer[u.wet] 
 end
-"""
-    function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where N1, N2, T <: Real
-
-    adjust all boundary conditions b that are described in u
-"""
-#function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-function adjustboundarycondition!(b::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
-    for bkey in keys(b)
-        if haskey(u,bkey)
-            adjustboundarycondition!(b[bkey],u[bkey])
-            #b[ukey].tracer[b[ukey].wet] += u[ukey].tracer[b[ukey].wet]
-        else
-            error("adjustboundarycondition: u doesn't have bkey ",bkey)
-        end
-    end
-end
 function adjustboundarycondition!(b::BoundaryCondition,u::NamedTuple) #where {N1, N2, T <: Real}
-    bkey = :surface # if not explicit, assume a surface boundary condition
+    # if not explicit, assume a surface boundary condition
+    bkey = :surface # 
     if haskey(u,bkey)
         adjustboundarycondition!(b,u[bkey])
-    else
-        error("adjustboundarycondition: u doesn't have bkey ",bkey)
+    end
+end
+function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
+    for bkey in keys(b)
+        adjustboundarycondition!(b[bkey],u)
     end
 end
 
-function adjustsource!(b::Field,u::Field)
-    # write it out so b changes when returned
-    b.tracer[b.γ.wet] += u.tracer[u.γ.wet] 
+# Seems not to be general because gu overwritten.
+function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    gu  = gb
+    return gu
 end
 
 """
@@ -2259,11 +2249,31 @@ end
     Keep this function so that calling functions can look alike.
     Could probably combine with lower function, use Union type
 """
-function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    gu  = gb
+function gadjustboundarycondition!(gu::BoundaryCondition,gb::BoundaryCondition) 
+    gu.tracer[gu.wet] += gb.tracer[gb.wet]
+end
+function gadjustboundarycondition!(gu::NamedTuple,gb::BoundaryCondition)
+    bkey = :surface
+    if haskey(gu,bkey)
+        gadjustboundarycondition!(gu[bkey],gb)
+    end
+end
+function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
+    for bkey in keys(gb)
+        gadjustboundarycondition!(gu,gb[bkey])
+    end
+end
+
+#function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+    gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
 end
 
+function adjustsource!(b::Field,u::Field)
+    # write it out so b changes when returned
+    b.tracer[b.γ.wet] += u.tracer[u.γ.wet] 
+end
 
 function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
     for qkey in keys(q)
@@ -2281,19 +2291,6 @@ function adjustsource!(q::Field,u::NamedTuple) #where {N1, N2, T <: Real}
     else
         error("adjustsource!: u doesn't have source info")
     end
-end
-
-"""
-    function gadjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-
-    ADJOINT CODE
-    adjust the (one) boundary condition 
-    Just copy the variable.
-    Keep this function so that calling functions can look alike.
-"""
-function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-    gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
-    return gu
 end
 
 """
