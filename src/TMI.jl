@@ -1797,9 +1797,9 @@ end
 """ 
     function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) where T <: Real
 
-    squared model-data misfit for pointwise data
-    controls are a vector input for Optim.jl
-    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    Squared model-data misfit for pointwise data.
+    Controls are a vector input for Optim.jl.
+    Core numerics handled by `costfunction_point_obs`.
     
 # Arguments
 - `uvec`: controls, vector format
@@ -1826,36 +1826,6 @@ function costfunction_point_obs(uvec::Vector,Alu,b::Union{BoundaryCondition,Name
     J = costfunction_point_obs!(J,guvec,uvec,Alu,b,u,y,Wⁱ,wis,locs,Q⁻,γ,q=q,r=r)
         
     return J, guvec
-
-    # # control penalty
-    # Jcontrol = uvec'*(Q⁻*uvec)
-
-    # u = unvec(u₀,uvec)
-    # b = adjustboundarycondition(b₀,u) # combine b₀, u
-    # c = steadyinversion(Alu,b,γ,q=q,r=r)  # gives the misfit
-    # # observe at right spots
-    # ỹ = observe(c,wis,γ)
-    # n = ỹ - y
-    
-    # Jdata = n ⋅ (Wⁱ * n) # dot product
-    # J = Jdata + Jcontrol
-
-    # ## start adjoint model
-    # # initialize adjoint control variable with zero
-    # gu = unvec(u₀,0 .* uvec)
-    
-    # gn = 2Wⁱ * n
-    # gỹ = gn
-    
-    # gc = gobserve(gỹ,c,locs)
-    # gb = gsteadyinversion(gc, Alu, b, γ)
-    # #gu = gadjustboundarycondition(gb,u)
-    # gadjustboundarycondition!(gu,gb)
-
-    # # control penalty gradient
-    # guvec = 2*(Q⁻*uvec)
-
-    # guvec += vec(gu)
 end
 
 """ 
@@ -1891,9 +1861,9 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
     n = ỹ - y
 
     if guvec != nothing
-        # adjoint equations
-        #guvec = 0.0.*uvec # re-initialize
-        gtmp = 2*(Q⁻*uvec)
+        ## start adjoint model
+        
+        gtmp = 2*(Q⁻*uvec) # control penalty gradient
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
@@ -1903,13 +1873,9 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         for (ii,vv) in enumerate(gtmp)
             guvec[ii] = vv
         end
-        println(maximum(guvec))
-        println(minimum(guvec))
     end
 
     if J !=nothing
-        # reinitialize for Optim.jl
-        #J = 0.0
         # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
