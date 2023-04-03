@@ -1862,13 +1862,17 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 
     if guvec != nothing
         ## start adjoint model
+
+        # initialize to zero
+        gu = unvec(u,0 .* uvec)
         
         gtmp = 2*(Q⁻*uvec) # control penalty gradient
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
         gb = gsteadyinversion(gc, Alu, b, γ)
-        gu = gadjustboundarycondition(gb,u)
+        #gu = gadjustboundarycondition(gb,u)
+        gadjustboundarycondition!(gu,gb)
         gtmp += vec(gu)
         for (ii,vv) in enumerate(gtmp)
             guvec[ii] = vv
@@ -2224,7 +2228,7 @@ function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
 end
 
 #function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
 end
