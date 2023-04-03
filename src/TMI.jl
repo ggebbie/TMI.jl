@@ -419,10 +419,10 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid,iterations=10) #where {N1, N2, T <: Real}
+function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
 #function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
-     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1823,7 +1823,7 @@ function costfunction_point_obs(uvec::Vector,Alu,b::Union{BoundaryCondition,Name
     J = 0.0
     guvec = 0.0.*uvec # same size
     #gu = unvec(u,0 .* uvec)
-    J = costfunction_point_obs!(J,guvec,uvec,Alu,b,u,y,Wⁱ,wis,locs,Q⁻,γ,q=q,r=r)
+    J = costfunction_point_obs!(J,guvec,uvec,Alu,b,u,y,Wⁱ,wis,locs,Q⁻,γ,q₀=q,r=r)
         
     return J, guvec
 end
@@ -1848,12 +1848,17 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) #where {N1, N2, T <: Real}
+function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0) #where {N1, N2, T <: Real}
 #function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
     #unvec!(u,uvec) # causes issues with Optim.jl
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
+
+    if !isnothing(q₀)
+        q = adjustsource(q₀,u)
+    end
+    
     c = steadyinversion(Alu,b,γ,q=q,r=r) 
 
     # observe at right spots
@@ -1871,7 +1876,6 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
         gb = gsteadyinversion(gc, Alu, b, γ)
-        #gu = gadjustboundarycondition(gb,u)
         gadjustboundarycondition!(gu,gb)
         gtmp += vec(gu)
         for (ii,vv) in enumerate(gtmp)
@@ -1883,6 +1887,8 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
+        println("Jcontrol:",Jcontrol)
+        println("Jdata:",Jdata)
         return Jdata + Jcontrol
     end
 end
@@ -2233,11 +2239,16 @@ function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::Nam
     return gu
 end
 
-function adjustsource!(b::Field,u::Field)
-    # write it out so b changes when returned
-    b.tracer[b.γ.wet] += u.tracer[u.γ.wet] 
+function adjustsource(q₀::Union{Field,NamedTuple},u::Union{Field,NamedTuple})
+    q = deepcopy(q₀)
+    adjustsource!(q,u)
+    return q
 end
-
+    
+function adjustsource!(q::Field,u::Field)
+    # write it out so b changes when returned
+    q.tracer[q.γ.wet] += u.tracer[u.γ.wet] 
+end
 function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
     for qkey in keys(q)
         if haskey(u,qkey)

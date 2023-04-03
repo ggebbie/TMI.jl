@@ -223,7 +223,7 @@ using TMI
             @test out.minimum < J̃₀
             # reconstruct by hand to double-check.
             ũ = out.minimizer
-            J̃,gJ̃ = fg(ũ)
+            J̃,∂J̃∂ũ = fg(ũ)
             @test J̃ < J̃₀
         end
     end
@@ -250,7 +250,7 @@ using TMI
         PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
         uvec = vec(u)
 
-        σq = 0.2
+        σq = 0.1
         Q⁻ = 1.0/(σq^2) # how well is q (source) known?
         fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
         f(x) = fg(x)[1]
@@ -273,7 +273,7 @@ using TMI
         println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
         iterations = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,iterations=iterations)
         # was cost function decreased?
         @test out.minimum < J̃₀
         # reconstruct by hand to double-check.
