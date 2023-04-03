@@ -422,7 +422,7 @@ end
 function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
 #function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
-     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r)
+     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q,r=r)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -1387,7 +1387,6 @@ function dot(c::Field{T},d::Field{T})::T where T <: Real
     return e
 end
 
-
 """ 
     function setsource!(d::Field,q::Field,r::Number)
     apply interior source q to the equation constraints d
@@ -1397,10 +1396,21 @@ end
 - `r`::Number, default = 1.0, stoichiometric ratio
 """
 function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
-
-    # warning d.γ.wet and q.γ.wet must match
     d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
+end
 
+"""
+    function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
+
+    Adjoint to `setsource!`
+"""
+function gsetsource!(gq::Field{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.wet] -= r * gd.tracer[gd.γ.wet]
+end
+function gsetsource(gd::Field{T},q,r) where T<: Real
+    gq = 0.0 * q
+    gsetsource!(gq,gd,r)
+    return gq
 end
 
 """
@@ -1848,18 +1858,19 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0) #where {N1, N2, T <: Real}
-#function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0)
 
     #unvec!(u,uvec) # causes issues with Optim.jl
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
 
     if !isnothing(q₀)
+        # careful with scope of c
         q = adjustsource(q₀,u)
+        c = steadyinversion(Alu,b,γ,q=q,r=r)
+    else
+        c = steadyinversion(Alu,b,γ)
     end
-    
-    c = steadyinversion(Alu,b,γ,q=q,r=r) 
 
     # observe at right spots
     ỹ = observe(c,wis,γ)
@@ -1875,7 +1886,14 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
-        gb = gsteadyinversion(gc, Alu, b, γ)
+
+        if !isnothing(q₀)
+            gb,gq = gsteadyinversion(gc,Alu,b,γ,q=q,r=r)
+            gadjustsource!(gu,gq)
+        else
+            gb = gsteadyinversion(gc, Alu, b, γ)
+        end
+        
         gadjustboundarycondition!(gu,gb)
         gtmp += vec(gu)
         for (ii,vv) in enumerate(gtmp)
@@ -1887,8 +1905,8 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
-        println("Jcontrol:",Jcontrol)
-        println("Jdata:",Jdata)
+        #println("Jcontrol:",Jcontrol)
+        #println("Jdata:",Jdata)
         return Jdata + Jcontrol
     end
 end
@@ -1925,7 +1943,7 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
 end
 
 """ 
-    function gsteadyinversion(Alu,b;q=nothing,r=1.0)
+    function gsteadyinversion(gc,Alu,b;q=nothing,r=1.0)
 
     ADJOINT invert for a steady-state tracer distribution
 
@@ -1939,20 +1957,18 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
-
+function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
-
     gd = Alu' \ gc
+    gb = gsetboundarycondition(gd,b)
 
-    # still need to develop this
-    # and to find a way to return the value
     if !isnothing(q)
-        gq = gsetsource!(gd,d,q,r)
+        gq = gsetsource(gd,q,r)
+        return gb,gq
+    else
+        return gb
     end
 
-    gb = gsetboundarycondition(gd,b)
-    return gb
 end
 
 """
@@ -1983,29 +1999,29 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
     return c
 end
 
-"""
-    function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+# """
+#     function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
-    ADDJOINT steady inversion for b::NamedTuple
-"""
-function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0) where {N, T <: Real}
+#     ADDJOINT steady inversion for b::NamedTuple
+# """
+# function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0) where {N, T <: Real}
 
-    #println("running adjoint steady inversion")
+#     #println("running adjoint steady inversion")
 
-    # sensitivity of Field of equation constraints
-    gd = Alu' \ gc
+#     # sensitivity of Field of equation constraints
+#     gd = Alu' \ gc
 
-    # still need to develop this
-    # and to find a way to return the value
-    if !isnothing(q)
-        gq = gsetsource!(gd,d,q,r)
-    end
+#     # still need to develop this
+#     # and to find a way to return the value
+#     if !isnothing(q)
+#         gq = gsetsource!(gd,d,q,r)
+#     end
 
-    # update d with the boundary condition b
-    gb = gsetboundarycondition(gd,b)
+#     # update d with the boundary condition b
+#     gb = gsetboundarycondition(gd,b)
 
-    return gb
-end
+#     return gb
+# end
 
 """
     function wetlocation(γ)
@@ -2264,6 +2280,24 @@ function adjustsource!(q::Field,u::NamedTuple) #where {N1, N2, T <: Real}
         adjustsource!(q,u[qkey])
     else
         error("adjustsource!: u doesn't have source info")
+    end
+end
+
+function gadjustsource!(gu::Field,gq::Field)
+    # write it out so b changes when returned
+    gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
+end
+function gadjustsource!(gu::NamedTuple,gq::Field) #where {N1, N2, T <: Real}
+    qkey = :source
+    if haskey(gu,qkey)
+        gadjustsource!(gu[qkey],gq)
+    end
+end
+function gadjustsource!(gu::NamedTuple,gq::NamedTuple) 
+    for qkey in keys(gq)
+        if haskey(gu,qkey)
+            gadjustsource!(gu[qkey],gq[qkey])
+        end
     end
 end
 

@@ -216,8 +216,8 @@ using TMI
             # error less than 10 percent?
             println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-            iterations = 5
-            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+            iters = 5
+            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
 
             # was cost function decreased?
             @test out.minimum < J̃₀
@@ -256,7 +256,7 @@ using TMI
         f(x) = fg(x)[1]
         J0 = f(uvec)
         J̃₀,∂J₀∂u = fg(uvec)
-        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
+        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=qPO₄)
 
         ϵ = 1e-3 # size of finite perturbation
         ii = rand(1:sum(γ.wet[:,:,1]))
@@ -272,8 +272,8 @@ using TMI
         # error less than 10 percent?
         println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-        iterations = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,iterations=iterations)
+        iters = 5
+        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iterations)
         # was cost function decreased?
         @test out.minimum < J̃₀
         # reconstruct by hand to double-check.
