@@ -227,7 +227,7 @@ using TMI
             @test J̃ < J̃₀
         end
     end
-    @testset "adjustsource" begin
+    @testset "sourcemap" begin
 
         using Statistics, Interpolations
 
