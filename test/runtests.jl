@@ -245,12 +245,11 @@ using TMI
         #u = (;surface = zerosurfaceboundary(γ))
         u = (; source = zeros(γ))
         #b = (; surface = bPO₄)
-        b = bPO₄ # assume a surface boundary condition
+        b = (; surface = bPO₄) # assume a surface boundary condition
 
         PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
         uvec = vec(u)
 
-        σb = 5.0
         σq = 0.2
         Q⁻ = 1.0/(σq^2) # how well is q (source) known?
         fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
