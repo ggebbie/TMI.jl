@@ -198,7 +198,7 @@ using TMI
             fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
             f(x) = fg(x)[1]
             J0 = f(uvec)
-            J̃₀,gJ₀ = fg(uvec)
+            J̃₀,∂J₀∂u = fg(uvec)
             fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
             ϵ = 1e-3 # size of finite perturbation
@@ -208,8 +208,9 @@ using TMI
             ∇f_finite = (f(δu) - f(uvec))/ϵ
             println("∇f_finite=",∇f_finite)
 
-            fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-            ∇f = gJ₀[ii]
+            ∂J₀∂u = 0.0 .* uvec
+            fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+            ∇f = ∂J₀∂u[ii]
             println("∇f=",∇f)
 
             # error less than 10 percent?
@@ -217,6 +218,7 @@ using TMI
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
             iterations = 5
             out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+
             # was cost function decreased?
             @test out.minimum < J̃₀
             # reconstruct by hand to double-check.
@@ -254,8 +256,8 @@ using TMI
         fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
         f(x) = fg(x)[1]
         J0 = f(uvec)
-        J̃₀,gJ₀ = fg(uvec)
-        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+        J̃₀,∂J₀∂u = fg(uvec)
+        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
 
         ϵ = 1e-3 # size of finite perturbation
         ii = rand(1:sum(γ.wet[:,:,1]))
@@ -264,8 +266,8 @@ using TMI
         ∇f_finite = (f(δu) - f(uvec))/ϵ
         println("∇f_finite=",∇f_finite)
 
-        fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-        ∇f = gJ₀[ii]
+        fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+        ∇f = ∂J₀∂u[ii]
         println("∇f=",∇f)
 
         # error less than 10 percent?
@@ -277,7 +279,7 @@ using TMI
         @test out.minimum < J̃₀
         # reconstruct by hand to double-check.
         ũ = out.minimizer
-        J̃,gJ̃ = fg(ũ)
+        J̃,∂J̃∂ũ = fg(ũ)
         @test J̃ < J̃₀
     end
 end

@@ -419,7 +419,8 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
+function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid,iterations=10) #where {N1, N2, T <: Real}
+#function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
      fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
     
@@ -1426,35 +1427,25 @@ function vec(u::NamedTuple)
 end
 
 """
-    function unvec!(u,uvec)
+    function unvec(u,uvec)
 
+    Replace u with new u
     Undo the operations by vec(u)
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-
-    counter = 0
-    for v in u
-        if v isa BoundaryCondition
-            wet = v.wet
-        elseif v isa Field
-            wet = v.γ.wet
-        end
-        
-        n = sum(v.wet)
-        v.tracer[v.wet] = uvec[counter+1:counter+n]
-        counter += n
-    end
+function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
+    tracer = zeros(utemplate.wet)
+    tracer[utemplate.wet] = uvec
+    u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
+    return u
 end
-
-"""
-    function unvec(utemplate,uvec)
-
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
-"""
+function unvec(utemplate::Field{T},uvec::Vector{T}) where T <: Real
+    tracer = zeros(utemplate.γ)
+    tracer.tracer[utemplate.γ.wet] .= uvec
+    #u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
+    return tracer
+end
 function unvec(utemplate::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
     counter = 0
     vals = Vector{BoundaryCondition}(undef,N)
@@ -1485,8 +1476,22 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
+function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
 
+    counter = 0
+    for v in u
+        if v isa BoundaryCondition
+            wet = v.wet
+        elseif v isa Field
+            wet = v.γ.wet
+        end
+        
+        n = sum(wet)
+        v.tracer[wet] = uvec[counter+1:counter+n]
+        counter += n
+    end
+end
+function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
     I = findall(u.wet)
     counter = 0
     for i in I
@@ -1495,28 +1500,6 @@ function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
         #u.tracer[u.wet] = uvec
         u.tracer[i] = uvec[counter]
     end
-    
-end
-
-"""
-    function unvec(u,uvec)
-
-    Replace u with new u
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
-"""
-function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
-    tracer = zeros(utemplate.wet)
-    tracer[utemplate.wet] = uvec
-    u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
-    return u
-end
-function unvec(utemplate::Field{T},uvec::Vector{T}) where T <: Real
-    tracer = zeros(utemplate.γ)
-    tracer.tracer[utemplate.γ.wet] .= uvec
-    #u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
-    return tracer
 end
 
 """
@@ -1835,40 +1818,44 @@ end
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_point_obs(uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) 
+function costfunction_point_obs(uvec::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) 
 
-    # control penalty
-    Jcontrol = uvec'*(Q⁻*uvec)
-
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
-    c = steadyinversion(Alu,b,γ,q=q,r=r)  # gives the misfit
-    # observe at right spots
-    ỹ = observe(c,wis,γ)
-    n = ỹ - y
-    
-    Jdata = n ⋅ (Wⁱ * n) # dot product
-    J = Jdata + Jcontrol
-
-    # start adjoint model
-
-    # initialize adjoint control variable with zero
-    gu = unvec(u₀,0 .* uvec)
-    
-    gn = 2Wⁱ * n
-    gỹ = gn
-    
-    gc = gobserve(gỹ,c,locs)
-    gb = gsteadyinversion(gc, Alu, b, γ)
-    #gu = gadjustboundarycondition(gb,u)
-    gadjustboundarycondition!(gu,gb)
-
-    # control penalty gradient
-    guvec = 2*(Q⁻*uvec)
-
-    guvec += vec(gu)
-    
+    J = 0.0
+    guvec = 0.0.*uvec # same size
+    #gu = unvec(u,0 .* uvec)
+    J = costfunction_point_obs!(J,guvec,uvec,Alu,b,u,y,Wⁱ,wis,locs,Q⁻,γ,q=q,r=r)
+        
     return J, guvec
+
+    # # control penalty
+    # Jcontrol = uvec'*(Q⁻*uvec)
+
+    # u = unvec(u₀,uvec)
+    # b = adjustboundarycondition(b₀,u) # combine b₀, u
+    # c = steadyinversion(Alu,b,γ,q=q,r=r)  # gives the misfit
+    # # observe at right spots
+    # ỹ = observe(c,wis,γ)
+    # n = ỹ - y
+    
+    # Jdata = n ⋅ (Wⁱ * n) # dot product
+    # J = Jdata + Jcontrol
+
+    # ## start adjoint model
+    # # initialize adjoint control variable with zero
+    # gu = unvec(u₀,0 .* uvec)
+    
+    # gn = 2Wⁱ * n
+    # gỹ = gn
+    
+    # gc = gobserve(gỹ,c,locs)
+    # gb = gsteadyinversion(gc, Alu, b, γ)
+    # #gu = gadjustboundarycondition(gb,u)
+    # gadjustboundarycondition!(gu,gb)
+
+    # # control penalty gradient
+    # guvec = 2*(Q⁻*uvec)
+
+    # guvec += vec(gu)
 end
 
 """ 
@@ -1891,12 +1878,13 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec,uvec::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) #where {N1, N2, T <: Real}
+function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) #where {N1, N2, T <: Real}
 #function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
 
-    unvec!(u,uvec)
-    adjustboundarycondition!(b,u) # combine b₀, u
-    c = steadyinversion(Alu,b,γ)  # gives the misfit
+    #unvec!(u,uvec) # causes issues with Optim.jl
+    u = unvec(u₀,uvec)
+    b = adjustboundarycondition(b₀,u) # combine b₀, u
+    c = steadyinversion(Alu,b,γ,q=q,r=r) 
 
     # observe at right spots
     ỹ = observe(c,wis,γ)
@@ -1904,6 +1892,7 @@ function costfunction_point_obs!(J,guvec,uvec::Vector,Alu,b::Union{BoundaryCondi
 
     if guvec != nothing
         # adjoint equations
+        #guvec = 0.0.*uvec # re-initialize
         gtmp = 2*(Q⁻*uvec)
         gn = 2Wⁱ * n
         gỹ = gn
@@ -1914,9 +1903,13 @@ function costfunction_point_obs!(J,guvec,uvec::Vector,Alu,b::Union{BoundaryCondi
         for (ii,vv) in enumerate(gtmp)
             guvec[ii] = vv
         end
+        println(maximum(guvec))
+        println(minimum(guvec))
     end
 
     if J !=nothing
+        # reinitialize for Optim.jl
+        #J = 0.0
         # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
