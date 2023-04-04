@@ -176,7 +176,7 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
-include(pkgsrcdir("TMIconfig.jl"))
+include(pkgsrcdir("config.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
