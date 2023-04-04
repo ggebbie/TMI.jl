@@ -361,3 +361,16 @@ using TMI
 
     end
 end
+
+@testset "regional" begin
+
+    shellscript = TMI.pkgsrcdir("read_nc_nordic_lowresolution.sh")
+    run(`sh $shellscript`)
+
+# NordicSeas_30-Dec-2020_low.mat
+    TMIversion = "NordicSeas_30-Dec-2020_low";
+    TMIfile = TMIversion*".nc"
+    !ispath(TMI.pkgdatadir()) && mkpath(TMI.pkgdatadir())
+    mv(joinpath(pwd(),TMIfile),TMI.pkgdatadir(TMIfile),force=true)
+
+end
