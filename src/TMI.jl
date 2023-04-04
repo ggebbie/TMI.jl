@@ -1438,12 +1438,6 @@ function vec(u::NamedTuple)
     return uvec
 end
 
-function zerotemplate(utemplate,uvec)
-    tracer = zeros(wet(utemplate))
-    tracer[wet(utemplate)] = uvec
-    return tracer
-end
-
 """
     function unvec(u,uvec)
 
@@ -1452,58 +1446,9 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(utemplate::Union{Field{T},BoundaryCondition{T}},uvec::Vector{T}) where T <: Real
-    tracer = zerotemplate(utemplate,uvec)
-    u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,wet(utemplate))
-    return u
-end
-# function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
-#     tracer = zeros(utemplate.wet)
-#     tracer[utemplate.wet] = uvec
-#     u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
-#     return u
-# end
-# function unvec(utemplate::Field{T},uvec::Vector{T}) where T <: Real
-#     tracer = zeros(utemplate.γ)
-#     tracer.tracer[utemplate.γ.wet] .= uvec
-#     #u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
-#     return tracer
-# end
-function unvec(utemplate::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
-    counter = 0
-    vals = Vector{BoundaryCondition}(undef,N)
-    for (ii,vv) in enumerate(utemplate)
-        n = sum(vv.wet)
-        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
-        counter += n
-    end
-    u = (;zip(keys(utemplate), vals)...)
-    return u
-end
-function unvec(utemplate::NamedTuple{<:Any,NTuple{N,Field{T}}},uvec::Vector{T}) where {N, T <: Real}
-    counter = 0
-    vals = Vector{Field}(undef,N)
-    for (ii,vv) in enumerate(utemplate)
-        n = sum(vv.γ.wet)
-        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
-        counter += n
-    end
-    u = (;zip(keys(utemplate), vals)...)
-    return u
-end
-function unvec(utemplate,uvec::Vector{T}) where {T <: Real}
-    counter = 0
-    vals = Vector{Any}(undef,length(utemplate))
-    for (ii,vv) in enumerate(utemplate)
-        if vv isa Field
-            n = sum(vv.γ.wet)
-        elseif vv isa BoundaryCondition
-            n = sum(vv.wet)
-        end
-        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
-        counter += n
-    end
-    u = (;zip(keys(utemplate), vals)...)
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
+    u = deepcopy(u₀)
+    unvec!(u,uvec)
     return u
 end
 
@@ -1514,6 +1459,12 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
+function unvec!(u::Union{BoundaryCondition{T},Field{T}},uvec::Vector{T}) where T <: Real
+    I = findall(wet(u)) # findall seems slow
+    for (ii,vv) in enumerate(I)
+        u.tracer[vv] = uvec[ii]
+    end
+end
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
 
     nlo = 1
@@ -1523,12 +1474,6 @@ function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
         unvec!(v,uvec[nlo:nhi])
         #v.tracer[wet(v)] = uvec[nlo:nhi]
         nlo = nhi + 1
-    end
-end
-function unvec!(u::Union{BoundaryCondition{T},Field{T}},uvec::Vector{T}) where T <: Real
-    I = findall(wet(u))
-    for (ii,vv) in enumerate(I)
-        u.tracer[vv] = uvec[ii]
     end
 end
 

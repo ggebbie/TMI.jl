@@ -307,9 +307,9 @@ using TMI
         J0 = f(uvec)
         J̃₀,∂J₀∂u = fg(uvec)
         fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=qPO₄)
-
+        
         ϵ = 1e-3 # size of finite perturbation
-        ii = rand(1:sum(γ.wet[:,:,1]))
+        ii = rand(1:length(uvec))
         println("gradient check location=",ii)
         δu = copy(uvec); δu[ii] += ϵ
         ∇f_finite = (f(δu) - f(uvec))/ϵ
@@ -343,20 +343,21 @@ using TMI
              west = 2 * zerowestboundary(γ),
              east = 3 * zeroeastboundary(γ))
 
-        unvec!(u2,vecu)
-
-        @test u.surface.tracer[10,10] == u2.surface.tracer[10,10]
-
-        @test u.east.tracer[10,10] == u2.east.tracer[10,10]
-
-        @test u.west.tracer[10,10] == u2.west.tracer[10,10]
-
+        u3 = unvec(u2,vecu)
+        @test u.surface.tracer[10,10] == u3.surface.tracer[10,10]
+        @test u.east.tracer[10,10] == u3.east.tracer[10,10]
+        @test u.west.tracer[10,10] == u3.west.tracer[10,10]
         @test u.surface.tracer[10,10] == 1.0
-
         @test u.west.tracer[10,10] == 2.0
-
+        @test u.east.tracer[10,10] == 3.0
+        
+        unvec!(u2,vecu)
+        @test u.surface.tracer[10,10] == u2.surface.tracer[10,10]
+        @test u.east.tracer[10,10] == u2.east.tracer[10,10]
+        @test u.west.tracer[10,10] == u2.west.tracer[10,10]
+        @test u.surface.tracer[10,10] == 1.0
+        @test u.west.tracer[10,10] == 2.0
         @test u.east.tracer[10,10] == 3.0
 
     end
-
 end
