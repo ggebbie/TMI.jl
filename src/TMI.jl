@@ -71,6 +71,7 @@ struct Grid
     R::Array{Int,3}
 #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
+    #interior::BitArray{3}
 end
 
 """
@@ -161,6 +162,22 @@ function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector
     return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
 end
 
+"""
+    struct Source
+
+    This structure describes Sources, which are
+    similar to Fields, but they may be
+    1) non-negative
+    2) have only interior mask
+"""
+struct Source{T}
+    tracer::Array{T,3}
+    interior::BitArray{3}
+    name::Symbol
+    longname::String
+    units::String
+    nonnegative::Bool
+end
 
 # Credit to DrWatson.jl for these functions
 # Didn't want to add dependency for these small functions
@@ -586,6 +603,42 @@ function writefield(file,field::Field{T}) where T <: Real
     end
         
     return nothing
+end
+
+function readsource(file,tracername,γ::Grid)
+
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+
+    # load all data
+    tracer = v[:,:,:]
+    #println(tracer)
+
+    # Make an interior mask
+
+    
+    # load an attribute
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    
+    close(ds)
+
+    # perform a check of file compatibility
+    # with grid
+    if sum(isnan.(tracer[γ.wet])) > 0
+        error("readfield warning: NaN on grid")
+    end
+    # check for non NaN or nonzero off grid
+    # Need to rethink how to do this.
+    # if sum( !iszero(tracer[.!γ.wet])) > 0 
+    #     println("readfield warning: nonzero value off grid")
+    # end
+    
+    #c = Field(tracer,γ)
+    c = Field(tracer,γ,Symbol(tracername),longname,units)
+    
+    return c
 end
 
 """
@@ -1460,7 +1513,11 @@ end
     u need to be known at runtime.
 """
 function unvec!(u::Union{BoundaryCondition{T},Field{T}},uvec::Vector{T}) where T <: Real
-    I = findall(wet(u)) # findall seems slow
+    if u isa BoundaryCondition
+        I = findall(wet(u)) # findall seems slow
+    elseif u isa Field
+        I = u.γ.I
+    end
     for (ii,vv) in enumerate(I)
         u.tracer[vv] = uvec[ii]
     end
