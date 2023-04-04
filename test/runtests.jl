@@ -273,7 +273,7 @@ using TMI
         println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
         iters = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iterations)
+        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
         # was cost function decreased?
         @test out.minimum < J̃₀
         # reconstruct by hand to double-check.
@@ -323,7 +323,7 @@ using TMI
         println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
         @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
         iters = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iterations)
+        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
         # was cost function decreased?
         @test out.minimum < J̃₀
         # reconstruct by hand to double-check.
