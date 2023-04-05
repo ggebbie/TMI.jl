@@ -63,6 +63,12 @@ function download_ncfile(TMIversion::String)
             shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+        elseif  TMIversion == "nordic_201x115x46_B23"
+            println("workaround for regional Nordic Seas file")
+            shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
+            run(`sh $shellscript`)
+            TMIfile = TMIversion*".nc"
+            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
@@ -179,8 +185,7 @@ function download_matfile(TMIversion::String)
         println("workaround for regional Nordic Seas file")
         shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
         run(`sh $shellscript`)
-        TMIfile = TMIversion*".nc"
-        mv(joinpath(pwd(),TMIfilegz),pkgdatadir(TMIfile),force=true)
+        mv(joinpath(pwd(),TMIfilegz),TMIfile,force=true)
     else
         !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
     end
