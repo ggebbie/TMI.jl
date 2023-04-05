@@ -175,10 +175,9 @@ function download_matfile(TMIversion::String)
         shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
-    elseif  TMIversion == "NordicSeas_30-Dec-2020_low"
-        # problems with file name inconsistency here
+    elseif  TMIversion == "nordic_201x115x46_B23"
         println("workaround for regional Nordic Seas file")
-        shellscript = pkgsrcdir("read_mat_nordic_lowresolution.sh")
+        shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
         run(`sh $shellscript`)
         TMIfile = TMIversion*".nc"
         mv(joinpath(pwd(),TMIfilegz),pkgdatadir(TMIfile),force=true)
