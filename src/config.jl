@@ -95,22 +95,27 @@ function Grid(TMIfile::String)
     # get properties of grid
     lon,lat,depth = gridprops(TMIfile)
 
+    # make ocean mask
+    wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+
+    # do not store: compute on demand
+    #R = linearindex(wet)
+    #γ = Grid(lon,lat,depth,I,R,wet)
+
+    return Grid(lon,lat,depth,wet)
+end
+
+function wetmask(TMIfile,nx,ny,nz)
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
-
     # make a mask
     # first choice: smaller but inconsistent with input grid
     #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
-    wet = falses(length(lon),length(lat),length(depth))
+    wet = falses(nx,ny,nz)
     wet[I] .= 1
-
-    R = linearindex(wet)
-    
-    γ = Grid(lon,lat,depth,I,R,wet)
-
-    return γ
+    return wet
 end
-
+    
 """
 Configure TMI environment from original MATLAB output
 """
