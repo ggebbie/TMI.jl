@@ -193,7 +193,7 @@ struct Source{T}
     name::Symbol
     longname::String
     units::String
-    nonnegative::Bool
+    logscale::Bool
 end
 
 # Credit to DrWatson.jl for these functions
@@ -545,11 +545,14 @@ function readfield(file,tracername,γ::Grid)
     if sum(isnan.(tracer[γ.wet])) > 0
         error("readfield warning: NaN on grid")
     end
+
     # check for non NaN or nonzero off grid
     # Need to rethink how to do this.
-    # if sum( !iszero(tracer[.!γ.wet])) > 0 
-    #     println("readfield warning: nonzero value off grid")
-    # end
+    if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
+        println("readfield warning: non-NaN value off grid")
+        println("resetting to NaN")
+        tracer[.!(γ.wet)] .= NaN
+    end
     
     #c = Field(tracer,γ)
     c = Field(tracer,γ,Symbol(tracername),longname,units)
@@ -622,40 +625,15 @@ function writefield(file,field::Field{T}) where T <: Real
     return nothing
 end
 
-function readsource(file,tracername,γ::Grid)
-
-    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    ds = Dataset(file,"r")
-    v = ds[tracername]
-
-    # load all data
-    tracer = v[:,:,:]
-    #println(tracer)
-
-    # Make an interior mask
-
-    
-    # load an attribute
-    units = v.attrib["units"]
-    longname = v.attrib["longname"]
-    
-    close(ds)
-
-    # perform a check of file compatibility
-    # with grid
-    if sum(isnan.(tracer[γ.wet])) > 0
-        error("readfield warning: NaN on grid")
+function readsource(file,tracername,γ::Grid;logscale=false)
+    c = readfield(file,tracername,γ)
+    if logscale
+        ct = log.(c.tracer)
+    else
+        ct = c.tracer
     end
-    # check for non NaN or nonzero off grid
-    # Need to rethink how to do this.
-    # if sum( !iszero(tracer[.!γ.wet])) > 0 
-    #     println("readfield warning: nonzero value off grid")
-    # end
-    
-    #c = Field(tracer,γ)
-    c = Field(tracer,γ,Symbol(tracername),longname,units)
-    
-    return c
+    q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
+    return q
 end
 
 """

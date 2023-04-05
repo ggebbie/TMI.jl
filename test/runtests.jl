@@ -14,7 +14,7 @@ using TMI
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
         PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+        qPO₄ = TMI.readsource(TMIfile,"qPO₄",γ)
         b₀ = zerosurfaceboundary(γ)
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
         PO₄total = PO₄ᴿ + PO₄pre
