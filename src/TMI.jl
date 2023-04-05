@@ -68,7 +68,7 @@ struct Grid
     lat::Vector{Float64}
     depth::Vector{Float64}
     wet::BitArray{3}
-    #interior::BitArray{3}
+    interior::BitArray{3}
     #    I::Vector{CartesianIndex{3}} # index
     #    R::Array{Int,3}
     #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
@@ -90,7 +90,6 @@ function Base.getproperty(γ::Grid, d::Symbol)
         return getfield(γ, d)
     end
 end
-
 
 """
     struct Field
@@ -190,7 +189,7 @@ end
 """
 struct Source{T}
     tracer::Array{T,3}
-    interior::BitArray{3}
+    γ::Grid
     name::Symbol
     longname::String
     units::String

@@ -14,8 +14,6 @@ function config_from_nc(TMIversion)
 
     TMIfile = download_ncfile(TMIversion)
 
-    γ = Grid(TMIfile)
-    
     println("A")
     @time A = watermassmatrix(TMIfile)
 
@@ -23,6 +21,8 @@ function config_from_nc(TMIversion)
     println("Alu")
     @time Alu = lu(A)
 
+    γ = Grid(TMIfile)
+    
     # would be good to make this optional
     println("L=")
     @time L = circulationmatrix(TMIfile,A,γ)
@@ -91,18 +91,22 @@ function gridinit(TMIfile)
 # Output
 - `γ::Grid`: TMI grid struct
 """
-function Grid(TMIfile::String)
+function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
     # get properties of grid
     lon,lat,depth = gridprops(TMIfile)
 
+    
     # make ocean mask
     wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+
+    # make interior mask
+    interior = interiormask(A,wet,length(lon),length(lat),length(depth))
 
     # do not store: compute on demand
     #R = linearindex(wet)
     #γ = Grid(lon,lat,depth,I,R,wet)
 
-    return Grid(lon,lat,depth,wet)
+    return Grid(lon,lat,depth,wet,interior)
 end
 
 function wetmask(TMIfile,nx,ny,nz)
@@ -115,7 +119,15 @@ function wetmask(TMIfile,nx,ny,nz)
     wet[I] .= 1
     return wet
 end
-    
+
+function interiormask(A,wet,nx,ny,nz)
+    interior = falses(nx,ny,nz)
+    I = cartesianindex(wet)
+    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+    interior[I[list]] .= true 
+    return interior
+end
+
 """
 Configure TMI environment from original MATLAB output
 """
