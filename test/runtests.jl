@@ -250,6 +250,8 @@ using TMI
             ũ = out.minimizer
             J̃,∂J̃∂ũ = fg(ũ)
             @test J̃ < J̃₀
+
+
         end
     end
     @testset "sourcemap" begin
@@ -259,24 +261,26 @@ using TMI
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
         qPO₄ = readsource(TMIfile,"qPO₄",γ)
-
+        q₀ = 1e-2*onesource(γ)
+      
         N = 20
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
 
-        #u = (; source = zeros(γ))
-        u = (; source = zerosource(γ))
+        #u = (; source = zerosource(γ))
+        u = (; source = zerosource(γ,logscale=true))             
         b = (; surface = bPO₄) # surface boundary condition
 
-        PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
+        PO₄true = steadyinversion(Alu,b,γ,q=qPO₄)
+        PO₄₀ = steadyinversion(Alu,b,γ,q=q₀)
         uvec = vec(u)
 
-        σq = 0.1
+        σq = 1.0
         Q⁻ = 1.0/(σq^2) # how well is q (source) known?
-        fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
+        fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
         f(x) = fg(x)[1]
         J0 = f(uvec)
         J̃₀,∂J₀∂u = fg(uvec)
-        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=qPO₄)
+        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
 
         ϵ = 1e-3 # size of finite perturbation
         ii = rand(1:sum(γ.wet[:,:,1]))
@@ -300,6 +304,14 @@ using TMI
         ũ = out.minimizer
         J̃,∂J̃∂ũ = fg(ũ)
         @test J̃ < J̃₀
+        #@test J̃ < 3N # too strict if first guess is bad
+
+        #b̃ = adjustboundarycondition(b₀,unvec(u,ũ)) # combine b₀, u
+        q̃ = TMI.adjustsource(q₀,unvec(u,ũ))
+
+        @test
+
+        
     end
     @testset "source_and_surfacemap" begin
 

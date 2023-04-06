@@ -51,9 +51,9 @@ export config, config_from_mat, config_from_nc,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
     maximum, minimum, (+), (-), (*), dot,
-    zerosource,
+    zerosource, onesource,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec,
-    adjustsource!,
+    adjustsource, adjustsource!,
     zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
 onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary
 
@@ -1028,13 +1028,19 @@ function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 end
 
 function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
-
     T = eltype(γ.depth)
     tracer = Array{T}(undef,size(γ.interior))
     tracer[γ.interior] .= zero(T)
     tracer[.!γ.interior] .= zero(T)/zero(T)
     return Source(tracer,γ,name,longname,units,logscale)
+end
 
+function onesource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
+    T = eltype(γ.depth)
+    tracer = Array{T}(undef,size(γ.interior))
+    tracer[γ.interior] .= one(T)
+    tracer[.!γ.interior] .= zero(T)/zero(T)
+    return Source(tracer,γ,name,longname,units,logscale)
 end
 
 """ 
@@ -1332,15 +1338,11 @@ function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
 end
 
 # Define maximum for Field to not include NaNs
-maximum(c::Field) = maximum(c.tracer[c.γ.wet])
-minimum(c::Field) = minimum(c.tracer[c.γ.wet])
+Base.maximum(c::Union{Field,Source,BoundaryCondition}) = maximum(c.tracer[wet(c)])
+Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)])
 
 # uncomment this
 #mean(x::Field) = mean(x.tracer[x.γ.wet])
-
-# Define max/min for BoundaryCondition
-maximum(b::BoundaryCondition) = maximum(b.tracer[b.wet])
-minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
 
 """
     `function \\(A,d::Field)::Field`
@@ -1887,7 +1889,6 @@ end
 """
 function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0)
 
-    #unvec!(u,uvec) # causes issues with Optim.jl
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
 
@@ -1916,7 +1917,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 
         if !isnothing(q₀)
             gb,gq = gsteadyinversion(gc,Alu,b,γ,q=q,r=r)
-            gadjustsource!(gu,gq)
+            gadjustsource!(gu,gq,q) # pass q to linearize logscale version
         else
             gb = gsteadyinversion(gc, Alu, b, γ)
         end
@@ -2339,17 +2340,20 @@ function gadjustsource!(gu::Field,gq::Field)
     # write it out so b changes when returned
     gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
 end
-function gadjustsource!(gu::Source,gq::Source)
+function gadjustsource!(gu::Source,gq::Source,q₀::Source)
+    q = deepcopy(q₀)
     if gq.logscale && gu.logscale
         error("not implemented")
         # gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
         # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
         # q.logscale = false
+        gq.logscale = false
+        
     elseif gu.logscale
-        error("not implemented")
-        # q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
-        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
+        gq.tracer[gq.γ.interior] = gq.tracer[gq.γ.interior] .* exp.(q.tracer[q.γ.interior])
+        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+        # no need to adjoint this next line?
     elseif gq.logscale
         error("not implemented: logscale would not lead to non-negative source")
         # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
@@ -2360,16 +2364,16 @@ function gadjustsource!(gu::Source,gq::Source)
     end        
 end
 
-function gadjustsource!(gu::NamedTuple,gq::Union{Source,Field}) #where {N1, N2, T <: Real}
+function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: Union{Source,Field}
     qkey = :source
     if haskey(gu,qkey)
-        gadjustsource!(gu[qkey],gq)
+        gadjustsource!(gu[qkey],gq,q)
     end
 end
-function gadjustsource!(gu::NamedTuple,gq::NamedTuple) 
+function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: NamedTuple 
     for qkey in keys(gq)
         if haskey(gu,qkey)
-            gadjustsource!(gu[qkey],gq[qkey])
+            gadjustsource!(gu[qkey],gq[qkey],q[qkey])
         end
     end
 end
