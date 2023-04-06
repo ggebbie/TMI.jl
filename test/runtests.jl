@@ -258,111 +258,120 @@ using TMI
 
         using Statistics, Interpolations
 
-        yPO₄ = readfield(TMIfile,"PO₄",γ)
-        bPO₄ = getsurfaceboundary(yPO₄)
-        qPO₄ = readsource(TMIfile,"qPO₄",γ)
-        q₀ = 1e-2*onesource(γ)
-      
-        N = 20
-        y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
+        for lscale in (false,true)
+            for surfacetoo in (false,true)
+                
+                yPO₄ = readfield(TMIfile,"PO₄",γ)
+                bPO₄ = getsurfaceboundary(yPO₄)
+                qPO₄ = readsource(TMIfile,"qPO₄",γ)
+                q₀ = 1e-2*onesource(γ)
+                
+                N = 20
+                y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
 
-        #u = (; source = zerosource(γ))
-        u = (; source = zerosource(γ,logscale=true))             
-        b = (; surface = bPO₄) # surface boundary condition
+                #u = (; source = zerosource(γ))
+                if surfacetoo
+                    u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
+                else
+                    u = (; source = zerosource(γ,logscale=lscale))
+                end
+                
+                b = (; surface = bPO₄) # surface boundary condition
 
-        PO₄true = steadyinversion(Alu,b,γ,q=qPO₄)
-        PO₄₀ = steadyinversion(Alu,b,γ,q=q₀)
-        uvec = vec(u)
+                PO₄true = steadyinversion(Alu,b,γ,q=qPO₄)
+                PO₄₀ = steadyinversion(Alu,b,γ,q=q₀)
+                uvec = vec(u)
 
-        σq = 1.0
-        Q⁻ = 1.0/(σq^2) # how well is q (source) known?
-        fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
-        f(x) = fg(x)[1]
-        J0 = f(uvec)
-        J̃₀,∂J₀∂u = fg(uvec)
-        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
+                σq = 1.0
+                Q⁻ = 1.0/(σq^2) # how well is q (source) known?
+                fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
+                f(x) = fg(x)[1]
+                J0 = f(uvec)
+                J̃₀,∂J₀∂u = fg(uvec)
+                fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
 
-        ϵ = 1e-3 # size of finite perturbation
-        ii = rand(1:sum(γ.wet[:,:,1]))
-        println("gradient check location=",ii)
-        δu = copy(uvec); δu[ii] += ϵ
-        ∇f_finite = (f(δu) - f(uvec))/ϵ
-        println("∇f_finite=",∇f_finite)
+                ϵ = 1e-3 # size of finite perturbation
+                ii = rand(1:sum(γ.wet[:,:,1]))
+                println("gradient check location=",ii)
+                δu = copy(uvec); δu[ii] += ϵ
+                ∇f_finite = (f(δu) - f(uvec))/ϵ
+                println("∇f_finite=",∇f_finite)
 
-        fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
-        ∇f = ∂J₀∂u[ii]
-        println("∇f=",∇f)
+                fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+                ∇f = ∂J₀∂u[ii]
+                println("∇f=",∇f)
 
-        # error less than 10 percent?
-        println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-        iters = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
-        # was cost function decreased?
-        @test out.minimum < J̃₀
-        # reconstruct by hand to double-check.
-        ũ = out.minimizer
-        J̃,∂J̃∂ũ = fg(ũ)
-        @test J̃ < J̃₀
-        #@test J̃ < 3N # too strict if first guess is bad
+                # error less than 10 percent?
+                println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+                @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+                iters = 5
+                out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
+                # was cost function decreased?
+                @test out.minimum < J̃₀
+                # reconstruct by hand to double-check.
+                ũ = out.minimizer
+                J̃,∂J̃∂ũ = fg(ũ)
+                @test J̃ < J̃₀
+                #@test J̃ < 3N # too strict if first guess is bad
 
-        #b̃ = adjustboundarycondition(b₀,unvec(u,ũ)) # combine b₀, u
-        q̃ = TMI.adjustsource(q₀,unvec(u,ũ))
-
-        @test
-
-        
+                if lscale
+                    #b̃ = adjustboundarycondition(b₀,unvec(u,ũ)) # combine b₀, u
+                    q̃ = TMI.adjustsource(q₀,unvec(u,ũ))
+                    @test minimum(q̃) ≥ 0
+                end
+            end
+        end
     end
-    @testset "source_and_surfacemap" begin
+    # @testset "source_and_surfacemap" begin
 
-        using Statistics, Interpolations
+    #     using Statistics, Interpolations
 
-        yPO₄ = readfield(TMIfile,"PO₄",γ)
-        bPO₄ = getsurfaceboundary(yPO₄)
+    #     yPO₄ = readfield(TMIfile,"PO₄",γ)
+    #     bPO₄ = getsurfaceboundary(yPO₄)
+    #     qPO₄ = readfield(TMIfile,"qPO₄",γ)
+    #     q₀ = 1e-2*onesource(γ)
 
-        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+    #     N = 20
+    #     y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
 
-        N = 20
-        y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
+    #     u = (; surface = zerosurfaceboundary(γ), source = zeros(γ))
+    #     #b = (; surface = bPO₄)
+    #     b = (; surface = bPO₄) # assume a surface boundary condition
 
-        u = (; surface = zerosurfaceboundary(γ), source = zeros(γ))
-        #b = (; surface = bPO₄)
-        b = (; surface = bPO₄) # assume a surface boundary condition
+    #     PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
+    #     uvec = vec(u)
 
-        PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
-        uvec = vec(u)
-
-        σq = 0.1
-        Q⁻ = 1.0/(σq^2) # how well is q (source) known?
-        fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
-        f(x) = fg(x)[1]
-        J0 = f(uvec)
-        J̃₀,∂J₀∂u = fg(uvec)
-        fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=qPO₄)
+    #     σq = 0.1
+    #     Q⁻ = 1.0/(σq^2) # how well is q (source) known?
+    #     fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄)
+    #     f(x) = fg(x)[1]
+    #     J0 = f(uvec)
+    #     J̃₀,∂J₀∂u = fg(uvec)
+    #     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=qPO₄)
         
-        ϵ = 1e-3 # size of finite perturbation
-        ii = rand(1:length(uvec))
-        println("gradient check location=",ii)
-        δu = copy(uvec); δu[ii] += ϵ
-        ∇f_finite = (f(δu) - f(uvec))/ϵ
-        println("∇f_finite=",∇f_finite)
+    #     ϵ = 1e-3 # size of finite perturbation
+    #     ii = rand(1:length(uvec))
+    #     println("gradient check location=",ii)
+    #     δu = copy(uvec); δu[ii] += ϵ
+    #     ∇f_finite = (f(δu) - f(uvec))/ϵ
+    #     println("∇f_finite=",∇f_finite)
 
-        fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
-        ∇f = ∂J₀∂u[ii]
-        println("∇f=",∇f)
+    #     fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+    #     ∇f = ∂J₀∂u[ii]
+    #     println("∇f=",∇f)
 
-        # error less than 10 percent?
-        println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-        @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-        iters = 5
-        out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
-        # was cost function decreased?
-        @test out.minimum < J̃₀
-        # reconstruct by hand to double-check.
-        ũ = out.minimizer
-        J̃,∂J̃∂ũ = fg(ũ)
-        @test J̃ < J̃₀
-    end
+    #     # error less than 10 percent?
+    #     println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+    #     @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+    #     iters = 5
+    #     out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
+    #     # was cost function decreased?
+    #     @test out.minimum < J̃₀
+    #     # reconstruct by hand to double-check.
+    #     ũ = out.minimizer
+    #     J̃,∂J̃∂ũ = fg(ũ)
+    #     @test J̃ < J̃₀
+    # end
 
     @testset "unvec" begin
         u = (;surface = onesurfaceboundary(γ),
