@@ -265,3 +265,60 @@ function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
     tracer3D[:,:,1][wet[:,:,1]] = usfc
     return tracer3D
 end
+
+# """
+#     `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
+#     Define addition for Fields
+# """
+# function Base.:+(c::T,d::T)::T where T <: Union{Source,Field,BoundaryCondition}
+
+#     if c.wet != d.wet # check conformability
+#         error("BoundaryCondition's not conformable for addition")
+#     end
+#     array = zeros(c.wet)
+#     e = BoundaryCondition(array,c.i,c.j,c.k,c.dim,c.dimval,c.wet)
+    
+#     # a strange formulation to get
+#     # return e to be correct
+#     e.tracer[e.wet] += c.tracer[c.wet]
+#     e.tracer[e.wet] += d.tracer[d.wet]
+#     return e
+# end
+
+# """
+#     `function +(c::Field,d::Field)::Field`
+#     Define addition for Fields
+# """
+# function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
+#     # initialize output
+#     if c.γ.wet != d.γ.wet # check conformability
+#         error("Fields not conformable for addition")
+#     end
+
+#     if !isequal(d.units,c.units)
+#         error("Units not consistent:",d.units," vs ",c.units)
+#     end
+
+#     e = zeros(d.γ,d.name,d.longname,d.units)
+
+#     # a strange formulation to get
+#     # return e to be correct
+#     e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+#     e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
+#     return e
+# end
+
+# """
+#     `function -(c::Field,d::Field)::Field`
+#     Define addition for Fields
+# """
+# function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
+#     # initialize output
+#     if c.γ.wet !== d.γ.wet # check conformability
+#         error("Fields not conformable for addition")
+#     end
+#     e = zeros(d.γ)
+#     e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+#     e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
+#     return e
+# end

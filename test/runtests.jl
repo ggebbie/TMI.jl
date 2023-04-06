@@ -258,12 +258,7 @@ using TMI
 
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
-
-        if rand([1,2]) == 1
-            qPO₄ = readfield(TMIfile,"qPO₄",γ)
-        else
-            qPO₄ = readsource(TMIfile,"qPO₄",γ)
-        end
+        qPO₄ = readsource(TMIfile,"qPO₄",γ)
 
         N = 20
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
