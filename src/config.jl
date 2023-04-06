@@ -132,7 +132,7 @@ end
 Configure TMI environment from original MATLAB output
 """
 function config_from_mat(TMIversion)
-
+    # repetitive and long
     TMIfile = download_matfile(TMIversion)
     
     # # make a sample field from zyx cartesian indices
@@ -143,19 +143,21 @@ function config_from_mat(TMIversion)
     wet[Izyx] .= 1
 
     I = cartesianindex(wet)
-
     R = linearindex(wet)
 
     Azyx = watermassmatrix(TMIfile)
+
     A = matrix_zyx2xyz(TMIfile,Azyx,R)
 
     # # LU factorization for efficient matrix inversions
     Alu = lu(A)
 
-    # get properties of grid
-    lat,lon,depth = gridprops(TMIfile)
+    γ = Grid(TMIfile,A=A)
 
-    γ = Grid(lon,lat,depth,I,R,wet)
+    # # get properties of grid
+    # lat,lon,depth = gridprops(TMIfile)
+
+    # γ = Grid(lon,lat,depth,I,R,wet)
 
     # need to make this optional
     L = circulationmatrix(TMIfile,γ)
