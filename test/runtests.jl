@@ -14,7 +14,7 @@ using TMI
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
         PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = TMI.readsource(TMIfile,"qPO₄",γ)
+        qPO₄ = readfield(TMIfile,"qPO₄",γ)
         b₀ = zerosurfaceboundary(γ)
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
         PO₄total = PO₄ᴿ + PO₄pre
@@ -37,7 +37,9 @@ using TMI
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
         PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+
+        # this line changes
+        qPO₄ = readsource(TMIfile,"qPO₄",γ)
         b₀ = zerosurfaceboundary(γ)
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
         PO₄total = PO₄ᴿ + PO₄pre
@@ -257,18 +259,18 @@ using TMI
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
 
-        #PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = readfield(TMIfile,"qPO₄",γ)
-        #b₀ = bPO₄ #zerosurfaceboundary(γ)
-        #PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+        if rand([1,2]) == 1
+            qPO₄ = readfield(TMIfile,"qPO₄",γ)
+        else
+            qPO₄ = readsource(TMIfile,"qPO₄",γ)
+        end
 
         N = 20
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
 
-        #u = (;surface = zerosurfaceboundary(γ))
-        u = (; source = zeros(γ))
-        #b = (; surface = bPO₄)
-        b = (; surface = bPO₄) # assume a surface boundary condition
+        #u = (; source = zeros(γ))
+        u = (; source = zerosource(γ))
+        b = (; surface = bPO₄) # surface boundary condition
 
         PO₄ = steadyinversion(Alu,b,γ,q=qPO₄)
         uvec = vec(u)

@@ -14,6 +14,7 @@ using LineSearches
 using MAT
 using NCDatasets
 using DataStructures
+using UnicodePlots
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -29,6 +30,7 @@ export config, config_from_mat, config_from_nc,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
+    readsource,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
@@ -45,10 +47,11 @@ export config, config_from_mat, config_from_nc,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
     onesurfaceboundary, setboundarycondition!,
-    #adjustboundarycondition,
     adjustboundarycondition!,
     gsetboundarycondition, setsource!,
-    zeros, one, oneunit, ones, maximum, minimum, (+), (-), (*), dot,
+    zeros, one, oneunit, ones,
+    maximum, minimum, (+), (-), (*), dot,
+    zerosource,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec,
     adjustsource!,
     zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
@@ -129,6 +132,19 @@ end
 #function Field(tracer::Array{T,3},γ::Grid) where T <: Real
 #   return Field(tracer,γ,:none,"unknown","unknown")
 #end
+
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
+    summary(io, x); println(io)
+    println(io, "Field size")
+    println(io, size(x.tracer))
+    println(io, "Surface view")
+    show(io,mime,heatmap(transpose(x.tracer[:,:,1])))
+    #show(io, mime, x.x)
+    # println(io, "\nsingular values:")
+    # show(io, mime, F.S)
+    # println(io, "\nV (right singular vectors):")
+    # show(io, mime, F.V)
+end
 
 """
     struct BoundaryCondition
@@ -1011,6 +1027,16 @@ function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
     return d
 end
 
+function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
+
+    T = eltype(γ.depth)
+    tracer = Array{T}(undef,size(γ.interior))
+    tracer[γ.interior] .= zero(T)
+    tracer[.!γ.interior] .= zero(T)/zero(T)
+    return Source(tracer,γ,name,longname,units,logscale)
+
+end
+
 """ 
     function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
@@ -1448,6 +1474,9 @@ end
 function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
     d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
 end
+function setsource!(d::Field{T},q::Source{T},r=1.0) where T<: Real
+    d.tracer[d.γ.interior] -= r * q.tracer[q.γ.interior]
+end
 
 """
     function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
@@ -1472,8 +1501,7 @@ end
 """
 vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::BoundaryCondition) = u.tracer[u.wet]
-
-#function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
+vec(u::Source) = u.tracer[u.γ.interior]
 function vec(u::NamedTuple) 
 
     T = eltype(values(u)[1].tracer)
@@ -1507,24 +1535,18 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec!(u::Union{BoundaryCondition{T},Field{T}},uvec::Vector{T}) where T <: Real
-    if u isa BoundaryCondition
-        I = findall(wet(u)) # findall seems slow
-    elseif u isa Field
-        I = u.γ.I
-    end
+function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
+    I = findall(wet(u)) # findall seems slow
     for (ii,vv) in enumerate(I)
         u.tracer[vv] = uvec[ii]
     end
 end
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-
     nlo = 1
     nhi = 0
     for v in u
         nhi += sum(wet(v))
         unvec!(v,uvec[nlo:nhi])
-        #v.tracer[wet(v)] = uvec[nlo:nhi]
         nlo = nhi + 1
     end
 end
@@ -2279,7 +2301,7 @@ function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::Nam
     return gu
 end
 
-function adjustsource(q₀::Union{Field,NamedTuple},u::Union{Field,NamedTuple})
+function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
     q = deepcopy(q₀)
     adjustsource!(q,u)
     return q
@@ -2288,6 +2310,23 @@ end
 function adjustsource!(q::Field,u::Field)
     # write it out so b changes when returned
     q.tracer[q.γ.wet] += u.tracer[u.γ.wet] 
+end
+function adjustsource!(q::Source,u::Source)
+    if q.logscale && u.logscale
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        q.logscale = false
+    elseif ~q.logscale && u.logscale
+        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    elseif q.logscale && ~u.logscale
+        u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    else 
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+    end        
 end
 function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
     for qkey in keys(q)
@@ -2298,7 +2337,7 @@ function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
         end
     end
 end
-function adjustsource!(q::Field,u::NamedTuple) #where {N1, N2, T <: Real}
+function adjustsource!(q::Union{Field,Source},u::NamedTuple) #where {N1, N2, T <: Real}
     qkey = :source
     if haskey(u,qkey)
         adjustsource!(q,u[qkey])
@@ -2359,163 +2398,9 @@ function planview(c::Field{T},depth)::Array{T,2} where T <: Real
     return cplan
 end
 
-""" 
-    function control2state(tracer2D,γ)
-    turn 2D surface field into 3D field with zeroes below surface    
-# Arguments
-- `tracer2D`:: 2D surface tracer field
-- `wet`::BitArray mask of ocean points
-# Output
-- `tracer3D`:: 3d tracer field with NaN on dry points
-"""
-function control2state(tracer2D::Matrix{T},wet) where T<: Real
-    # preallocate
-    tracer3D = Array{T}(undef,size(wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    tracer3D[wet] .= zero(T)
-    tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1] = tracer2D
-    return tracer3D
-end
-
-""" 
-    function surfacecontrol2field(usfc,γ.wet)
-    turn surface control vector into 3D field with zeroes below surface    
-# Arguments
-- `usfc`:: surface control vector
-- `wet`::BitArray mask of ocean points
-# Output
-- `tracer3D`:: 3d tracer field with NaN on dry points
-"""
-function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
-    # preallocate
-    tracer3D = Array{T}(undef,size(wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    tracer3D[wet] .= zero(T)
-    tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1][wet[:,:,1]] = usfc
-    return tracer3D
-end
-
-"""
-    function Γsfc 
-    Γsfc anonymously calls surfacecontrol2field
-"""
-Γsfc = surfacecontrol2field
-
-"""
-    function surfacecontrol2field!(c,u,γ)
-    Add surface control vector to existing 3D field 
-# Arguments
-- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `usfc`:: surface control vector
-- `wet`::BitArray mask of ocean points
-"""
-function surfacecontrol2field!(c::Array{T,3},usfc::Vector{T},γ) where T<: Real
-    #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
-#    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-    list = surfaceindex(γ.I)
-    [c[γ.I[ii]] += usfc[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-end
-
-""" 
-    function surfacecontrol2field!(c,u,γ)
-    Add surface control vector to tracer vector
-# Arguments
-- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `u`:: surface control vector
-- `wet`::BitArray mask of ocean points
-"""
-function surfacecontrol2field!(c::Vector{T},u::Vector{T},γ) where T<: Real
-    list = surfaceindex(γ.I)
-    [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-end
-
-"""
-    function Γsfc! 
-    Γsfc! anonymously calls surfacecontrol2field!
-"""
-Γsfc! = surfacecontrol2field!
-
-function field2obs(cvec,wis,γ)
-    # interpolate onto data points
-    N = length(wis)
-    sumwis = Vector{Float64}(undef,N)
-    list = vcat(1:length(γ.lon),1)
-
-    # perhaps the most clever line in TMI.jl?
-    wetwrap = view(γ.wet,list,:,:)
-
-    # some interpolation weights on land, oh no
-    # sum up all weights in ocean
-    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
-
-    # reconstruct the observations
-    ỹ = Vector{Float64}(undef,N)
-    c̃ = tracerinit(γ.wet)
-    c̃[γ.wet] = cvec
-    replace!(c̃,NaN=>0.0)
-    cwrap = view(c̃,list,:,:)
-
-    # divide by sum of all ocean weights so that this is still a true average
-    [ỹ[i] = Interpolations.InterpGetindex(cwrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
-    return ỹ
-end
-
-""" 
-    function tracerinit(wet,vec,I)
-          initialize tracer field on TMI grid
-        perhaps better to have a tracer struct and constructor
-# Arguments
-- `wet`:: BitArray mask of ocean points
-- `vec`:: vector of values at wet points
-- `I`:: Cartesian Index for vector
-# Output
-- `field`:: 3d tracer field with NaN on dry points
-"""
-function tracerinit(vec,I,wet)
-
-    # preallocate
-    T = eltype(vec)
-    field = Array{T}(undef,size(wet))
-    fill!(field,zero(T)/zero(T))    
-
-    #- a comprehension
-    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
-    return field
-end
-
-"""
-    function vec2fld
-    Transfer a vector to a 3D field with accounting for ocean bathymetry
-# Arguments
-- `vector`: field in vector form (no land points)
-- `I`: cartesian indices of ocean points
-# Output
-- `field`: field in 3d form including land points (NaN)
-"""
-function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
-    # choose NaN for now, zero better? nothing better?
-    fillvalue = zero(T)/zero(T)
-    
-    nx = maximum(I)[1]
-    ny = maximum(I)[2]
-    nz = maximum(I)[3]
-
-    # faster instead to allocate as undef and then fill! ?
-    field = (NaN .* zero(T)) .* zeros(nx,ny,nz)
-
-    # a comprehension
-    [field[I[n]]=vector[n] for n ∈ eachindex(I)]
-    return field
-end
-
 wet(a::BoundaryCondition) = a.wet
 wet(a::Field) = a.γ.wet
+wet(a::Source) = a.γ.interior
 
 include("deprecated.jl")
 

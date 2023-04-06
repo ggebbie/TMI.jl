@@ -109,3 +109,159 @@
 #     return u
 # end
 
+
+"""
+    function vec2fld
+    Transfer a vector to a 3D field with accounting for ocean bathymetry
+# Arguments
+- `vector`: field in vector form (no land points)
+- `I`: cartesian indices of ocean points
+# Output
+- `field`: field in 3d form including land points (NaN)
+"""
+function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
+    # choose NaN for now, zero better? nothing better?
+    fillvalue = zero(T)/zero(T)
+    
+    nx = maximum(I)[1]
+    ny = maximum(I)[2]
+    nz = maximum(I)[3]
+
+    # faster instead to allocate as undef and then fill! ?
+    field = (NaN .* zero(T)) .* zeros(nx,ny,nz)
+
+    # a comprehension
+    [field[I[n]]=vector[n] for n ∈ eachindex(I)]
+    return field
+end
+
+
+""" 
+    function tracerinit(wet,vec,I)
+          initialize tracer field on TMI grid
+        perhaps better to have a tracer struct and constructor
+# Arguments
+- `wet`:: BitArray mask of ocean points
+- `vec`:: vector of values at wet points
+- `I`:: Cartesian Index for vector
+# Output
+- `field`:: 3d tracer field with NaN on dry points
+"""
+function tracerinit(vec,I,wet)
+
+    # preallocate
+    T = eltype(vec)
+    field = Array{T}(undef,size(wet))
+    fill!(field,zero(T)/zero(T))    
+
+    #- a comprehension
+    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
+    return field
+end
+
+"""
+    function Γsfc 
+    Γsfc anonymously calls surfacecontrol2field
+"""
+Γsfc = surfacecontrol2field
+
+"""
+    function surfacecontrol2field!(c,u,γ)
+    Add surface control vector to existing 3D field 
+# Arguments
+- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
+- `usfc`:: surface control vector
+- `wet`::BitArray mask of ocean points
+"""
+function surfacecontrol2field!(c::Array{T,3},usfc::Vector{T},γ) where T<: Real
+    #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
+#    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+    list = surfaceindex(γ.I)
+    [c[γ.I[ii]] += usfc[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+end
+
+""" 
+    function surfacecontrol2field!(c,u,γ)
+    Add surface control vector to tracer vector
+# Arguments
+- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
+- `u`:: surface control vector
+- `wet`::BitArray mask of ocean points
+"""
+function surfacecontrol2field!(c::Vector{T},u::Vector{T},γ) where T<: Real
+    list = surfaceindex(γ.I)
+    [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
+end
+
+"""
+    function Γsfc! 
+    Γsfc! anonymously calls surfacecontrol2field!
+"""
+Γsfc! = surfacecontrol2field!
+
+function field2obs(cvec,wis,γ)
+    # interpolate onto data points
+    N = length(wis)
+    sumwis = Vector{Float64}(undef,N)
+    list = vcat(1:length(γ.lon),1)
+
+    # perhaps the most clever line in TMI.jl?
+    wetwrap = view(γ.wet,list,:,:)
+
+    # some interpolation weights on land, oh no
+    # sum up all weights in ocean
+    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
+
+    # reconstruct the observations
+    ỹ = Vector{Float64}(undef,N)
+    c̃ = tracerinit(γ.wet)
+    c̃[γ.wet] = cvec
+    replace!(c̃,NaN=>0.0)
+    cwrap = view(c̃,list,:,:)
+
+    # divide by sum of all ocean weights so that this is still a true average
+    [ỹ[i] = Interpolations.InterpGetindex(cwrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+    return ỹ
+end
+
+""" 
+    function control2state(tracer2D,γ)
+    turn 2D surface field into 3D field with zeroes below surface    
+# Arguments
+- `tracer2D`:: 2D surface tracer field
+- `wet`::BitArray mask of ocean points
+# Output
+- `tracer3D`:: 3d tracer field with NaN on dry points
+"""
+function control2state(tracer2D::Matrix{T},wet) where T<: Real
+    # preallocate
+    tracer3D = Array{T}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer3D[wet] .= zero(T)
+    tracer3D[.!wet] .= zero(T)/zero(T)
+    tracer3D[:,:,1] = tracer2D
+    return tracer3D
+end
+
+""" 
+    function surfacecontrol2field(usfc,γ.wet)
+    turn surface control vector into 3D field with zeroes below surface    
+# Arguments
+- `usfc`:: surface control vector
+- `wet`::BitArray mask of ocean points
+# Output
+- `tracer3D`:: 3d tracer field with NaN on dry points
+"""
+function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
+    # preallocate
+    tracer3D = Array{T}(undef,size(wet))
+
+    # set ocean to zero, land to NaN
+    # consider whether land should be nothing or missing
+    tracer3D[wet] .= zero(T)
+    tracer3D[.!wet] .= zero(T)/zero(T)
+    tracer3D[:,:,1][wet[:,:,1]] = usfc
+    return tracer3D
+end
