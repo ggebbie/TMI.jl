@@ -12,6 +12,7 @@ TMIversion = "LGM_90x45x33_G14A"
 TMIversion = "LGM_90x45x33_GPLS1"
 TMIversion = "LGM_90x45x33_GPLS2"
 TMIversion = "LGM_90x45x33_OG18"
+TMIversion = "nordic_201x115x46_B23"
 
 # original NetCDF version
 #A, Alu, γ, TMIfile = config(TMIversion)

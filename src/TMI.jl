@@ -14,6 +14,7 @@ using LineSearches
 using MAT
 using NCDatasets
 using DataStructures
+using UnicodePlots
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -29,6 +30,7 @@ export config, config_from_mat, config_from_nc,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
+    readsource,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
@@ -45,10 +47,15 @@ export config, config_from_mat, config_from_nc,
     surface_oxygensaturation, oxygen, location_obs,
     getsurfaceboundary, zerosurfaceboundary,
     onesurfaceboundary, setboundarycondition!,
-    adjustboundarycondition, adjustboundarycondition!,
+    adjustboundarycondition!,
     gsetboundarycondition, setsource!,
-    zeros, one, oneunit, ones, maximum, minimum, (+), (-), (*), dot,
-    Grid, Field, BoundaryCondition, vec, unvec!, unvec
+    zeros, one, oneunit, ones,
+    maximum, minimum, (+), (-), (*), dot,
+    zerosource, onesource,
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec,
+    adjustsource, adjustsource!,
+    zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
+onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary
 
 import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
 import Base: (+), (-), (*), (/), vec
@@ -63,10 +70,28 @@ struct Grid
     lon::Vector{Float64}
     lat::Vector{Float64}
     depth::Vector{Float64}
-    I::Vector{CartesianIndex{3}} # index
-    R::Array{Int,3}
-#    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
     wet::BitArray{3}
+    interior::BitArray{3}
+    #    I::Vector{CartesianIndex{3}} # index
+    #    R::Array{Int,3}
+    #    R::LinearIndices{3, Tuple{UnitRange{Int64}, UnitRange{Int64}, UnitRange{Int64}}} 
+end
+
+"""
+    Base.propertynames(γ::Grid) = (I,R,fieldnames(typeof(x))...)
+
+    Do not store Cartesian and linear indices.
+    Compute them on demand.
+""" 
+Base.propertynames(γ::Grid) = (:I,:R,fieldnames(typeof(γ))...)
+function Base.getproperty(γ::Grid, d::Symbol)
+    if d === :I
+        return cartesianindex(γ.wet)
+    elseif d === :R
+        return linearindex(γ.wet)
+    else
+        return getfield(γ, d)
+    end
 end
 
 """
@@ -107,6 +132,19 @@ end
 #function Field(tracer::Array{T,3},γ::Grid) where T <: Real
 #   return Field(tracer,γ,:none,"unknown","unknown")
 #end
+
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
+    summary(io, x); println(io)
+    println(io, "Field size")
+    println(io, size(x.tracer))
+    println(io, "Surface view")
+    show(io,mime,heatmap(transpose(x.tracer[:,:,1])))
+    #show(io, mime, x.x)
+    # println(io, "\nsingular values:")
+    # show(io, mime, F.S)
+    # println(io, "\nV (right singular vectors):")
+    # show(io, mime, F.V)
+end
 
 """
     struct BoundaryCondition
@@ -157,6 +195,22 @@ function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector
     return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
 end
 
+"""
+    struct Source
+
+    This structure describes Sources, which are
+    similar to Fields, but they may be
+    1) non-negative
+    2) have only interior mask
+"""
+struct Source{T}
+    tracer::Array{T,3}
+    γ::Grid
+    name::Symbol
+    longname::String
+    units::String
+    logscale::Bool
+end
 
 # Credit to DrWatson.jl for these functions
 # Didn't want to add dependency for these small functions
@@ -172,7 +226,7 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
-include(pkgsrcdir("TMIconfig.jl"))
+include(pkgsrcdir("config.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -417,9 +471,10 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
+function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
+#function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
-     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+     fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q,r=r)
     
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
@@ -487,8 +542,8 @@ end
 - `c`::Field
 """
 function readfield(file,tracername,γ::Grid)
-    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
 
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     ds = Dataset(file,"r")
     v = ds[tracername]
 
@@ -504,13 +559,16 @@ function readfield(file,tracername,γ::Grid)
     # perform a check of file compatibility
     # with grid
     if sum(isnan.(tracer[γ.wet])) > 0
-        println("readfield warning: NaN on grid")
+        error("readfield warning: NaN on grid")
     end
+
     # check for non NaN or nonzero off grid
     # Need to rethink how to do this.
-    # if sum( !iszero(tracer[.!γ.wet])) > 0 
-    #     println("readfield warning: nonzero value off grid")
-    # end
+    if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
+        println("readfield warning: non-NaN value off grid")
+        println("resetting to NaN")
+        tracer[.!(γ.wet)] .= NaN
+    end
     
     #c = Field(tracer,γ)
     c = Field(tracer,γ,Symbol(tracername),longname,units)
@@ -581,6 +639,17 @@ function writefield(file,field::Field{T}) where T <: Real
     end
         
     return nothing
+end
+
+function readsource(file,tracername,γ::Grid;logscale=false)
+    c = readfield(file,tracername,γ)
+    if logscale
+        ct = log.(c.tracer)
+    else
+        ct = c.tracer
+    end
+    q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
+    return q
 end
 
 """
@@ -958,6 +1027,22 @@ function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
     return d
 end
 
+function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
+    T = eltype(γ.depth)
+    tracer = Array{T}(undef,size(γ.interior))
+    tracer[γ.interior] .= zero(T)
+    tracer[.!γ.interior] .= zero(T)/zero(T)
+    return Source(tracer,γ,name,longname,units,logscale)
+end
+
+function onesource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
+    T = eltype(γ.depth)
+    tracer = Array{T}(undef,size(γ.interior))
+    tracer[γ.interior] .= one(T)
+    tracer[.!γ.interior] .= zero(T)/zero(T)
+    return Source(tracer,γ,name,longname,units,logscale)
+end
+
 """ 
     function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
@@ -979,7 +1064,7 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    println("calling one with ",T)
+    #println("calling one with ",T)
     tracer[γ.wet] .= Base.one(T) # add Base: error "should import Base"
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
@@ -1003,7 +1088,7 @@ function one(field::Field{T})::Field{T} where T <: Real
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    println("calling one with ",T)
+    #println("calling one with ",T)
     tracer[field.γ.wet] .= Base.one(T) # add Base: error "should import Base"
     tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
@@ -1036,7 +1121,7 @@ function one(field::Field{Float64})
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    println("calling one with ",T)
+    #println("calling one with ",T)
     tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
     tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
@@ -1058,7 +1143,7 @@ function Field(field::Field{Float64})
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    println("calling one with ",T)
+    # println("calling one with ",T)
     tracer[field.γ.wet] .= one(T) # add Base: error "should import Base"
     tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
@@ -1075,7 +1160,7 @@ function /(field::Field{Float64},scalar::Float64)
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    println("calling one with ",T)
+    # println("calling one with ",T)
     tracer[field.γ.wet] ./= scalar # add Base: error "should import Base"
     tracer[.!field.γ.wet] .= zero(T)/zero(T) # NaNs with right type
 
@@ -1166,7 +1251,7 @@ end
 
        Initialize boundary condition with ones
 """
-function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
+function ones(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
 
     i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
 
@@ -1253,15 +1338,11 @@ function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
 end
 
 # Define maximum for Field to not include NaNs
-maximum(c::Field) = maximum(c.tracer[c.γ.wet])
-minimum(c::Field) = minimum(c.tracer[c.γ.wet])
+Base.maximum(c::Union{Field,Source,BoundaryCondition}) = maximum(c.tracer[wet(c)])
+Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)])
 
 # uncomment this
 #mean(x::Field) = mean(x.tracer[x.γ.wet])
-
-# Define max/min for BoundaryCondition
-maximum(b::BoundaryCondition) = maximum(b.tracer[b.wet])
-minimum(b::BoundaryCondition) = minimum(b.tracer[b.wet])
 
 """
     `function \\(A,d::Field)::Field`
@@ -1279,111 +1360,95 @@ end
     `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
     Define addition for Fields
 """
-function +(c::BoundaryCondition{T},d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
-
-    if c.wet != d.wet # check conformability
-        error("BoundaryCondition's not conformable for addition")
+function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    if wet(c) != wet(d) # check conformability
+        error("TMI type not conformable for addition")
     end
-    array = zeros(c.wet)
-    e = BoundaryCondition(array,c.i,c.j,c.k,c.dim,c.dimval,c.wet)
-    
-    # a strange formulation to get
-    # return e to be correct
-    e.tracer[e.wet] += c.tracer[c.wet]
-    e.tracer[e.wet] += d.tracer[d.wet]
+    # a strange formulation to do in-place addition
+    c.tracer[wet(c)] += d.tracer[wet(d)]
+end
+
+function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = deepcopy(c)
+    add!(e,d)
     return e
 end
 
-"""
-    `function +(c::Field,d::Field)::Field`
-    Define addition for Fields
-"""
-function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
-    # initialize output
-    if c.γ.wet != d.γ.wet # check conformability
-        error("Fields not conformable for addition")
+function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    if wet(c) != wet(d) # check conformability
+        error("TMI type not conformable for addition")
     end
-
-    if !isequal(d.units,c.units)
-        error("Units not consistent:",d.units," vs ",c.units)
-    end
-
-    e = zeros(d.γ,d.name,d.longname,d.units)
-
-    # a strange formulation to get
-    # return e to be correct
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
-    e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
-    return e
+    # a strange formulation to do in-place addition
+    c.tracer[wet(c)] -= d.tracer[wet(d)]
 end
 
-"""
-    `function -(c::Field,d::Field)::Field`
-    Define addition for Fields
-"""
-function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
-    # initialize output
-    if c.γ.wet !== d.γ.wet # check conformability
-        error("Fields not conformable for addition")
-    end
-    e = zeros(d.γ)
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
-    e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
+function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = deepcopy(c)
+    subtract!(e,d)
     return e
 end
 
 """
     `function *(C,d::Field)::Field`
     Define scalar or matrix multiplication for fields
-"""
-function *(C,d::Field{T})::Field{T} where T <: Real
 
-    e = zeros(d.γ)
-    e.tracer[e.γ.wet] += C*d.tracer[d.γ.wet]
+    one argument can be a number, but not both (type piracy?)
+"""
+# the order doesn't matter when multiplying by a scalar
+
+Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
+# right matrix multiply not handled
+function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
+    e = deepcopy(d)
+    mul!(c,e)
+    return e
+end
+function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryCondition,Source}
+    e = deepcopy(d)
+    mul!(e,c)
     return e
 end
 
-"""
-    `function *(C,d::BoundaryCondition)::BoundaryCondition`
-    Define scalar or matrix multiplication for BoundaryCondition`s
-"""
-function *(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
-    array = zeros(d.wet)
-    e = BoundaryCondition(array,d.i,d.j,d.k,d.dim,d.dimval,d.wet)
-    e.tracer[e.wet] += C*d.tracer[d.wet]
-    return e
+function mul!(d::Union{Field,BoundaryCondition,Source},C::Number)
+    d.tracer[wet(d)] *= C #*d.tracer[wet(d)]
 end
-
-"""
-    `function *(c::Field,d::Field)::Field`
-    Field by field multiplication is element-by-element.
-"""
-function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+function mul!(c::T,d::T) where T <: Union{Field,BoundaryCondition,Source}
     # initialize output
-    if c.γ.wet != d.γ.wet # check conformability
-        error("Fields not conformable for addition")
+    if wet(c) != wet(d) # check conformability
+        error("Fields not conformable for multiplication")
     end
 
     if !isequal(d.units,c.units)
         error("Units not consistent:",d.units," vs ",c.units)
     end
-
-    e = zeros(d.γ,d.name,d.longname,d.units)
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
-    return e
+    c.tracer[wet(c)] .*= d.tracer[wet(d)]
 end
 
+# matrix multiplication with arrays/matrices: order matters
+# d is mutated
+function mul!(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
+    # initialize output
+    if size(c,2) != sum(wet(d)) # check conformability
+        error("Number/Matrix-Field/BC/Source multiplication: not right size")
+    end
+    d.tracer[wet(d)] = c*d.tracer[wet(d)]
+end
+function mul!(d::Union{Field,BoundaryCondition,Source},c::AbstractArray)
+    # initialize output
+    if size(c,1) != sum(wet(d)) # check conformability
+        error("Field/BC/Source-Number/Matrix multiplication: not right size")
+    end
+    d.tracer[wet(d)] = d.tracer[wet(d)]*c
+end
 
 """
     `function *(c::Field,d::Field)::Field`
     Field by field multiplication is element-by-element.
 """
 function dot(c::Field{T},d::Field{T})::T where T <: Real
-
     e =  c.tracer[c.γ.wet]' * d.tracer[d.γ.wet]
     return e
 end
-
 
 """ 
     function setsource!(d::Field,q::Field,r::Number)
@@ -1394,10 +1459,27 @@ end
 - `r`::Number, default = 1.0, stoichiometric ratio
 """
 function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
-
-    # warning d.γ.wet and q.γ.wet must match
     d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
+end
+function setsource!(d::Field{T},q::Source{T},r=1.0) where T<: Real
+    d.tracer[d.γ.interior] -= r * q.tracer[q.γ.interior]
+end
 
+"""
+    function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
+
+    Adjoint to `setsource!`
+"""
+function gsetsource!(gq::Field{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.wet] -= r * gd.tracer[gd.γ.wet]
+end
+function gsetsource!(gq::Source{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.interior] -= r * gd.tracer[gd.γ.interior]
+end
+function gsetsource(gd::Field{T},q::Union{Field,Source},r) where T<: Real
+    gq = 0.0 * q
+    gsetsource!(gq,gd,r)
+    return gq
 end
 
 """
@@ -1407,82 +1489,19 @@ end
     for use with Optim.jl. 
     An in-place version of this function would be handy.
 """
-function vec(u::BoundaryCondition{T}) where T <: Real
-    uvec = u.tracer[u.wet]
-    return uvec
-end
+vec(u::Field) = u.tracer[u.γ.wet]
+vec(u::BoundaryCondition) = u.tracer[u.wet]
+vec(u::Source) = u.tracer[u.γ.interior]
+function vec(u::NamedTuple) 
 
-"""
-    function vec(u)
-
-    Turn a collection of controls into a vector
-    for use with Optim.jl. 
-    An in-place version of this function would be handy.
-"""
-function vec(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
-
+    T = eltype(values(u)[1].tracer)
+    #T = eltype(u)
     uvec = Vector{T}(undef,0)
     for v in u
-        append!(uvec,v.tracer[v.wet])
+        #append!(uvec,v.tracer[v.wet])
+        append!(uvec,vec(v))
     end
     return uvec
-end
-
-"""
-    function unvec!(u,uvec)
-
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
-"""
-function unvec!(u::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
-
-    counter = 0
-    for v in u
-        n = sum(v.wet)
-        v.tracer[v.wet] = uvec[counter+1:counter+n]
-        counter += n
-    end
-end
-
-"""
-    function unvec(utemplate,uvec)
-
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
-"""
-function unvec(utemplate::NamedTuple{<:Any,NTuple{N,BoundaryCondition{T}}},uvec::Vector{T}) where {N, T <: Real}
-
-    counter = 0
-    vals = Vector{BoundaryCondition}(undef,N)
-    for (ii,vv) in enumerate(utemplate)
-        n = sum(vv.wet)
-        vals[ii] = unvec(vv, uvec[counter+1:counter+n])
-        counter += n
-    end
-    u = (;zip(keys(utemplate), vals)...)
-    return u
-end
-
-"""
-    function unvec!(u,uvec)
-
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
-"""
-function unvec!(u::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
-
-    I = findall(u.wet)
-    counter = 0
-    for i in I
-        counter +=1
-    # doesn't work to pass u back
-        #u.tracer[u.wet] = uvec
-        u.tracer[i] = uvec[counter]
-    end
-    
 end
 
 """
@@ -1493,12 +1512,33 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(utemplate::BoundaryCondition{T},uvec::Vector{T}) where T <: Real
-
-    tracer = zeros(utemplate.wet)
-    tracer[utemplate.wet] = uvec
-    u = BoundaryCondition(tracer,utemplate.i,utemplate.j,utemplate.k,utemplate.dim,utemplate.dimval,utemplate.wet)
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
+    u = deepcopy(u₀)
+    unvec!(u,uvec)
     return u
+end
+
+"""
+    function unvec!(u,uvec)
+
+    Undo the operations by vec(u)
+    Needs to update u because attributes of 
+    u need to be known at runtime.
+"""
+function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
+    I = findall(wet(u)) # findall seems slow
+    for (ii,vv) in enumerate(I)
+        u.tracer[vv] = uvec[ii]
+    end
+end
+function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
+    nlo = 1
+    nhi = 0
+    for v in u
+        nhi += sum(wet(v))
+        unvec!(v,uvec[nlo:nhi])
+        nlo = nhi + 1
+    end
 end
 
 """
@@ -1584,13 +1624,8 @@ function synthetic_observations(TMIversion,variable,γ)
     #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
 
     ntrue = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
-    println(θtrue.units)
-    println(ntrue.units)
-
     ntrue *= σθ
-
     y = θtrue + ntrue
-    
     #y = θtrue .+ ntrue
 
     # get cost function (J) based on model misfit
@@ -1799,11 +1834,11 @@ function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{Bound
 end
 
 """ 
-    function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where T <: Real
+    function costfunction_point_obs(uvec::Vector{T},Alu,b₀::BoundaryCondition{T},u₀::BoundaryCondition{T},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) where T <: Real
 
-    squared model-data misfit for pointwise data
-    controls are a vector input for Optim.jl
-    Issue #1: couldn't figure out how to nest with costfunction_obs!
+    Squared model-data misfit for pointwise data.
+    Controls are a vector input for Optim.jl.
+    Core numerics handled by `costfunction_point_obs`.
     
 # Arguments
 - `uvec`: controls, vector format
@@ -1815,36 +1850,20 @@ end
 - `locs`: data locations (lon,lat,depth)
 - `Q⁻`: weights for control vector
 - `γ`: grid
+# Optional
+- `q::Field`: interior source
+- `r::Number`: scalar factor for source
 # Output
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
 """
-function costfunction_point_obs(uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+function costfunction_point_obs(uvec::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q=nothing,r=1.0) 
 
-    # control penalty and gradient
-    Jcontrol = uvec'*(Q⁻*uvec)
-    guvec = 2*(Q⁻*uvec)
-
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
-
-    c = steadyinversion(Alu,b,γ)  # gives the misfit
-
-    # observe at right spots
-    ỹ = observe(c,wis,γ)
-    n = ỹ - y
-    
-    Jdata = n ⋅ (Wⁱ * n) # dot product
-    J = Jdata + Jcontrol
-
-    gn = 2Wⁱ * n
-    gỹ = gn
-    
-    gc = gobserve(gỹ,c,locs)
-    gb = gsteadyinversion(gc, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
-    guvec += vec(gu)
-    
+    J = 0.0
+    guvec = 0.0.*uvec # same size
+    #gu = unvec(u,0 .* uvec)
+    J = costfunction_point_obs!(J,guvec,uvec,Alu,b,u,y,Wⁱ,wis,locs,Q⁻,γ,q₀=q,r=r)
+        
     return J, guvec
 end
 
@@ -1868,24 +1887,42 @@ end
 - `Q⁻`: weights for control vector
 - `γ`: grid
 """
-function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},Wⁱ::Diagonal{T, Vector{T}},wis,locs,Q⁻,γ::Grid) where {N1, N2, T <: Real}
+function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0)
 
     u = unvec(u₀,uvec)
     b = adjustboundarycondition(b₀,u) # combine b₀, u
-    c = steadyinversion(Alu,b,γ)  # gives the misfit
+
+    if !isnothing(q₀)
+        # careful with scope of c
+        q = adjustsource(q₀,u)
+        c = steadyinversion(Alu,b,γ,q=q,r=r)
+    else
+        c = steadyinversion(Alu,b,γ)
+    end
 
     # observe at right spots
     ỹ = observe(c,wis,γ)
     n = ỹ - y
 
     if guvec != nothing
-        # adjoint equations
-        gtmp = 2*(Q⁻*uvec)
+        ## start adjoint model
+
+        # initialize to zero
+        gu = unvec(u,0 .* uvec)
+        
+        gtmp = 2*(Q⁻*uvec) # control penalty gradient
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
-        gb = gsteadyinversion(gc, Alu, b, γ)
-        gu = gadjustboundarycondition(gb,u)
+
+        if !isnothing(q₀)
+            gb,gq = gsteadyinversion(gc,Alu,b,γ,q=q,r=r)
+            gadjustsource!(gu,gq,q) # pass q to linearize logscale version
+        else
+            gb = gsteadyinversion(gc, Alu, b, γ)
+        end
+        
+        gadjustboundarycondition!(gu,gb)
         gtmp += vec(gu)
         for (ii,vv) in enumerate(gtmp)
             guvec[ii] = vv
@@ -1896,6 +1933,8 @@ function costfunction_point_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{Boundar
         # control penalty and gradient
         Jcontrol = uvec'*(Q⁻*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
+        #println("Jcontrol:",Jcontrol)
+        #println("Jdata:",Jdata)
         return Jdata + Jcontrol
     end
 end
@@ -1905,7 +1944,7 @@ end
     invert for a steady-state tracer distribution
 # Arguments
 - `Alu`: LU decomposition of water-mass matrix
-- `b`: boundary condition
+- `b`: boundary condition, assumed to be surface boundary condition
 - `γ`::Grid
 # Optional Arguments
 - `q`: interior sources/sinks of phosphate
@@ -1914,8 +1953,6 @@ end
 - `c`::Field, steady-state tracer distribution
 """
 function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
-
-    #println("running steady inversion")
 
     # preallocate Field for equation constraints
     d = zeros(γ)
@@ -1929,17 +1966,12 @@ function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::
         setsource!(d,q,r)
     end
 
-    # define ldiv with fields
-    # println(b.units)
-    #c = zeros(d.γ,b.name,b.longname,b.units)
-    #println(c.units)
     c = Alu \ d
-    
     return c
 end
 
 """ 
-    function gsteadyinversion(Alu,b;q=nothing,r=1.0)
+    function gsteadyinversion(gc,Alu,b;q=nothing,r=1.0)
 
     ADJOINT invert for a steady-state tracer distribution
 
@@ -1953,20 +1985,18 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function gsteadyinversion(gc,Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::BoundaryCondition{T} where T <: Real
-
+function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
-
     gd = Alu' \ gc
+    gb = gsetboundarycondition(gd,b)
 
-    # still need to develop this
-    # and to find a way to return the value
     if !isnothing(q)
-        gq = gsetsource!(gd,d,q,r)
+        gq = gsetsource(gd,q,r)
+        return gb,gq
+    else
+        return gb
     end
 
-    gb = gsetboundarycondition(gd,b)
-    return gb
 end
 
 """
@@ -1989,7 +2019,6 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
     end
 
     # Warning: doesn't this need to loop over the NamedTuple?
-    
 
     # define ldiv with fields
     #c = zeros(d.γ,b.name,b.longname,b.units)
@@ -1998,29 +2027,29 @@ function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}
     return c
 end
 
-"""
-    function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+# """
+#     function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
-    ADDJOINT steady inversion for b::NamedTuple
-"""
-function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0) where {N, T <: Real}
+#     ADDJOINT steady inversion for b::NamedTuple
+# """
+# function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0) where {N, T <: Real}
 
-    #println("running adjoint steady inversion")
+#     #println("running adjoint steady inversion")
 
-    # sensitivity of Field of equation constraints
-    gd = Alu' \ gc
+#     # sensitivity of Field of equation constraints
+#     gd = Alu' \ gc
 
-    # still need to develop this
-    # and to find a way to return the value
-    if !isnothing(q)
-        gq = gsetsource!(gd,d,q,r)
-    end
+#     # still need to develop this
+#     # and to find a way to return the value
+#     if !isnothing(q)
+#         gq = gsetsource!(gd,d,q,r)
+#     end
 
-    # update d with the boundary condition b
-    gb = gsetboundarycondition(gd,b)
+#     # update d with the boundary condition b
+#     gb = gsetboundarycondition(gd,b)
 
-    return gb
-end
+#     return gb
+# end
 
 """
     function wetlocation(γ)
@@ -2095,8 +2124,15 @@ zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,
 
 zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
 
-## Warning: need to update this next function
-onesurfaceboundary(γ) = ones(3,1,γ)::BoundaryCondition
+onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,1,γ,name,longname,units)::BoundaryCondition
+
+onenorthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+oneeastboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+
+onesouthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,1,γ,name,longname,units)::BoundaryCondition
+
+onewestboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,1,γ,name,longname,units)::BoundaryCondition
 
 getsurfaceboundary(c::Field) = getboundarycondition(c,3,1)::BoundaryCondition
 getnorthboundary(c::Field) = getboundarycondition(c,2,maximum(latindex(c.γ.I)))::BoundaryCondition
@@ -2183,25 +2219,46 @@ function gsetboundarycondition(gd::Field{T},b::NamedTuple{<:Any, NTuple{N,Bounda
 end
 
 """
-    function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
 
-    adjust the (one) boundary condition 
-    problem: passes back a mutated b
+    adjust all boundary conditions b that are described in u
 """
-function adjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    b.tracer[b.wet] += u.tracer[u.wet] # write it out so b changes when returned
+adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
+function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple}) 
+    bnew = deepcopy(b)
+    adjustboundarycondition!(bnew,u)
+    return bnew
 end
 
 """
-    function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
 
-    adjust the (one) boundary condition 
+    adjust all boundary conditions b that are described in u
+
+    warning: if u doesn't contain any boundary condition adjustments,
+    nothing will change.
 """
-function adjustboundarycondition(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
+    # write it out so b changes when returned
+    b.tracer[b.wet] += u.tracer[u.wet] 
+end
+function adjustboundarycondition!(b::BoundaryCondition,u::NamedTuple) #where {N1, N2, T <: Real}
+    # if not explicit, assume a surface boundary condition
+    bkey = :surface # 
+    if haskey(u,bkey)
+        adjustboundarycondition!(b,u[bkey])
+    end
+end
+function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
+    for bkey in keys(b)
+        adjustboundarycondition!(b[bkey],u)
+    end
+end
 
-    bnew = b + u
-    return bnew
-
+# Seems not to be general because gu overwritten.
+function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+    gu  = gb
+    return gu
 end
 
 """
@@ -2212,51 +2269,113 @@ end
     Keep this function so that calling functions can look alike.
     Could probably combine with lower function, use Union type
 """
-function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    gu  = gb
-    return gu
+function gadjustboundarycondition!(gu::BoundaryCondition,gb::BoundaryCondition) 
+    gu.tracer[gu.wet] += gb.tracer[gb.wet]
 end
-
-"""
-    function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where N1, N2, T <: Real
-
-    adjust all boundary conditions b that are described in u
-"""
-function adjustboundarycondition!(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-
-    ukeys = keys(u)
-    for ukey in keys(u)
-        b[ukey].tracer[b[ukey].wet] += u[ukey].tracer[b[ukey].wet] 
+function gadjustboundarycondition!(gu::NamedTuple,gb::BoundaryCondition)
+    bkey = :surface
+    if haskey(gu,bkey)
+        gadjustboundarycondition!(gu[bkey],gb)
     end
-    
 end
-
-"""
-    function adjustboundarycondition(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where N1, N2, T <: Real
-
-    adjust all boundary conditions b that are described in u
-"""
-function adjustboundarycondition(b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-
-    bnew = deepcopy(b)
-    ukeys = keys(u)
-    for ukey in keys(u)
-        bnew[ukey].tracer[bnew[ukey].wet] += u[ukey].tracer[bnew[ukey].wet] 
+function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
+    for bkey in keys(gb)
+        gadjustboundarycondition!(gu,gb[bkey])
     end
-    return bnew
 end
 
-"""
-    function gadjustboundarycondition!(b::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-
-    ADJOINT CODE
-    adjust the (one) boundary condition 
-    Just copy the variable.
-    Keep this function so that calling functions can look alike.
-"""
-function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+#function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
+function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
+end
+
+function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
+    q = deepcopy(q₀)
+    adjustsource!(q,u)
+    return q
+end
+    
+function adjustsource!(q::Field,u::Field)
+    # write it out so b changes when returned
+    q.tracer[q.γ.wet] += u.tracer[u.γ.wet] 
+end
+function adjustsource!(q::Source,u::Source)
+    if q.logscale && u.logscale
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        q.logscale = false
+    elseif ~q.logscale && u.logscale
+        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    elseif q.logscale && ~u.logscale
+        error("not implemented: logscale would not lead to non-negative source")
+        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
+        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    else 
+        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+    end        
+end
+function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
+    for qkey in keys(q)
+        if haskey(u,qkey)
+            adjustsource!(q[qkey],u[qkey])
+        else
+            error("adjustsource!: u doesn't have qkey ",qkey)
+        end
+    end
+end
+function adjustsource!(q::Union{Field,Source},u::NamedTuple) #where {N1, N2, T <: Real}
+    qkey = :source
+    if haskey(u,qkey)
+        adjustsource!(q,u[qkey])
+    else
+        error("adjustsource!: u doesn't have source info")
+    end
+end
+
+function gadjustsource!(gu::Field,gq::Field)
+    # write it out so b changes when returned
+    gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
+end
+function gadjustsource!(gu::Source,gq::Source,q₀::Source)
+    q = deepcopy(q₀)
+    if gq.logscale && gu.logscale
+        error("not implemented")
+        # gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        # q.logscale = false
+        gq.logscale = false
+        
+    elseif gu.logscale
+        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
+        gq.tracer[gq.γ.interior] = gq.tracer[gq.γ.interior] .* exp.(q.tracer[q.γ.interior])
+        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+        # no need to adjoint this next line?
+    elseif gq.logscale
+        error("not implemented: logscale would not lead to non-negative source")
+        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
+        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    else 
+        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+    end        
+end
+
+function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: Union{Source,Field}
+    qkey = :source
+    if haskey(gu,qkey)
+        gadjustsource!(gu[qkey],gq,q)
+    end
+end
+function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: NamedTuple 
+    for qkey in keys(gq)
+        if haskey(gu,qkey)
+            gadjustsource!(gu[qkey],gq[qkey],q[qkey])
+        end
+    end
 end
 
 """
@@ -2293,183 +2412,10 @@ function planview(c::Field{T},depth)::Array{T,2} where T <: Real
     return cplan
 end
 
-""" 
-    function control2state(tracer2D,γ)
-    turn 2D surface field into 3D field with zeroes below surface    
-# Arguments
-- `tracer2D`:: 2D surface tracer field
-- `wet`::BitArray mask of ocean points
-# Output
-- `tracer3D`:: 3d tracer field with NaN on dry points
-"""
-function control2state(tracer2D::Matrix{T},wet) where T<: Real
-    # preallocate
-    tracer3D = Array{T}(undef,size(wet))
+wet(a::BoundaryCondition) = a.wet
+wet(a::Field) = a.γ.wet
+wet(a::Source) = a.γ.interior
 
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    tracer3D[wet] .= zero(T)
-    tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1] = tracer2D
-    return tracer3D
-end
-
-""" 
-    function surfacecontrol2field(usfc,γ.wet)
-    turn surface control vector into 3D field with zeroes below surface    
-# Arguments
-- `usfc`:: surface control vector
-- `wet`::BitArray mask of ocean points
-# Output
-- `tracer3D`:: 3d tracer field with NaN on dry points
-"""
-function surfacecontrol2field(usfc::Vector{T},wet) where T<: Real
-    # preallocate
-    tracer3D = Array{T}(undef,size(wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    tracer3D[wet] .= zero(T)
-    tracer3D[.!wet] .= zero(T)/zero(T)
-    tracer3D[:,:,1][wet[:,:,1]] = usfc
-    return tracer3D
-end
-
-"""
-    function Γsfc 
-    Γsfc anonymously calls surfacecontrol2field
-"""
-Γsfc = surfacecontrol2field
-
-"""
-    function surfacecontrol2field!(c,u,γ)
-    Add surface control vector to existing 3D field 
-# Arguments
-- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `usfc`:: surface control vector
-- `wet`::BitArray mask of ocean points
-"""
-function surfacecontrol2field!(c::Array{T,3},usfc::Vector{T},γ) where T<: Real
-    #c[:,:,1][wet[:,:,1]] .+= u # doesn't work
-#    [c[γ.I[ii][1],γ.I[ii][2],γ.I[ii][3]] += u[ii] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-    list = surfaceindex(γ.I)
-    [c[γ.I[ii]] += usfc[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-end
-
-""" 
-    function surfacecontrol2field!(c,u,γ)
-    Add surface control vector to tracer vector
-# Arguments
-- `c`:: state field, 3d tracer field with NaN on dry points, modified by function
-- `u`:: surface control vector
-- `wet`::BitArray mask of ocean points
-"""
-function surfacecontrol2field!(c::Vector{T},u::Vector{T},γ) where T<: Real
-    list = surfaceindex(γ.I)
-    [c[ii] += u[list[ii]] for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
-end
-
-"""
-    function Γsfc! 
-    Γsfc! anonymously calls surfacecontrol2field!
-"""
-Γsfc! = surfacecontrol2field!
-
-function field2obs(cvec,wis,γ)
-    # interpolate onto data points
-    N = length(wis)
-    sumwis = Vector{Float64}(undef,N)
-    list = vcat(1:length(γ.lon),1)
-
-    # perhaps the most clever line in TMI.jl?
-    wetwrap = view(γ.wet,list,:,:)
-
-    # some interpolation weights on land, oh no
-    # sum up all weights in ocean
-    [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
-
-    # reconstruct the observations
-    ỹ = Vector{Float64}(undef,N)
-    c̃ = tracerinit(γ.wet)
-    c̃[γ.wet] = cvec
-    replace!(c̃,NaN=>0.0)
-    cwrap = view(c̃,list,:,:)
-
-    # divide by sum of all ocean weights so that this is still a true average
-    [ỹ[i] = Interpolations.InterpGetindex(cwrap)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
-    return ỹ
-end
-
-"""
-    function E 
-    E anonymously calls field2obs
-"""
-E = field2obs
-
-""" 
-    function tracerinit(wet,vec,I)
-          initialize tracer field on TMI grid
-        perhaps better to have a tracer struct and constructor
-# Arguments
-- `wet`:: BitArray mask of ocean points
-- `vec`:: vector of values at wet points
-- `I`:: Cartesian Index for vector
-# Output
-- `field`:: 3d tracer field with NaN on dry points
-"""
-function tracerinit(vec,I,wet)
-
-    # preallocate
-    T = eltype(vec)
-    field = Array{T}(undef,size(wet))
-    fill!(field,zero(T)/zero(T))    
-
-    #- a comprehension
-    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
-    return field
-end
-
-"""
-    function vec2fld
-    Transfer a vector to a 3D field with accounting for ocean bathymetry
-# Arguments
-- `vector`: field in vector form (no land points)
-- `I`: cartesian indices of ocean points
-# Output
-- `field`: field in 3d form including land points (NaN)
-"""
-function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
-    # choose NaN for now, zero better? nothing better?
-    fillvalue = zero(T)/zero(T)
-    
-    nx = maximum(I)[1]
-    ny = maximum(I)[2]
-    nz = maximum(I)[3]
-
-    # faster instead to allocate as undef and then fill! ?
-    field = (NaN .* zero(T)) .* zeros(nx,ny,nz)
-
-    # a comprehension
-    [field[I[n]]=vector[n] for n ∈ eachindex(I)]
-    return field
-end
-
-"""
-    function fld2vec
-    Transfer 3D field with accounting for ocean bathymetry to a vector without land points.
-    This is done more easily with a BitArray mask, i.e., vector = field[mask].
-    This function may be removed in the future.
-# Arguments
-- `field`: field in 3d form including land points (NaN)
-- `I`: cartesian indices of ocean points
-# Output
-- `vector`: field in vector form (no land points)
-"""
-function fld2vec(field::Array{T,3},I::Vector{CartesianIndex{3}}) where T<:Real
-    vector = Vector{T}(undef,length(I))
-    #- a comprehension
-     [vector[n] = field[I[n]] for n ∈ eachindex(I)];
-     return vector
- end
+include("deprecated.jl")
 
 end

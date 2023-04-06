@@ -31,7 +31,32 @@ using TMI
         O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
     end
-    
+
+    @testset "steadyinversion with Source type" begin
+
+        yPO₄ = readfield(TMIfile,"PO₄",γ)
+        bPO₄ = getsurfaceboundary(yPO₄)
+        PO₄pre = steadyinversion(Alu,bPO₄,γ)
+
+        # this line changes
+        qPO₄ = readsource(TMIfile,"qPO₄",γ)
+        b₀ = zerosurfaceboundary(γ)
+        PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+        PO₄total = PO₄ᴿ + PO₄pre
+        PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
+
+        ## how big is the maximum difference?
+        # could replace with abs function
+        @test maximum(PO₄direct - PO₄total) < 0.1
+        @test minimum(PO₄direct - PO₄total) > -0.1
+
+        ## oxygen distribution, just be sure it runs
+        yO₂ = readfield(TMIfile,"O₂",γ)
+        bO₂ = getsurfaceboundary(yO₂)
+        O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
+
+    end
+
     ############################
     ## trackpathways
     @testset "trackpathways" begin
@@ -198,7 +223,7 @@ using TMI
             fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
             f(x) = fg(x)[1]
             J0 = f(uvec)
-            J̃₀,gJ₀ = fg(uvec)
+            J̃₀,∂J₀∂u = fg(uvec)
             fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
             ϵ = 1e-3 # size of finite perturbation
@@ -208,21 +233,137 @@ using TMI
             ∇f_finite = (f(δu) - f(uvec))/ϵ
             println("∇f_finite=",∇f_finite)
 
-            fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-            ∇f = gJ₀[ii]
+            ∂J₀∂u = 0.0 .* uvec
+            fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+            ∇f = ∂J₀∂u[ii]
             println("∇f=",∇f)
 
             # error less than 10 percent?
             println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-            iterations = 5
-            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+            iters = 5
+            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
+
             # was cost function decreased?
             @test out.minimum < J̃₀
             # reconstruct by hand to double-check.
             ũ = out.minimizer
-            J̃,gJ̃ = fg(ũ)
+            J̃,∂J̃∂ũ = fg(ũ)
             @test J̃ < J̃₀
+
+
         end
+    end
+    @testset "sourcemap" begin
+
+        using Statistics, Interpolations
+
+        for lscale in (false,true)
+            for surfacetoo in (false,true)
+                
+                yPO₄ = readfield(TMIfile,"PO₄",γ)
+                bPO₄ = getsurfaceboundary(yPO₄)
+                qPO₄ = readsource(TMIfile,"qPO₄",γ)
+                q₀ = 1e-2*onesource(γ)
+                
+                N = 20
+                y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
+
+                #u = (; source = zerosource(γ))
+                if surfacetoo
+                    u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
+                else
+                    u = (; source = zerosource(γ,logscale=lscale))
+                end
+                
+                b = (; surface = bPO₄) # surface boundary condition
+
+                PO₄true = steadyinversion(Alu,b,γ,q=qPO₄)
+                PO₄₀ = steadyinversion(Alu,b,γ,q=q₀)
+                uvec = vec(u)
+
+                σq = 1.0
+                Q⁻ = 1.0/(σq^2) # how well is q (source) known?
+                fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
+                f(x) = fg(x)[1]
+                J0 = f(uvec)
+                J̃₀,∂J₀∂u = fg(uvec)
+                fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
+
+                ϵ = 1e-3 # size of finite perturbation
+                ii = rand(1:sum(γ.wet[:,:,1]))
+                println("gradient check location=",ii)
+                δu = copy(uvec); δu[ii] += ϵ
+                ∇f_finite = (f(δu) - f(uvec))/ϵ
+                println("∇f_finite=",∇f_finite)
+
+                fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+                ∇f = ∂J₀∂u[ii]
+                println("∇f=",∇f)
+
+                # error less than 10 percent?
+                println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+                @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+                iters = 5
+                out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=qPO₄,r=1.0,iterations=iters)
+                # was cost function decreased?
+                @test out.minimum < J̃₀
+                # reconstruct by hand to double-check.
+                ũ = out.minimizer
+                J̃,∂J̃∂ũ = fg(ũ)
+                @test J̃ < J̃₀
+                #@test J̃ < 3N # too strict if first guess is bad
+
+                if lscale
+                    #b̃ = adjustboundarycondition(b₀,unvec(u,ũ)) # combine b₀, u
+                    q̃ = TMI.adjustsource(q₀,unvec(u,ũ))
+                    @test minimum(q̃) ≥ 0
+                end
+            end
+        end
+    end
+
+    @testset "unvec" begin
+        u = (;surface = onesurfaceboundary(γ),
+             west = 2 * onewestboundary(γ),
+             east = 3 *oneeastboundary(γ))
+
+        vecu = vec(u)
+        
+        u2 = (;surface = zerosurfaceboundary(γ),
+             west = 2 * zerowestboundary(γ),
+             east = 3 * zeroeastboundary(γ))
+
+        u3 = unvec(u2,vecu)
+        @test u.surface.tracer[10,10] == u3.surface.tracer[10,10]
+        @test u.east.tracer[10,10] == u3.east.tracer[10,10]
+        @test u.west.tracer[10,10] == u3.west.tracer[10,10]
+        @test u.surface.tracer[10,10] == 1.0
+        @test u.west.tracer[10,10] == 2.0
+        @test u.east.tracer[10,10] == 3.0
+        
+        unvec!(u2,vecu)
+        @test u.surface.tracer[10,10] == u2.surface.tracer[10,10]
+        @test u.east.tracer[10,10] == u2.east.tracer[10,10]
+        @test u.west.tracer[10,10] == u2.west.tracer[10,10]
+        @test u.surface.tracer[10,10] == 1.0
+        @test u.west.tracer[10,10] == 2.0
+        @test u.east.tracer[10,10] == 3.0
+
+    end
+
+    @testset "regional" begin
+        TMIversion = "nordic_201x115x46_B23"
+        A, Alu, γ, TMIfile, L, B = config_from_mat(TMIversion)
+
+#     shellscript = TMI.pkgsrcdir("read_nc_nordic_lowresolution.sh")
+#     run(`sh $shellscript`)
+
+# # NordicSeas_30-Dec-2020_low.mat
+#     TMIversion = "NordicSeas_30-Dec-2020_low";
+#     TMIfile = TMIversion*".nc"
+#     !ispath(TMI.pkgdatadir()) && mkpath(TMI.pkgdatadir())
+#     mv(joinpath(pwd(),TMIfile),TMI.pkgdatadir(TMIfile),force=true)
+
     end
 end

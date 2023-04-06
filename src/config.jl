@@ -14,8 +14,6 @@ function config_from_nc(TMIversion)
 
     TMIfile = download_ncfile(TMIversion)
 
-    γ = Grid(TMIfile)
-    
     println("A")
     @time A = watermassmatrix(TMIfile)
 
@@ -23,6 +21,8 @@ function config_from_nc(TMIversion)
     println("Alu")
     @time Alu = lu(A)
 
+    γ = Grid(TMIfile)
+    
     # would be good to make this optional
     println("L=")
     @time L = circulationmatrix(TMIfile,A,γ)
@@ -63,6 +63,12 @@ function download_ncfile(TMIversion::String)
             shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+        elseif  TMIversion == "nordic_201x115x46_B23"
+            println("workaround for regional Nordic Seas file")
+            shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
+            run(`sh $shellscript`)
+            TMIfile = TMIversion*".nc"
+            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
@@ -85,31 +91,48 @@ function gridinit(TMIfile)
 # Output
 - `γ::Grid`: TMI grid struct
 """
-function Grid(TMIfile::String)
+function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
     # get properties of grid
     lon,lat,depth = gridprops(TMIfile)
 
+    
+    # make ocean mask
+    wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+
+    # make interior mask
+    interior = interiormask(A,wet,length(lon),length(lat),length(depth))
+
+    # do not store: compute on demand
+    #R = linearindex(wet)
+    #γ = Grid(lon,lat,depth,I,R,wet)
+
+    return Grid(lon,lat,depth,wet,interior)
+end
+
+function wetmask(TMIfile,nx,ny,nz)
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
-
     # make a mask
     # first choice: smaller but inconsistent with input grid
     #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
-    wet = falses(length(lon),length(lat),length(depth))
+    wet = falses(nx,ny,nz)
     wet[I] .= 1
+    return wet
+end
 
-    R = linearindex(wet)
-    
-    γ = Grid(lon,lat,depth,I,R,wet)
-
-    return γ
+function interiormask(A,wet,nx,ny,nz)
+    interior = falses(nx,ny,nz)
+    I = cartesianindex(wet)
+    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+    interior[I[list]] .= true 
+    return interior
 end
 
 """
 Configure TMI environment from original MATLAB output
 """
 function config_from_mat(TMIversion)
-
+    # repetitive and long
     TMIfile = download_matfile(TMIversion)
     
     # # make a sample field from zyx cartesian indices
@@ -120,19 +143,21 @@ function config_from_mat(TMIversion)
     wet[Izyx] .= 1
 
     I = cartesianindex(wet)
-
     R = linearindex(wet)
 
     Azyx = watermassmatrix(TMIfile)
+
     A = matrix_zyx2xyz(TMIfile,Azyx,R)
 
     # # LU factorization for efficient matrix inversions
     Alu = lu(A)
 
-    # get properties of grid
-    lat,lon,depth = gridprops(TMIfile)
+    γ = Grid(TMIfile,A=A)
 
-    γ = Grid(lon,lat,depth,I,R,wet)
+    # # get properties of grid
+    # lat,lon,depth = gridprops(TMIfile)
+
+    # γ = Grid(lon,lat,depth,I,R,wet)
 
     # need to make this optional
     L = circulationmatrix(TMIfile,γ)
@@ -175,6 +200,11 @@ function download_matfile(TMIversion::String)
         shellscript = pkgsrcdir("read_mat_modern_180x90x33_GH11_GH12.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
+    elseif  TMIversion == "nordic_201x115x46_B23"
+        println("workaround for regional Nordic Seas file")
+        shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
+        run(`sh $shellscript`)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     else
         !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
     end
@@ -206,9 +236,25 @@ function cartesianindex(file::String)
     elseif file[end-2:end] == "mat"
 
         matobj = matopen(file)
-        haskey(matobj,"it") ? it=convert(Vector{Integer},vec(read(matobj,"it"))) : it = convert(Vector{Integer},vec(read(matobj,"i")))
-        haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
-        haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
+        if haskey(matobj,"it")
+            it=convert(Vector{Integer},vec(read(matobj,"it")))
+            jt=convert(Vector{Integer},vec(read(matobj,"jt")))
+            kt=convert(Vector{Integer},vec(read(matobj,"kt")))
+        elseif haskey(matobj,"i")
+            it = convert(Vector{Integer},vec(read(matobj,"i")))
+            jt = convert(Vector{Integer},vec(read(matobj,"j")))
+            kt = convert(Vector{Integer},vec(read(matobj,"k")))
+        elseif haskey(matobj,"grd")
+            #grd = read(matobj,"grd")
+            it = convert(Vector{Integer},vec(read(matobj,"grd")["it"]))
+            jt = convert(Vector{Integer},vec(read(matobj,"grd")["jt"]))
+            kt = convert(Vector{Integer},vec(read(matobj,"grd")["kt"]))
+        else
+            error("grid index key not found")
+        end
+        
+        #haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
+        #haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
         I = CartesianIndex.(it,jt,kt) 
     end
@@ -231,15 +277,19 @@ function gridprops(file)
         depth = convert(Vector{Float64},ncread(file,"depth"))
 
     elseif file[end-2:end] == "mat"
-        
-        matobj = matopen(file)
-        lon=convert(Vector{Float64},vec(read(matobj,"LON")))
-        lat=convert(Vector{Float64},vec(read(matobj,"LAT")))
-        depth=convert(Vector{Float64},vec(read(matobj,"DEPTH")))
-        close(matobj)
 
+        matobj = matopen(file)
+        if haskey(matobj,"grd")
+            lon = convert(Vector{Float64},vec(read(matobj,"grd")["LON"]))
+            lat = convert(Vector{Float64},vec(read(matobj,"grd")["LAT"]))
+            depth = convert(Vector{Float64},vec(read(matobj,"grd")["DEPTH"]))
+        else
+            lon=convert(Vector{Float64},vec(read(matobj,"LON")))
+            lat=convert(Vector{Float64},vec(read(matobj,"LAT")))
+            depth=convert(Vector{Float64},vec(read(matobj,"DEPTH")))
+        end
+        close(matobj)
     end
-    
     return lon,lat,depth
 end
 
@@ -444,6 +494,9 @@ end
 """
     function updatelinearindex(izyx,Izyx,R)
     Linear index translated from z,y,x to x,y,z accounting
+
+    get Izyx Cartesian index stored from legacy MATLAB code
+
 # Arguments
 - `izyx`: index of interest in z,y,x accounting
 - `Izyx`: wet Cartesian Index for z,y,x
@@ -451,12 +504,7 @@ end
 # Output
 - `ixyz`: index of interest in x,y,z accounting
 """
-function updatelinearindex(izyx,Izyx,R)
-    # get Izyx Cartesian index stored from legacy MATLAB code
-    ixyz = R[Izyx[izyx]]
-    return ixyz
-end
-
+updatelinearindex(izyx,Izyx,R) = R[Izyx[izyx]]
 
 """
      function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
