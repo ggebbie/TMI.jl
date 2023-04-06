@@ -202,7 +202,7 @@ function download_matfile(TMIversion::String)
         println("workaround for regional Nordic Seas file")
         shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
         run(`sh $shellscript`)
-        mv(joinpath(pwd(),TMIfilegz),TMIfile,force=true)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     else
         !isfile(TMIfilegz) & !isfile(TMIfile) && google_download(url,pkgdatadir())
     end
@@ -234,9 +234,25 @@ function cartesianindex(file::String)
     elseif file[end-2:end] == "mat"
 
         matobj = matopen(file)
-        haskey(matobj,"it") ? it=convert(Vector{Integer},vec(read(matobj,"it"))) : it = convert(Vector{Integer},vec(read(matobj,"i")))
-        haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
-        haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
+        if haskey(matobj,"it")
+            it=convert(Vector{Integer},vec(read(matobj,"it")))
+            jt=convert(Vector{Integer},vec(read(matobj,"jt")))
+            kt=convert(Vector{Integer},vec(read(matobj,"kt")))
+        elseif haskey(matobj,"i")
+            it = convert(Vector{Integer},vec(read(matobj,"i")))
+            jt = convert(Vector{Integer},vec(read(matobj,"j")))
+            kt = convert(Vector{Integer},vec(read(matobj,"k")))
+        elseif haskey(matobj,"grd")
+            #grd = read(matobj,"grd")
+            it = convert(Vector{Integer},vec(read(matobj,"grd")["it"]))
+            jt = convert(Vector{Integer},vec(read(matobj,"grd")["jt"]))
+            kt = convert(Vector{Integer},vec(read(matobj,"grd")["kt"]))
+        else
+            error("grid index key not found")
+        end
+        
+        #haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
+        #haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
         I = CartesianIndex.(it,jt,kt) 
     end
@@ -259,15 +275,19 @@ function gridprops(file)
         depth = convert(Vector{Float64},ncread(file,"depth"))
 
     elseif file[end-2:end] == "mat"
-        
-        matobj = matopen(file)
-        lon=convert(Vector{Float64},vec(read(matobj,"LON")))
-        lat=convert(Vector{Float64},vec(read(matobj,"LAT")))
-        depth=convert(Vector{Float64},vec(read(matobj,"DEPTH")))
-        close(matobj)
 
+        matobj = matopen(file)
+        if haskey(matobj,"grd")
+            lon = convert(Vector{Float64},vec(read(matobj,"grd")["LON"]))
+            lat = convert(Vector{Float64},vec(read(matobj,"grd")["LAT"]))
+            depth = convert(Vector{Float64},vec(read(matobj,"grd")["DEPTH"]))
+        else
+            lon=convert(Vector{Float64},vec(read(matobj,"LON")))
+            lat=convert(Vector{Float64},vec(read(matobj,"LAT")))
+            depth=convert(Vector{Float64},vec(read(matobj,"DEPTH")))
+        end
+        close(matobj)
     end
-    
     return lon,lat,depth
 end
 
