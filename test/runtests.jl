@@ -354,7 +354,7 @@ using TMI
 
     @testset "regional" begin
         TMIversion = "nordic_201x115x46_B23"
-        A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+        A, Alu, γ, TMIfile, L, B = config_from_mat(TMIversion)
 
 #     shellscript = TMI.pkgsrcdir("read_nc_nordic_lowresolution.sh")
 #     run(`sh $shellscript`)
