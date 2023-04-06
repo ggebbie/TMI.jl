@@ -163,7 +163,7 @@ end
     function Γsfc 
     Γsfc anonymously calls surfacecontrol2field
 """
-Γsfc = surfacecontrol2field
+#Γsfc = surfacecontrol2field
 
 """
     function surfacecontrol2field!(c,u,γ)

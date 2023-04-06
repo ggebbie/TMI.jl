@@ -1358,64 +1358,96 @@ end
     `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
     Define addition for Fields
 """
-function +(c::BoundaryCondition{T},d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
-
-    if c.wet != d.wet # check conformability
-        error("BoundaryCondition's not conformable for addition")
+function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    if wet(c) != wet(d) # check conformability
+        error("TMI type not conformable for addition")
     end
-    array = zeros(c.wet)
-    e = BoundaryCondition(array,c.i,c.j,c.k,c.dim,c.dimval,c.wet)
+    # a strange formulation to do in-place addition
+    c.tracer[wet(c)] += d.tracer[wet(d)]
+end
+
+function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = deepcopy(c)
+    add!(e,d)
+    return e
+end
+
+function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    if wet(c) != wet(d) # check conformability
+        error("TMI type not conformable for addition")
+    end
+    # a strange formulation to do in-place addition
+    c.tracer[wet(c)] -= d.tracer[wet(d)]
+end
+
+function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = deepcopy(c)
+    subtract!(e,d)
+    return e
+end
+
+# """
+#     `function +(c::BoundaryCondition,d::BoundaryCondition)::BoundaryCondition`
+#     Define addition for Fields
+# """
+# function Base.:+(c::T,d::T)::T where T <: Union{Source,Field,BoundaryCondition}
+
+#     if c.wet != d.wet # check conformability
+#         error("BoundaryCondition's not conformable for addition")
+#     end
+#     array = zeros(c.wet)
+#     e = BoundaryCondition(array,c.i,c.j,c.k,c.dim,c.dimval,c.wet)
     
-    # a strange formulation to get
-    # return e to be correct
-    e.tracer[e.wet] += c.tracer[c.wet]
-    e.tracer[e.wet] += d.tracer[d.wet]
-    return e
-end
+#     # a strange formulation to get
+#     # return e to be correct
+#     e.tracer[e.wet] += c.tracer[c.wet]
+#     e.tracer[e.wet] += d.tracer[d.wet]
+#     return e
+# end
 
-"""
-    `function +(c::Field,d::Field)::Field`
-    Define addition for Fields
-"""
-function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
-    # initialize output
-    if c.γ.wet != d.γ.wet # check conformability
-        error("Fields not conformable for addition")
-    end
+# """
+#     `function +(c::Field,d::Field)::Field`
+#     Define addition for Fields
+# """
+# function +(c::Field{T},d::Field{T})::Field{T} where T <: Real
+#     # initialize output
+#     if c.γ.wet != d.γ.wet # check conformability
+#         error("Fields not conformable for addition")
+#     end
 
-    if !isequal(d.units,c.units)
-        error("Units not consistent:",d.units," vs ",c.units)
-    end
+#     if !isequal(d.units,c.units)
+#         error("Units not consistent:",d.units," vs ",c.units)
+#     end
 
-    e = zeros(d.γ,d.name,d.longname,d.units)
+#     e = zeros(d.γ,d.name,d.longname,d.units)
 
-    # a strange formulation to get
-    # return e to be correct
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
-    e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
-    return e
-end
+#     # a strange formulation to get
+#     # return e to be correct
+#     e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+#     e.tracer[e.γ.wet] += d.tracer[d.γ.wet]
+#     return e
+# end
 
-"""
-    `function -(c::Field,d::Field)::Field`
-    Define addition for Fields
-"""
-function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
-    # initialize output
-    if c.γ.wet !== d.γ.wet # check conformability
-        error("Fields not conformable for addition")
-    end
-    e = zeros(d.γ)
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
-    e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
-    return e
-end
+# """
+#     `function -(c::Field,d::Field)::Field`
+#     Define addition for Fields
+# """
+# function -(c::Field{T},d::Field{T})::Field{T} where T <: Real
+#     # initialize output
+#     if c.γ.wet !== d.γ.wet # check conformability
+#         error("Fields not conformable for addition")
+#     end
+#     e = zeros(d.γ)
+#     e.tracer[e.γ.wet] += c.tracer[c.γ.wet]
+#     e.tracer[e.γ.wet] -= d.tracer[d.γ.wet]
+#     return e
+# end
 
 """
     `function *(C,d::Field)::Field`
     Define scalar or matrix multiplication for fields
 """
-function *(C,d::Field{T})::Field{T} where T <: Real
+function Base.:*(C,d::Field{T})::Field{T} where T <: Real
 
     e = zeros(d.γ)
     e.tracer[e.γ.wet] += C*d.tracer[d.γ.wet]
@@ -1426,7 +1458,7 @@ end
     `function *(C,d::BoundaryCondition)::BoundaryCondition`
     Define scalar or matrix multiplication for BoundaryCondition`s
 """
-function *(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
+function Base.:*(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
     array = zeros(d.wet)
     e = BoundaryCondition(array,d.i,d.j,d.k,d.dim,d.dimval,d.wet)
     e.tracer[e.wet] += C*d.tracer[d.wet]
@@ -1437,7 +1469,7 @@ end
     `function *(c::Field,d::Field)::Field`
     Field by field multiplication is element-by-element.
 """
-function *(c::Field{T},d::Field{T})::Field{T} where T <: Real
+function Base.:*(c::Field{T},d::Field{T})::Field{T} where T <: Real
     # initialize output
     if c.γ.wet != d.γ.wet # check conformability
         error("Fields not conformable for addition")
@@ -2321,9 +2353,10 @@ function adjustsource!(q::Source,u::Source)
         q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
         q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
     elseif q.logscale && ~u.logscale
-        u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
-        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        error("not implemented: logscale would not lead to non-negative source")
+        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
+        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
     else 
         q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
     end        
