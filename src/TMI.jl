@@ -1389,17 +1389,54 @@ end
 """
     `function *(C,d::Field)::Field`
     Define scalar or matrix multiplication for fields
-"""
-Base.:*(C,d::Union{Field,BoundaryCondition,Source}) = d*C
 
-function Base.:*(d::Union{Field,BoundaryCondition,Source},C) 
+    one argument can be a number, but not both (type piracy?)
+"""
+# the order doesn't matter when multiplying by a scalar
+
+Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
+# right matrix multiply not handled
+function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
     e = deepcopy(d)
-    mul!(e,C)
+    mul!(c,e)
+    return e
+end
+function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryCondition,Source}
+    e = deepcopy(d)
+    mul!(e,c)
     return e
 end
 
-function mul!(d::Union{Field,BoundaryCondition,Source},C)
+function mul!(d::Union{Field,BoundaryCondition,Source},C::Number)
     d.tracer[wet(d)] *= C #*d.tracer[wet(d)]
+end
+function mul!(c::T,d::T) where T <: Union{Field,BoundaryCondition,Source}
+    # initialize output
+    if wet(c) != wet(d) # check conformability
+        error("Fields not conformable for multiplication")
+    end
+
+    if !isequal(d.units,c.units)
+        error("Units not consistent:",d.units," vs ",c.units)
+    end
+    c.tracer[wet(c)] .*= d.tracer[wet(d)]
+end
+
+# matrix multiplication with arrays/matrices: order matters
+# d is mutated
+function mul!(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
+    # initialize output
+    if size(c,2) != sum(wet(d)) # check conformability
+        error("Number/Matrix-Field/BC/Source multiplication: not right size")
+    end
+    d.tracer[wet(d)] = c*d.tracer[wet(d)]
+end
+function mul!(d::Union{Field,BoundaryCondition,Source},c::AbstractArray)
+    # initialize output
+    if size(c,1) != sum(wet(d)) # check conformability
+        error("Field/BC/Source-Number/Matrix multiplication: not right size")
+    end
+    d.tracer[wet(d)] = d.tracer[wet(d)]*c
 end
 
 """
@@ -1407,7 +1444,6 @@ end
     Field by field multiplication is element-by-element.
 """
 function dot(c::Field{T},d::Field{T})::T where T <: Real
-
     e =  c.tracer[c.γ.wet]' * d.tracer[d.γ.wet]
     return e
 end

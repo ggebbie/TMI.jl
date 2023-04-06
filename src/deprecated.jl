@@ -337,18 +337,3 @@ end
 # """
 #     `function *(c::Field,d::Field)::Field`
 #     Field by field multiplication is element-by-element.
-# """
-# function Base.:*(c::Field{T},d::Field{T})::Field{T} where T <: Real
-#     # initialize output
-#     if c.γ.wet != d.γ.wet # check conformability
-#         error("Fields not conformable for addition")
-#     end
-
-#     if !isequal(d.units,c.units)
-#         error("Units not consistent:",d.units," vs ",c.units)
-#     end
-
-#     e = zeros(d.γ,d.name,d.longname,d.units)
-#     e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
-#     return e
-# end
