@@ -1471,7 +1471,10 @@ end
 function gsetsource!(gq::Field{T},gd::Field{T},r) where T<: Real
     gq.tracer[gq.γ.wet] -= r * gd.tracer[gd.γ.wet]
 end
-function gsetsource(gd::Field{T},q,r) where T<: Real
+function gsetsource!(gq::Source{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.interior] -= r * gd.tracer[gd.γ.interior]
+end
+function gsetsource(gd::Field{T},q::Union{Field,Source},r) where T<: Real
     gq = 0.0 * q
     gsetsource!(gq,gd,r)
     return gq
@@ -2336,7 +2339,28 @@ function gadjustsource!(gu::Field,gq::Field)
     # write it out so b changes when returned
     gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
 end
-function gadjustsource!(gu::NamedTuple,gq::Field) #where {N1, N2, T <: Real}
+function gadjustsource!(gu::Source,gq::Source)
+    if gq.logscale && gu.logscale
+        error("not implemented")
+        # gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+        # q.logscale = false
+    elseif gu.logscale
+        error("not implemented")
+        # q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
+        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    elseif gq.logscale
+        error("not implemented: logscale would not lead to non-negative source")
+        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
+        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
+    else 
+        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+    end        
+end
+
+function gadjustsource!(gu::NamedTuple,gq::Union{Source,Field}) #where {N1, N2, T <: Real}
     qkey = :source
     if haskey(gu,qkey)
         gadjustsource!(gu[qkey],gq)
