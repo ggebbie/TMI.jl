@@ -1386,48 +1386,21 @@ function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     return e
 end
 
-
 """
     `function *(C,d::Field)::Field`
     Define scalar or matrix multiplication for fields
 """
-function Base.:*(C,d::Field{T})::Field{T} where T <: Real
+Base.:*(C,d::Union{Field,BoundaryCondition,Source}) = d*C
 
-    e = zeros(d.γ)
-    e.tracer[e.γ.wet] += C*d.tracer[d.γ.wet]
+function Base.:*(d::Union{Field,BoundaryCondition,Source},C) 
+    e = deepcopy(d)
+    mul!(e,C)
     return e
 end
 
-"""
-    `function *(C,d::BoundaryCondition)::BoundaryCondition`
-    Define scalar or matrix multiplication for BoundaryCondition`s
-"""
-function Base.:*(C,d::BoundaryCondition{T})::BoundaryCondition{T} where T <: Real
-    array = zeros(d.wet)
-    e = BoundaryCondition(array,d.i,d.j,d.k,d.dim,d.dimval,d.wet)
-    e.tracer[e.wet] += C*d.tracer[d.wet]
-    return e
+function mul!(d::Union{Field,BoundaryCondition,Source},C)
+    d.tracer[wet(d)] *= C #*d.tracer[wet(d)]
 end
-
-"""
-    `function *(c::Field,d::Field)::Field`
-    Field by field multiplication is element-by-element.
-"""
-function Base.:*(c::Field{T},d::Field{T})::Field{T} where T <: Real
-    # initialize output
-    if c.γ.wet != d.γ.wet # check conformability
-        error("Fields not conformable for addition")
-    end
-
-    if !isequal(d.units,c.units)
-        error("Units not consistent:",d.units," vs ",c.units)
-    end
-
-    e = zeros(d.γ,d.name,d.longname,d.units)
-    e.tracer[e.γ.wet] += c.tracer[c.γ.wet] .* d.tracer[d.γ.wet]
-    return e
-end
-
 
 """
     `function *(c::Field,d::Field)::Field`
