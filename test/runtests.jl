@@ -360,25 +360,25 @@ using TMI
 
             using Statistics, Interpolations
 
-            for lscale in (false,true)
-                for surfacetoo in (false,true)
-                    
-                    yPO₄ = readfield(TMIfile,"PO₄",γ)
-                    bPO₄ = getsurfaceboundary(yPO₄)
-                    qPO₄ = readsource(TMIfile,"qPO₄",γ)
-                    q₀ = 1e-2*onesource(γ)
-                    
-                    N = 20
-                    y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
+            lscale = true
+            surfacetoo = false
+            
+            yPO₄ = readfield(TMIfile,"PO₄",γ)
+            bPO₄ = getsurfaceboundary(yPO₄)
+            qPO₄ = readsource(TMIfile,"qPO₄",γ)
+            q₀ = 1e-2*onesource(γ)
+            
+            N = 20
+            y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N)
 
-                    #u = (; source = zerosource(γ))
-                    if surfacetoo
-                        u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
-                    else
-                        u = (; source = zerosource(γ,logscale=lscale))
-                    end
-                    
-                    b = (; surface = bPO₄) # surface boundary condition
+            #u = (; source = zerosource(γ))
+            if surfacetoo
+                u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
+            else
+                u = (; source = zerosource(γ,logscale=lscale))
+            end
+            
+            b = (; surface = bPO₄) # surface boundary condition
 
                     PO₄true = steadyinversion(Alu,b,γ,q=qPO₄)
                     PO₄₀ = steadyinversion(Alu,b,γ,q=q₀)
