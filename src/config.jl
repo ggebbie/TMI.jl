@@ -689,6 +689,24 @@ function matfields2nc(TMIversion,γ)
     end
 end
 
+"""
+Read 3D source field from mat file and save to NetCDF file.
+"""
+function matsource2nc(TMIversion,γ)
+
+    netcdffile = pkgdatadir("TMI_"*TMIversion*".nc")
+    matfile = pkgdatadir("TMI_"*TMIversion*".mat")
+    varnames, xvarnames = matvarnames(matfile)
+    Izyx = cartesianindex(matfile)
+
+    for (kk,vv) in mat2ncsource()
+        if kk in varnames || kk in xvarnames 
+            source = readsource(matfile,kk,γ,Izyx)
+            writesource(netcdffile,source)
+        end
+    end
+end
+
 
 """
 All variable names and attributes.

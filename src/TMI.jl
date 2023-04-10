@@ -632,7 +632,7 @@ readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfiel
 # Side-effect
 - write to `file`
 """
-function writefield(file,field::Field{T}) where T <: Real
+function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
 
     if !isfile(file)
         # create new NetCDF file
@@ -725,6 +725,8 @@ function readsource(matfile,matsourcename,γ::Grid,Izyx) # for MATLAB
     return Source(source,γ,Symbol(ncsourcename),longname,units,logscale)
 end
 readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsource(file,matsourcename,γ,Izyx)
+
+writesource(file,field::Source) = writefield(file,field) 
 
 """
     function depthindex(I) 
