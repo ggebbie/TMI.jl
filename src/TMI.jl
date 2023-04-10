@@ -692,6 +692,39 @@ function readsource(file,tracername,γ::Grid;logscale=false)
     q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
     return q
 end
+function readsource(matfile,matsourcename,γ::Grid,Izyx) # for MATLAB
+    # read MATLAB field and transfer zyx format to xyz
+
+    matobj = matopen(matfile)
+    varnames, xvarnames = matvarnames(matfile)
+
+    if matsourcename in varnames
+        tvar = read(matobj,matsourcename)
+    elseif matsourcename in xvarnames
+        tvar = read(matobj,"x")[matsourcename]
+    end
+
+    # put zyx vector into xyz 3D array
+    source = sourceinit(tvar, Izyx, γ)
+
+    # perform a check of file compatibility with grid
+    if sum(isnan.(source[γ.interior])) > 0
+        error("readsource warning: NaN on interior grid")
+    end
+    # check for non NaN or nonzero off grid
+    if sum(isnan.(source[.!(γ.interior)])) < length(isnan.(source[.!(γ.interior)]))
+        println("readsource warning: non-NaN value off grid")
+        println("resetting to NaN")
+        source[.!(γ.interior)] .= NaN
+    end
+    ncsourcename = mat2ncsource()[matsourcename]
+    units = fieldsatts()[ncsourcename]["units"]
+    longname = fieldsatts()[ncsourcename]["longname"]
+    logscale = false # not implemented for true case
+    close(matobj)
+    return Source(source,γ,Symbol(ncsourcename),longname,units,logscale)
+end
+readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsource(file,matsourcename,γ,Izyx)
 
 """
     function depthindex(I) 

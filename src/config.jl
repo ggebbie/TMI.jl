@@ -963,3 +963,45 @@ function grid2nc(TMIversion,γ)
     
 end
 
+""" 
+    function tracerinit(wet,vec,I)
+          initialize tracer field on TMI grid
+        perhaps better to have a tracer struct and constructor
+# Arguments
+- `wet`:: BitArray mask of ocean points
+- `vec`:: vector of values at wet points
+- `I`:: Cartesian Index for vector
+# Output
+- `field`:: 3d tracer field with NaN on dry points
+"""
+function tracerinit(vec,I,wet)
+
+    # preallocate
+    T = eltype(vec)
+    field = Array{T}(undef,size(wet))
+    fill!(field,zero(T)/zero(T))    
+
+    #- a comprehension
+    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
+    return field
+end
+function sourceinit(vec,I,γ)
+
+    # preallocate
+    T = eltype(vec)
+    source = Array{T}(undef,size(γ.wet))
+    fill!(source,zero(T)/zero(T))    
+
+    if length(vec) == sum(γ.wet)
+        #- a comprehension
+        [source[I[n]]=vec[n] for n ∈ eachindex(I)]
+    elseif length(vec) == sum(γ.interior)
+        # get new index that drops boundaries
+        inew = findall(γ.interior[I])
+        Inew = I[inew]
+        [source[Inew[n]]=vec[n] for n ∈ eachindex(Inew)]
+    else
+        error("length of source vector doesn't match grid")
+    end
+    return source
+end
