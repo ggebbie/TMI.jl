@@ -252,9 +252,6 @@ function cartesianindex(file::String)
         else
             error("grid index key not found")
         end
-        
-        #haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
-        #haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
         I = CartesianIndex.(it,jt,kt) 
     end
