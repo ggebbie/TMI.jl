@@ -638,7 +638,7 @@ function griddicts(γ)
 end
 
 """
-    function matvar2ncvar
+    function mat2ncfield
 
     Rename MATLAB variables to NetCDF variables
 """
@@ -649,11 +649,11 @@ mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
                    "Serr"=>"σSₚ",
                    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
                    "O18err"=>"σδ¹⁸Ow",
-                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄",
+                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
                    "Perr" => "σPO₄",
-                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃",
+                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
                    "Nerr" => "σNO₃",
-                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂",
+                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
                    "Oerr"=>"σO₂",
                    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
                    "C13err" =>  "σδ¹³C")
@@ -678,52 +678,15 @@ function matfields2nc(TMIversion,γ)
 
     netcdffile = pkgdatadir("TMI_"*TMIversion*".nc")
     matfile = pkgdatadir("TMI_"*TMIversion*".mat")
-
     varnames, xvarnames = matvarnames(matfile)
-    
-    # TMIgrids, TMIgridsatts = griddicts(γ)
-    #T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
-
     Izyx = cartesianindex(matfile)
-    #TMIfieldsatts = fieldsatts()
-    #TMIfields = Dict{String,Array{T,3}}()
-    for (kk,vv) in mat2ncfield()
 
-        if kk in varnames #haskey(vars,kk)
+    for (kk,vv) in mat2ncfield()
+        if kk in varnames || kk in xvarnames #haskey(vars,kk)
             field = readfield(matfile,kk,γ,Izyx)
             writefield(netcdffile,field)
-            #tracer = tracerinit(vars[kk], Izyx, γ.wet)
-            
-        #elseif haskey(vars,"x") && haskey(vars["x"],kk)
-        elseif kk in xvarnames
-            tracer = tracerinit(vars["x"][kk], Izyx, γ.wet)
-        else
-            break
         end
-        
-        nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[vv])
-        println("write ",varname)
-
-        #ncwrite(varvals,filenetcdf,varname)
-            
-            
-        
-
     end
-
-
-    
-
-    # iterate in TMIgrids Dictionary to write to NetCDF.
-    for (varname,varvals) in TMIfields
-        
-        nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[varname])
-        println("write ",varname)
-        ncwrite(varvals,filenetcdf,varname)
-
-    end
-
-    close(matfile)
 end
 
 
