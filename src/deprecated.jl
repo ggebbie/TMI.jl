@@ -135,30 +135,6 @@ function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
     return field
 end
 
-
-""" 
-    function tracerinit(wet,vec,I)
-          initialize tracer field on TMI grid
-        perhaps better to have a tracer struct and constructor
-# Arguments
-- `wet`:: BitArray mask of ocean points
-- `vec`:: vector of values at wet points
-- `I`:: Cartesian Index for vector
-# Output
-- `field`:: 3d tracer field with NaN on dry points
-"""
-function tracerinit(vec,I,wet)
-
-    # preallocate
-    T = eltype(vec)
-    field = Array{T}(undef,size(wet))
-    fill!(field,zero(T)/zero(T))    
-
-    #- a comprehension
-    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
-    return field
-end
-
 """
     function Γsfc 
     Γsfc anonymously calls surfacecontrol2field

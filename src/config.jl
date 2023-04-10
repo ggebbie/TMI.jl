@@ -606,6 +606,8 @@ function config2nc(TMIversion,A,γ,L,B)
     
     matfields2nc(TMIversion,γ)
 
+    matsource2nc(TMIversion,γ)
+    
     !isnothing(A) && watermassmatrix2nc(TMIversion,A)
 
     !isnothing(L) && circulationmatrix2nc(TMIversion,L,γ)
@@ -738,7 +740,8 @@ Read vectors from mat file, translate to 3D,
 """
 function regions2nc(TMIversion,γ)
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    # save in a different file.
+    filenetcdf = pkgdatadir("regions_"*TMIversion*".nc")
     filemat = pkgdatadir("TMI_"*TMIversion*".mat")
 
     # region names

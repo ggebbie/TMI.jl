@@ -672,6 +672,7 @@ function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
         # assumption: on the same grid
         ds = Dataset(file,"a")
 
+        println(field.name)
         v = defVar(ds,String(field.name),Float64,("lon","lat","depth"),
                   attrib = OrderedDict("longname" => field.longname,
                                 "units" => field.units))
