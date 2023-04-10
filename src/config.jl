@@ -632,29 +632,19 @@ function griddicts(γ)
     
     TMIgridsatts = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
                         "lat" => Dict("longname" => "Latitude", "units" => "°N"),
-                        "depth" => Dict("longname" => "depth", "units" => "m"))
+                        "depth" => Dict("longname" => "Depth", "units" => "m"))
 
     return TMIgrids, TMIgridsatts
-
 end
 
 """
-Read 3D fields from mat file and save to NetCDF file.
+    function matvar2ncvar
+
+    Rename MATLAB variables to NetCDF variables
 """
-function matfields2nc(TMIversion,γ)
-
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
-    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
-    vars = matread(filemat)
-
-    TMIgrids, TMIgridsatts = griddicts(γ)
-
-    T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
-    #T =  Float64
-
-    varlist = Dict("dP"=>"qPO₄","q"=>"qPO₄",
-                   "Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-                   "Terr"=>"σθ",
+mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
+                     "Terr"=>"σθ",
+                     "Sstar"=>"S⋆",
                    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
                    "Serr"=>"σSₚ",
                    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
@@ -668,22 +658,61 @@ function matfields2nc(TMIversion,γ)
                    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
                    "C13err" =>  "σδ¹³C")
 
-    # iterate over all possible variables listed above
-    Izyx = cartesianindex(filemat)
-    TMIfields = Dict{String,Array{T,3}}()
-    for (kk,vv) in varlist
-        haskey(vars,kk) ? push!(TMIfields, vv => tracerinit(vars[kk], Izyx, γ.wet)) : nothing
+mat2ncsource() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
+
+function matvarnames(filemat)
+    matobj = matopen(filemat)
+    varnames = keys(matobj)
+    xvarnames = nothing
+    if haskey(matobj,"x")
+        xvarnames = keys(read(matobj,"x"))
+    end
+    close(matobj)
+    return varnames, xvarnames
+end
+
+"""
+Read 3D fields from mat file and save to NetCDF file.
+"""
+function matfields2nc(TMIversion,γ)
+
+    netcdffile = pkgdatadir("TMI_"*TMIversion*".nc")
+    matfile = pkgdatadir("TMI_"*TMIversion*".mat")
+
+    varnames, xvarnames = matvarnames(matfile)
+    
+    # TMIgrids, TMIgridsatts = griddicts(γ)
+    #T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
+
+    Izyx = cartesianindex(matfile)
+    #TMIfieldsatts = fieldsatts()
+    #TMIfields = Dict{String,Array{T,3}}()
+    for (kk,vv) in mat2ncfield()
+
+        if kk in varnames #haskey(vars,kk)
+            field = readfield(matfile,kk,γ,Izyx)
+            writefield(netcdffile,field)
+            #tracer = tracerinit(vars[kk], Izyx, γ.wet)
+            
+        #elseif haskey(vars,"x") && haskey(vars["x"],kk)
+        elseif kk in xvarnames
+            tracer = tracerinit(vars["x"][kk], Izyx, γ.wet)
+        else
+            break
+        end
+        
+        nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[vv])
+        println("write ",varname)
+
+        #ncwrite(varvals,filenetcdf,varname)
+            
+            
+        
+
     end
 
-    # also save fields that are stored in the x struct, if they exist
-    if haskey(vars,"x")
-        for (kk,vv) in varlist
-            println(kk)
-            haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
-        end
-    end
+
     
-    TMIfieldsatts = fieldsatts()
 
     # iterate in TMIgrids Dictionary to write to NetCDF.
     for (varname,varvals) in TMIfields
@@ -693,15 +722,20 @@ function matfields2nc(TMIversion,γ)
         ncwrite(varvals,filenetcdf,varname)
 
     end
+
+    close(matfile)
 end
+
 
 """
 All variable names and attributes.
 Useful for writing NetCDF files.
 """
 fieldsatts() = 
-    Dict("θ" => Dict("longname" => "potential temperature", "units" => "°C"),
+    Dict("Θ" => Dict("longname" => "Conservative Temperature", "units" => "°C"),
+         "θ" => Dict("longname" => "potential temperature", "units" => "°C"),
          "σθ" => Dict("longname" => "1σ standard error in potential temperature", "units" => "°C"),
+         "S⋆" => Dict("longname" => "preformed salinity", "units" => "g/kg"),
          "Sₚ" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
          "σSₚ" => Dict("longname" => "1σ standard error in practical salinity", "units" => "PSS-78"),
          "δ¹⁸Ow" => Dict("longname" => "oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),

@@ -541,6 +541,12 @@ end
 - `γ::Grid`, TMI grid specification
 # Output
 - `c`::Field
+
+---------------------------------------------------
+    MATLAB version
+    function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
+
+    read MATLAB field and transfer zyx format to xyz
 """
 function readfield(file,tracername,γ::Grid)
 
@@ -576,6 +582,40 @@ function readfield(file,tracername,γ::Grid)
     
     return c
 end
+function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
+    # read MATLAB field and transfer zyx format to xyz
+
+    matobj = matopen(matfile)
+    varnames, xvarnames = matvarnames(matfile)
+
+    if mattracername in varnames
+        tvar = read(matobj,mattracername)
+    elseif mattracername in xvarnames
+        tvar = read(matobj,"x")[mattracername]
+    end
+
+    # put zyx vector into xyz 3D array
+    tracer = tracerinit(tvar, Izyx, γ.wet)
+
+    # perform a check of file compatibility with grid
+    if sum(isnan.(tracer[γ.wet])) > 0
+        error("readfield warning: NaN on grid")
+    end
+    # check for non NaN or nonzero off grid
+    if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
+        println("readfield warning: non-NaN value off grid")
+        println("resetting to NaN")
+        tracer[.!(γ.wet)] .= NaN
+    end
+    
+    nctracername = mat2ncfield()[mattracername]
+    units = fieldsatts()[nctracername]["units"]
+    longname = fieldsatts()[nctracername]["longname"]
+
+    close(matobj)
+    return Field(tracer,γ,Symbol(nctracername),longname,units)
+end
+readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfield(file,mattracername,γ,Izyx)
 
 """
     function writefield(file,field)
