@@ -681,6 +681,7 @@ function matfields2nc(TMIversion,γ)
     # also save fields that are stored in the x struct, if they exist
     if haskey(vars,"x")
         for (kk,vv) in varlist
+            println(kk)
             haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
         end
     end
@@ -717,7 +718,7 @@ fieldsatts() =
          "σO₂" => Dict("longname" => "1σ standard error in dissolved oxygen", "units" => "μmol/kg"),
          "δ¹³C" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
-         "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/s)/(kg gridcell)"))
+         "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/yr)/(kg gridcell)"))
 
 """
 Read vectors from mat file, translate to 3D,
