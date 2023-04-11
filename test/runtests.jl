@@ -1,6 +1,14 @@
 using Test
 using TMI
 
+function compare_controls(ubc,ubc2,testval)
+    irand = rand(1:sum(ubc.wet))
+    iloc = findall(ubc.wet)[irand]
+    @test ubc.tracer[iloc] == ubc2.tracer[iloc]
+    @test ubc.tracer[iloc] == testval
+end
+
+
 @testset "TMI.jl" begin
 
     #TMIversion = "modern_90x45x33_GH10_GH12"
@@ -174,7 +182,7 @@ using TMI
 
             # check with forward differences
             ϵ = 1e-3
-            ii = rand(1:sum(γ.wet[:,:,1]))
+            ii = rand(1:length(uvec))
             println("Location for test =",ii)
             δu = copy(uvec); δu[ii] += ϵ
             ∇f_finite = (f(δu) - f(uvec))/ϵ
@@ -333,20 +341,14 @@ using TMI
              east = 3 * zeroeastboundary(γ))
 
         u3 = unvec(u2,vecu)
-        @test u.surface.tracer[10,10] == u3.surface.tracer[10,10]
-        @test u.east.tracer[10,10] == u3.east.tracer[10,10]
-        @test u.west.tracer[10,10] == u3.west.tracer[10,10]
-        @test u.surface.tracer[10,10] == 1.0
-        @test u.west.tracer[10,10] == 2.0
-        @test u.east.tracer[10,10] == 3.0
+        compare_controls(u.surface,u3.surface,1.0)
+        compare_controls(u.east,u3.east,3.0)
+        compare_controls(u.west,u3.west,2.0)
         
         unvec!(u2,vecu)
-        @test u.surface.tracer[10,10] == u2.surface.tracer[10,10]
-        @test u.east.tracer[10,10] == u2.east.tracer[10,10]
-        @test u.west.tracer[10,10] == u2.west.tracer[10,10]
-        @test u.surface.tracer[10,10] == 1.0
-        @test u.west.tracer[10,10] == 2.0
-        @test u.east.tracer[10,10] == 3.0
+        compare_controls(u.surface,u2.surface,1.0)
+        compare_controls(u.east,u2.east,3.0)
+        compare_controls(u.west,u2.west,2.0)
 
     end
 
