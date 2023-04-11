@@ -67,7 +67,6 @@ function download_ncfile(TMIversion::String)
             println("workaround for regional Nordic Seas file")
             shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
             run(`sh $shellscript`)
-            TMIfile = TMIversion*".nc"
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
             println("read via GoogleDrive.jl")
@@ -252,9 +251,6 @@ function cartesianindex(file::String)
         else
             error("grid index key not found")
         end
-        
-        #haskey(matobj,"jt") ? jt=convert(Vector{Integer},vec(read(matobj,"jt"))) : jt=convert(Vector{Integer},vec(read(matobj,"j")))
-        #haskey(matobj,"kt") ? kt=convert(Vector{Integer},vec(read(matobj,"kt"))) : kt=convert(Vector{Integer},vec(read(matobj,"k")))
         close(matobj)
         I = CartesianIndex.(it,jt,kt) 
     end
@@ -604,10 +600,12 @@ function config2nc(TMIversion,A,γ,L,B)
     # make new netcdf file.
     filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     isfile(filenetcdf) && rm(filenetcdf)
-
-    grid2nc(TMIversion,γ)
     
     matfields2nc(TMIversion,γ)
+
+    matsource2nc(TMIversion,γ)
+
+    grid2nc(TMIversion,γ)
 
     !isnothing(A) && watermassmatrix2nc(TMIversion,A)
 
@@ -635,10 +633,43 @@ function griddicts(γ)
     
     TMIgridsatts = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
                         "lat" => Dict("longname" => "Latitude", "units" => "°N"),
-                        "depth" => Dict("longname" => "depth", "units" => "m"))
+                        "depth" => Dict("longname" => "Depth", "units" => "m"))
 
     return TMIgrids, TMIgridsatts
+end
 
+"""
+    function mat2ncfield
+
+    Rename MATLAB variables to NetCDF variables
+"""
+mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
+                     "Terr"=>"σθ",
+                     "Sstar"=>"S⋆",
+                   "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
+                   "Serr"=>"σSₚ",
+                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+                   "O18err"=>"σδ¹⁸Ow",
+                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
+                   "Perr" => "σPO₄",
+                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
+                   "Nerr" => "σNO₃",
+                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
+                   "Oerr"=>"σO₂",
+                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
+                   "C13err" =>  "σδ¹³C")
+
+mat2ncsource() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
+
+function matvarnames(filemat)
+    matobj = matopen(filemat)
+    varnames = keys(matobj)
+    xvarnames = nothing
+    if haskey(matobj,"x")
+        xvarnames = keys(read(matobj,"x"))
+    end
+    close(matobj)
+    return varnames, xvarnames
 end
 
 """
@@ -646,66 +677,49 @@ Read 3D fields from mat file and save to NetCDF file.
 """
 function matfields2nc(TMIversion,γ)
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
-    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
-    vars = matread(filemat)
+    netcdffile = pkgdatadir("TMI_"*TMIversion*".nc")
+    matfile = pkgdatadir("TMI_"*TMIversion*".mat")
+    varnames, xvarnames = matvarnames(matfile)
+    Izyx = cartesianindex(matfile)
 
-    TMIgrids, TMIgridsatts = griddicts(γ)
-
-    T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
-    #T =  Float64
-
-    varlist = Dict("dP"=>"qPO₄","q"=>"qPO₄",
-                   "Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-                   "Terr"=>"σθ",
-                   "Sobs"=>"Sp","Smod"=>"Sp","Slgm"=>"Sp",
-                   "Serr"=>"σSp",
-                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
-                   "O18err"=>"σδ¹⁸Ow",
-                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄",
-                   "Perr" => "σPO₄",
-                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃",
-                   "Nerr" => "σNO₃",
-                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂",
-                   "Oerr"=>"σO₂",
-                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
-                   "C13err" =>  "σδ¹³C")
-
-    # iterate over all possible variables listed above
-    Izyx = cartesianindex(filemat)
-    TMIfields = Dict{String,Array{T,3}}()
-    for (kk,vv) in varlist
-        haskey(vars,kk) ? push!(TMIfields, vv => tracerinit(vars[kk], Izyx, γ.wet)) : nothing
-    end
-
-    # also save fields that are stored in the x struct, if they exist
-    if haskey(vars,"x")
-        for (kk,vv) in varlist
-            haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
+    for (kk,vv) in mat2ncfield()
+        if kk in varnames || kk in xvarnames #haskey(vars,kk)
+            field = readfield(matfile,kk,γ,Izyx)
+            writefield(netcdffile,field)
         end
     end
-    
-    TMIfieldsatts = fieldsatts()
+end
 
-    # iterate in TMIgrids Dictionary to write to NetCDF.
-    for (varname,varvals) in TMIfields
-        
-        nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[varname])
-        println("write ",varname)
-        ncwrite(varvals,filenetcdf,varname)
+"""
+Read 3D source field from mat file and save to NetCDF file.
+"""
+function matsource2nc(TMIversion,γ)
 
+    netcdffile = pkgdatadir("TMI_"*TMIversion*".nc")
+    matfile = pkgdatadir("TMI_"*TMIversion*".mat")
+    varnames, xvarnames = matvarnames(matfile)
+    Izyx = cartesianindex(matfile)
+
+    for (kk,vv) in mat2ncsource()
+        if kk in varnames || kk in xvarnames 
+            source = readsource(matfile,kk,γ,Izyx)
+            writesource(netcdffile,source)
+        end
     end
 end
+
 
 """
 All variable names and attributes.
 Useful for writing NetCDF files.
 """
 fieldsatts() = 
-    Dict("θ" => Dict("longname" => "potential temperature", "units" => "°C"),
+    Dict("Θ" => Dict("longname" => "Conservative Temperature", "units" => "°C"),
+         "θ" => Dict("longname" => "potential temperature", "units" => "°C"),
          "σθ" => Dict("longname" => "1σ standard error in potential temperature", "units" => "°C"),
-         "Sp" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
-         "σSp" => Dict("longname" => "1σ standard error in practical salinity", "units" => "PSS-78"),
+         "S⋆" => Dict("longname" => "preformed salinity", "units" => "g/kg"),
+         "Sₚ" => Dict("longname" => "practical salinity", "units" => "PSS-78"),
+         "σSₚ" => Dict("longname" => "1σ standard error in practical salinity", "units" => "PSS-78"),
          "δ¹⁸Ow" => Dict("longname" => "oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
          "σδ¹⁸Ow" => Dict("longname" => "1σ standard error in oxygen-18 to oxygen-16 ratio in seawater", "units" => "‰ VSMOW"),
          "PO₄" => Dict("longname" => "phosphate", "units" => "μmol/kg"),
@@ -717,7 +731,7 @@ fieldsatts() =
          "σO₂" => Dict("longname" => "1σ standard error in dissolved oxygen", "units" => "μmol/kg"),
          "δ¹³C" => Dict("longname" => "carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
-         "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/s)/(kg gridcell)"))
+         "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/yr)/(kg gridcell)"))
 
 """
 Read vectors from mat file, translate to 3D,
@@ -725,7 +739,8 @@ Read vectors from mat file, translate to 3D,
 """
 function regions2nc(TMIversion,γ)
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    # save in a different file.
+    filenetcdf = pkgdatadir("regions_"*TMIversion*".nc")
     filemat = pkgdatadir("TMI_"*TMIversion*".mat")
 
     # region names
@@ -968,3 +983,45 @@ function grid2nc(TMIversion,γ)
     
 end
 
+""" 
+    function tracerinit(wet,vec,I)
+          initialize tracer field on TMI grid
+        perhaps better to have a tracer struct and constructor
+# Arguments
+- `wet`:: BitArray mask of ocean points
+- `vec`:: vector of values at wet points
+- `I`:: Cartesian Index for vector
+# Output
+- `field`:: 3d tracer field with NaN on dry points
+"""
+function tracerinit(vec,I,wet)
+
+    # preallocate
+    T = eltype(vec)
+    field = Array{T}(undef,size(wet))
+    fill!(field,zero(T)/zero(T))    
+
+    #- a comprehension
+    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
+    return field
+end
+function sourceinit(vec,I,γ)
+
+    # preallocate
+    T = eltype(vec)
+    source = Array{T}(undef,size(γ.wet))
+    fill!(source,zero(T)/zero(T))    
+
+    if length(vec) == sum(γ.wet)
+        #- a comprehension
+        [source[I[n]]=vec[n] for n ∈ eachindex(I)]
+    elseif length(vec) == sum(γ.interior)
+        # get new index that drops boundaries
+        inew = findall(γ.interior[I])
+        Inew = I[inew]
+        [source[Inew[n]]=vec[n] for n ∈ eachindex(Inew)]
+    else
+        error("length of source vector doesn't match grid")
+    end
+    return source
+end

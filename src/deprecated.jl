@@ -135,30 +135,6 @@ function vec2fld(vector::Vector{T},I::Vector{CartesianIndex{3}}) where T<:Real
     return field
 end
 
-
-""" 
-    function tracerinit(wet,vec,I)
-          initialize tracer field on TMI grid
-        perhaps better to have a tracer struct and constructor
-# Arguments
-- `wet`:: BitArray mask of ocean points
-- `vec`:: vector of values at wet points
-- `I`:: Cartesian Index for vector
-# Output
-- `field`:: 3d tracer field with NaN on dry points
-"""
-function tracerinit(vec,I,wet)
-
-    # preallocate
-    T = eltype(vec)
-    field = Array{T}(undef,size(wet))
-    fill!(field,zero(T)/zero(T))    
-
-    #- a comprehension
-    [field[I[n]]=vec[n] for n ∈ eachindex(I)]
-    return field
-end
-
 """
     function Γsfc 
     Γsfc anonymously calls surfacecontrol2field
@@ -337,3 +313,43 @@ end
 # """
 #     `function *(c::Field,d::Field)::Field`
 #     Field by field multiplication is element-by-element.
+"""
+Read 3D fields from mat file and save to NetCDF file.
+"""
+function matfields2nc_orig(TMIversion,γ)
+
+    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    filemat = pkgdatadir("TMI_"*TMIversion*".mat")
+    vars = matread(filemat)
+
+    TMIgrids, TMIgridsatts = griddicts(γ)
+
+    T = eltype(γ.lon) # does the eltype of longitude have to equal the tracer eltype?
+    #T =  Float64
+
+    # iterate over all possible variables listed above
+    Izyx = cartesianindex(filemat)
+    TMIfields = Dict{String,Array{T,3}}()
+    for (kk,vv) in mat2ncfield()
+        haskey(vars,kk) ? push!(TMIfields, vv => tracerinit(vars[kk], Izyx, γ.wet)) : nothing
+    end
+
+    # also save fields that are stored in the x struct, if they exist
+    if haskey(vars,"x")
+        for (kk,vv) in mat2ncfield()
+            println(kk)
+            haskey(vars["x"],kk) ? push!(TMIfields, vv => tracerinit(vars["x"][kk], Izyx, γ.wet)) : nothing
+        end
+    end
+    
+    TMIfieldsatts = fieldsatts()
+
+    # iterate in TMIgrids Dictionary to write to NetCDF.
+    for (varname,varvals) in TMIfields
+        
+        nccreate(filenetcdf,varname,"lon",γ.lon,TMIgridsatts["lon"],"lat",γ.lat,TMIgridsatts["lat"],"depth",γ.depth,TMIgridsatts["depth"],atts=TMIfieldsatts[varname])
+        println("write ",varname)
+        ncwrite(varvals,filenetcdf,varname)
+
+    end
+end
