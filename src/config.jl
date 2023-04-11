@@ -67,7 +67,6 @@ function download_ncfile(TMIversion::String)
             println("workaround for regional Nordic Seas file")
             shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
             run(`sh $shellscript`)
-            TMIfile = TMIversion*".nc"
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         else
             println("read via GoogleDrive.jl")
