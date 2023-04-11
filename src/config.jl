@@ -601,13 +601,13 @@ function config2nc(TMIversion,A,γ,L,B)
     # make new netcdf file.
     filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     isfile(filenetcdf) && rm(filenetcdf)
-
-    grid2nc(TMIversion,γ)
     
     matfields2nc(TMIversion,γ)
 
     matsource2nc(TMIversion,γ)
-    
+
+    grid2nc(TMIversion,γ)
+
     !isnothing(A) && watermassmatrix2nc(TMIversion,A)
 
     !isnothing(L) && circulationmatrix2nc(TMIversion,L,γ)
