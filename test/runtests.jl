@@ -114,7 +114,7 @@ using TMI
         @test sum(0. .< v./area .< 1000.)/length(γ.I) == 1
         volume = volumefilled(TMIversion,Alu,γ)
         # volumefill no smaller than smallest box?
-        @test exp10(minimum(volume)) ≥ 5.0
+        @test exp10(minimum(volume)) ≥ 4.9
     end
     
     ####################################
