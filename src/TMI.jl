@@ -513,7 +513,28 @@ function linearindex(wet)
     #Rwet = R[γ.wet]
     return R
 end
-                                                  
+
+"""
+    function checkgrid!(c,wet)
+
+    perform a check of file compatibility
+     with grid
+"""
+function checkgrid!(tracer,wet)
+    if sum(isnan.(tracer[wet])) > 0
+        println(sum(isnan.(tracer[wet]))," points")
+        error("readfield warning: NaN on grid")
+    end
+
+    # check for non NaN or nonzero off grid
+    # Need to rethink how to do this.
+    if sum(isnan.(tracer[.!(wet)])) < length(isnan.(tracer[.!(wet)]))
+        println("readfield warning: non-NaN value off grid")
+        println("resetting to NaN")
+        tracer[.!(wet)] .= NaN
+    end
+end
+
 """
     function readtracer(file,tracername)
     Read a tracer field from NetCDF.
@@ -526,6 +547,18 @@ end
 function readtracer(file,tracername)
     c = ncread(file,tracername)
     return c
+end
+
+function readtracerplus(file,tracername)
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+    # load all data
+    tracer = v[:,:,:]
+    # load an attribute
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    close(ds)
+    return tracer,units,longname
 end
 
 """
@@ -548,38 +581,13 @@ end
 
     read MATLAB field and transfer zyx format to xyz
 """
-function readfield(file,tracername,γ::Grid)
+function readfield(file,tracername,γ::Grid) 
 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    ds = Dataset(file,"r")
-    v = ds[tracername]
-
-    # load all data
-    tracer = v[:,:,:]
-
-    # load an attribute
-    units = v.attrib["units"]
-    longname = v.attrib["longname"]
-    
-    close(ds)
-
-    # perform a check of file compatibility
-    # with grid
-    if sum(isnan.(tracer[γ.wet])) > 0
-        error("readfield warning: NaN on grid")
-    end
-
-    # check for non NaN or nonzero off grid
-    # Need to rethink how to do this.
-    if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
-        println("readfield warning: non-NaN value off grid")
-        println("resetting to NaN")
-        tracer[.!(γ.wet)] .= NaN
-    end
-    
-    #c = Field(tracer,γ)
+    tracer, units, longname = readtracerplus(file,tracername)
+    checkgrid!(tracer,γ.wet)
     c = Field(tracer,γ,Symbol(tracername),longname,units)
-    
+
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
@@ -596,17 +604,18 @@ function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
 
     # put zyx vector into xyz 3D array
     tracer = tracerinit(tvar, Izyx, γ.wet)
+    checkgrid!(tracer,γ.wet)
 
     # perform a check of file compatibility with grid
-    if sum(isnan.(tracer[γ.wet])) > 0
-        error("readfield warning: NaN on grid")
-    end
-    # check for non NaN or nonzero off grid
-    if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
-        println("readfield warning: non-NaN value off grid")
-        println("resetting to NaN")
-        tracer[.!(γ.wet)] .= NaN
-    end
+    # if sum(isnan.(tracer[γ.wet])) > 0
+    #     error("readfield warning: NaN on grid")
+    # end
+    # # check for non NaN or nonzero off grid
+    # if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
+    #     println("readfield warning: non-NaN value off grid")
+    #     println("resetting to NaN")
+    #     tracer[.!(γ.wet)] .= NaN
+    # end
     
     nctracername = mat2ncfield()[mattracername]
     units = fieldsatts()[nctracername]["units"]
@@ -682,17 +691,30 @@ function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
         
     return nothing
 end
-
-function readsource(file,tracername,γ::Grid;logscale=false)
-    c = readfield(file,tracername,γ)
+function readsource(file,tracername,γ::Grid;logscale=false) 
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
+    tracer, units, longname = readtracerplus(file,tracername)
+    checkgrid!(tracer,γ.interior)
     if logscale
-        ct = log.(c.tracer)
+        ct = log.(tracer)
     else
-        ct = c.tracer
+        ct = tracer
     end
-    q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
-    return q
+
+    #c = Field(tracer,γ,Symbol(tracername),longname,units)
+    return Source(ct,γ,Symbol(tracername),longname,units,logscale)
 end
+
+# function readsource(file,tracername,γ::Grid;logscale=false)
+#     c = readfield(file,tracername,γ)
+#     if logscale
+#         ct = log.(c.tracer)
+#     else
+#         ct = c.tracer
+#     end
+#     q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
+#     return q
+# end
 function readsource(matfile,matsourcename,γ::Grid,Izyx) # for MATLAB
     # read MATLAB field and transfer zyx format to xyz
 
