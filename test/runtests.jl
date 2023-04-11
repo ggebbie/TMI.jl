@@ -178,11 +178,9 @@ using TMI
             println("Location for test =",ii)
             δu = copy(uvec); δu[ii] += ϵ
             ∇f_finite = (f(δu) - f(uvec))/ϵ
-            println(∇f_finite)
 
             fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
             ∇f = gJ₀[ii]
-            println(∇f)
             
             # error less than 10 percent?
             println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
@@ -373,11 +371,21 @@ using TMI
             q₀ = 1e-2*onesource(γ) # first guess
             
             N = 20
-            σ = 0.05 # incomplete first guess error, use scalar
+            σ = 0.01 # incomplete first guess error, use scalar
             y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N,σ)
 
+            # Adjust surface only
             #u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
+
+            # Adjust interior sources only
             u = (; source = zerosource(γ,logscale=lscale))
+
+            # Adjust interior sources and lateral boundary conditions
+            u = (; source = zerosource(γ,logscale=lscale),
+                 north = zeronorthboundary(γ),
+                 east = zeroeastboundary(γ),
+                 south = zerosouthboundary(γ),
+                 west = zerowestboundary(γ))
 
             PO₄true = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
             PO₄₀ = steadyinversion(Alu,bPO₄,γ,q=q₀)
