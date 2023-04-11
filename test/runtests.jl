@@ -233,7 +233,7 @@ end
             fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
             ϵ = 1e-3 # size of finite perturbation
-            ii = rand(1:sum(γ.wet[:,:,1]))
+            ii = rand(1:length(uvec))
             println("gradient check location=",ii)
             δu = copy(uvec); δu[ii] += ϵ
             ∇f_finite = (f(δu) - f(uvec))/ϵ
@@ -297,7 +297,7 @@ end
                 fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
 
                 ϵ = 1e-3 # size of finite perturbation
-                ii = rand(1:sum(γ.wet[:,:,1]))
+                ii = rand(1:length(uvec))
                 println("gradient check location=",ii)
                 δu = copy(uvec); δu[ii] += ϵ
                 ∇f_finite = (f(δu) - f(uvec))/ϵ
@@ -402,7 +402,7 @@ end
             fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
 
             ϵ = 1e-3 # size of finite perturbation
-            ii = rand(1:sum(γ.wet[:,:,1]))
+            ii = rand(1:length(uvec))
             println("gradient check location=",ii)
             δu = copy(uvec); δu[ii] += ϵ
             ∇f_finite = (f(δu) - f(uvec))/ϵ
