@@ -4,7 +4,7 @@ using TMI
 @testset "TMI.jl" begin
 
     #TMIversion = "modern_90x45x33_GH10_GH12"
-    TMIversion = "modern_180x90x33_GH10_GH12"
+    TMIversion = "modern_180x90x33_GH11_GH12"
     #TMIversion = "modern_90x45x33_unpub12"
     
     A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
