@@ -2344,16 +2344,17 @@ function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
     # write it out so b changes when returned
     b.tracer[b.wet] += u.tracer[u.wet] 
 end
-function adjustboundarycondition!(b::BoundaryCondition,u::NamedTuple) #where {N1, N2, T <: Real}
-    # if not explicit, assume a surface boundary condition
-    bkey = :surface # 
-    if haskey(u,bkey)
-        adjustboundarycondition!(b,u[bkey])
-    end
-end
+# function adjustboundarycondition!(b::BoundaryCondition,u::NamedTuple) #where {N1, N2, T <: Real}
+#     # if not explicit, assume a surface boundary condition
+#     bkey = :surface # 
+#     if haskey(u,bkey)
+#         adjustboundarycondition!(b,u[bkey])
+#     end
+# end
 function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
+    # only the bkeys are certain to be type BoundaryCondition
     for bkey in keys(b)
-        adjustboundarycondition!(b[bkey],u)
+        haskey(u,bkey) && adjustboundarycondition!(b[bkey],u[bkey]) 
     end
 end
 
@@ -2374,15 +2375,16 @@ end
 function gadjustboundarycondition!(gu::BoundaryCondition,gb::BoundaryCondition) 
     gu.tracer[gu.wet] += gb.tracer[gb.wet]
 end
-function gadjustboundarycondition!(gu::NamedTuple,gb::BoundaryCondition)
-    bkey = :surface
-    if haskey(gu,bkey)
-        gadjustboundarycondition!(gu[bkey],gb)
-    end
-end
+# function gadjustboundarycondition!(gu::NamedTuple,gb::BoundaryCondition)
+#     bkey = :surface
+#     if haskey(gu,bkey)
+#         gadjustboundarycondition!(gu[bkey],gb)
+#     end
+# end
 function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
     for bkey in keys(gb)
-        gadjustboundarycondition!(gu,gb[bkey])
+        #gadjustboundarycondition!(gu,gb[bkey])
+        haskey(gu,bkey) && gadjustboundarycondition!(gu[bkey],gb[bkey]) 
     end
 end
 
