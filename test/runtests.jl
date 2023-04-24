@@ -75,7 +75,7 @@ end
             # error less than 10 percent?
             println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-            iters = 5
+            iters = 25
             out = sparsedatamap(uvec,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀,r=1.0,iterations=iters)
             # was cost function decreased?
             @test out.minimum < J̃₀
@@ -89,9 +89,14 @@ end
                 #b̃ = adjustboundarycondition(b₀,unvec(u,ũ)) # combine b₀, u
                 q̃ = TMI.adjustsource(q₀,unvec(u,ũ))
                 @test minimum(q̃) ≥ 0
+
+                # get new boundary conditions
+                b̃ = TMI.adjustboundarycondition(bPO₄,unvec(u,ũ))
+
+                # are lateral boundaries adjusted?
+                @test ~iszero(minimum(b̃.south-bPO₄.south))
             end
         end
-
     end
 
     TMIversion = "modern_90x45x33_GH10_GH12"
