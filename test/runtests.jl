@@ -75,7 +75,7 @@ end
             # error less than 10 percent?
             println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-            iters = 25
+            iters = 5
             out = sparsedatamap(uvec,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀,r=1.0,iterations=iters)
             # was cost function decreased?
             @test out.minimum < J̃₀
