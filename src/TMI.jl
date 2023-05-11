@@ -1818,6 +1818,22 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
 end
 
 """
+    function observe(c,loc,γ)
+
+    Extend the TMI.observe method to use locations rather than weighted interpolations.
+"""
+function observe(c::Field{T},loc::Vector{Tuple{T,T,T}},γ::Grid) where T <: Real
+    # observe at locs.
+    N = length(loc)
+    wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+    [wis[i] = interpindex(loc[i],γ) for i in 1:N]
+
+    y = observe(c,wis,γ)
+
+    return y
+end
+
+"""
     function gobserve(gy::Vector{T},c::Field{T},wis,γ) where T <: Real
 
     ADJOINT Take a observation at location given by weights wis
