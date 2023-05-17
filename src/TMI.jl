@@ -15,6 +15,7 @@ using MAT
 using NCDatasets
 using DataStructures
 using UnicodePlots
+using Statistics
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -54,14 +55,16 @@ export config, config_from_mat, config_from_nc,
     adjustboundarycondition!,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
-    maximum, minimum, (+), (-), (*), dot,
+    #maximum, minimum,
+    (+), (-), (*), dot,
     zerosource, onesource,
-    Grid, Field, BoundaryCondition, vec, unvec!, unvec,
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
     adjustsource, adjustsource!,
     zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
 onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary
 
-import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
+import Base: zeros, one, oneunit, ones,  (\)
+#import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
@@ -139,7 +142,7 @@ end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     summary(io, x); println(io)
-    println(io, "Field size")
+    print(io, "Field size ")
     println(io, size(x.tracer))
     println(io, "Surface view")
     show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
@@ -1443,8 +1446,42 @@ end
 Base.maximum(c::Union{Field,Source,BoundaryCondition}) = maximum(c.tracer[wet(c)])
 Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)])
 
-# uncomment this
-#mean(x::Field) = mean(x.tracer[x.γ.wet])
+"""
+    Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
+
+    Extend `length` to give the number of wet (i.e., ocean) gridcells.
+"""
+Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
+
+"""
+    function Statistics.mean(c::Field)
+
+    Take the volume-weighted mean of a `Field`
+"""
+function Statistics.mean(c::Field)
+    vol = cellvolume(c.γ)
+    return sum(vol[wet(c)].*c.tracer[wet(c)])/sum(vol[wet(c)])
+end
+
+"""
+    Iterate over Field
+"""
+#Base.iterate(c::Field) =  (c.tracer[c.γ.I[1]],1)
+#Base.iterate(c::Field,state) = state < length(c) ? (c.tracer[c.γ.I[state+1]],state+1) : nothing
+#Base.iterate(c::Field) =  (c.tracer[wet(c)][1],1)
+#Base.iterate(c::Field,state) = state < length(c) ? (c.tracer[wet(c)][state+1],state+1) : nothing
+
+Base.iterate(c::Field) =  (c[1],1)
+Base.iterate(c::Field,state) = state < length(c) ? (c[state+1],state+1) : nothing
+
+Base.getindex(c::Field,i::Int) = c.tracer[wet(c)][i]
+
+"""
+    Specialize Base.sum(c::Field)
+
+    so that it doesn't use the slow iteration method
+"""
+Base.sum(c::Field) = sum(c.tracer[wet(c)])
 
 """
     `function \\(A,d::Field)::Field`
