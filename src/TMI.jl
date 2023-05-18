@@ -371,21 +371,27 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
 
     v = cellvolume(γ)
     area = cellarea(γ)
-    
+
+    vfilled = 0*area # answer will go here
+
     # effectively take inverse of transpose A matrix.
-    dVdd = zeros(γ.wet); # pre-allocate array
-    dVdd[γ.wet] = Alu'\v[γ.wet]
+    #dVdd = zeros(γ) # pre-allocate array
+    dVdd = Alu'\v #[γ.wet]
 
     # scale the sensitivity value by surface area so that converging meridians are taken into account.
     I = γ.I
     #volume = zeros(Float64,length(γ.lon),length(γ.lat))
     volume = zeros(γ.wet[:,:,1])
     # this step could use a function with γ.I argument
-    [volume[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
+    for ii ∈ eachindex(I)
+        if I[ii][3] == 1
+            volume[I[ii][1],I[ii][2]] = dVdd.tracer[I[ii][1],I[ii][2],1]./area.tracer[I[ii][1],I[ii][2]]
+        end
+    end
+             
     volume = log10.(volume)
-
-    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
     
     return  ∂V∂b 
 end

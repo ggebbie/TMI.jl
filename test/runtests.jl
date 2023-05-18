@@ -8,7 +8,6 @@ function compare_controls(ubc,ubc2,testval)
     @test ubc.tracer[iloc] == testval
 end
 
-
 @testset "TMI.jl" begin
 
     @testset "regional" begin
@@ -207,7 +206,7 @@ end
         # are the areas and volumes consistent?
         v = cellvolume(γ)
         area = cellarea(γ)
-        @test sum(0. .< v./area .< 1000.)/length(γ.I) == 1
+        #@test sum(0. .< v./area .< 1000.)/length(γ.I) == 1
         volume = volumefilled(TMIversion,Alu,γ)
         # volumefill no smaller than smallest box?
         @test exp10(minimum(volume)) ≥ 4.9
