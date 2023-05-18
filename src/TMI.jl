@@ -13,7 +13,7 @@ using Interpolations
 using LineSearches
 using MAT
 using NCDatasets
-using DataStructures
+#using DataStructures
 using UnicodePlots
 using Statistics
 
@@ -1350,6 +1350,11 @@ function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,u
     b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet,name,longname,units)
 
 end
+
+"""
+    zero(c::Field) = zeros(c.γ)
+"""
+Base.zero(c::Field) = zeros(c.γ)
 
 """
     function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
