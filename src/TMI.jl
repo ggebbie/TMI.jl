@@ -13,8 +13,9 @@ using Interpolations
 using LineSearches
 using MAT
 using NCDatasets
-using DataStructures
+#using DataStructures
 using UnicodePlots
+using Statistics
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -54,14 +55,16 @@ export config, config_from_mat, config_from_nc,
     adjustboundarycondition!,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
-    maximum, minimum, (+), (-), (*), dot,
+    #maximum, minimum,
+    (+), (-), (*), dot,
     zerosource, onesource,
-    Grid, Field, BoundaryCondition, vec, unvec!, unvec,
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
     adjustsource, adjustsource!,
     zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
 onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary
 
-import Base: zeros, one, oneunit, ones, maximum, minimum, (\)
+import Base: zeros, one, oneunit, ones,  (\)
+#import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
@@ -139,15 +142,10 @@ end
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     summary(io, x); println(io)
-    println(io, "Field size")
+    print(io, "Field size ")
     println(io, size(x.tracer))
     println(io, "Surface view")
     show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
-    #show(io, mime, x.x)
-    # println(io, "\nsingular values:")
-    # show(io, mime, F.S)
-    # println(io, "\nV (right singular vectors):")
-    # show(io, mime, F.V)
 end
 
 """
@@ -175,6 +173,13 @@ struct BoundaryCondition{T}
     name::Symbol
     longname::String
     units::String
+end
+
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::BoundaryCondition)
+    summary(io, x); println(io)
+    print(io, "Field size ")
+    println(io, size(x.tracer))
+    show(io,mime,heatmap(transpose(x.tracer),zlabel=x.units,title=x.longname))
 end
 
 """
@@ -366,21 +371,27 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
 
     v = cellvolume(γ)
     area = cellarea(γ)
-    
+
+    vfilled = 0*area # answer will go here
+
     # effectively take inverse of transpose A matrix.
-    dVdd = zeros(γ.wet); # pre-allocate array
-    dVdd[γ.wet] = Alu'\v[γ.wet]
+    #dVdd = zeros(γ) # pre-allocate array
+    dVdd = Alu'\v #[γ.wet]
 
     # scale the sensitivity value by surface area so that converging meridians are taken into account.
     I = γ.I
     #volume = zeros(Float64,length(γ.lon),length(γ.lat))
     volume = zeros(γ.wet[:,:,1])
     # this step could use a function with γ.I argument
-    [volume[I[ii][1],I[ii][2]] = dVdd[I[ii]] / area[I[ii][1],I[ii][2]] for ii ∈ eachindex(I) if I[ii][3] == 1]
 
+    for ii ∈ eachindex(I)
+        if I[ii][3] == 1
+            volume[I[ii][1],I[ii][2]] = dVdd.tracer[I[ii][1],I[ii][2],1]./area.tracer[I[ii][1],I[ii][2]]
+        end
+    end
+             
     volume = log10.(volume)
-
-    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
     
     return  ∂V∂b 
 end
@@ -840,10 +851,18 @@ function cellarea(γ)
     I = γ.I
     [area[I[ii][1],I[ii][2]] = dx[I[ii][2]] * dy for ii ∈ eachindex(I) if I[ii][3] == 1]
 
-    return area
+    dim = 3 # 3rd dimension is fixed 
+    dimval = 1 # surface
+
+    # is it really a Boundary Condition? (sorta, but more of a 2D Field)
+    return BoundaryCondition(area,γ.lon,γ.lat,γ.depth[dimval],dim,dimval,γ.wet[:,:,dimval],
+             :area,"cell area","m²")
+    #return area
 end
 
 """
+    function cellvolume(γ)::Field
+
     Volume of each grid cell.
 """
 function cellvolume(γ)
@@ -857,8 +876,10 @@ function cellvolume(γ)
 
     # for ocean volume only
     I = γ.I
-    [volume[I[ii]] = area[I[ii][1],I[ii][2]] * dz[I[ii][3]] for ii ∈ eachindex(I)]
-    return volume
+    [volume[I[ii]] = area.tracer[I[ii][1],I[ii][2]] * dz[I[ii][3]] for ii ∈ eachindex(I)]
+
+    # turn it into a Field
+    return Field(volume,γ,:vol,"cell volume","m³")
 end
 
 function layerthickness(γ::Grid)
@@ -1349,6 +1370,11 @@ function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,u
 end
 
 """
+    zero(c::Field) = zeros(c.γ)
+"""
+Base.zero(c::Field) = zeros(c.γ)
+
+"""
     function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
 
        Initialize boundary condition with ones
@@ -1443,8 +1469,42 @@ end
 Base.maximum(c::Union{Field,Source,BoundaryCondition}) = maximum(c.tracer[wet(c)])
 Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)])
 
-# uncomment this
-#mean(x::Field) = mean(x.tracer[x.γ.wet])
+"""
+    Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
+
+    Extend `length` to give the number of wet (i.e., ocean) gridcells.
+"""
+Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
+
+"""
+    function Statistics.mean(c::Field)
+
+    Take the volume-weighted mean of a `Field`
+"""
+function Statistics.mean(c::Field)
+    vol = cellvolume(c.γ)
+    return sum(vol[wet(c)].*c.tracer[wet(c)])/sum(vol[wet(c)])
+end
+
+"""
+    Iterate over Field
+"""
+#Base.iterate(c::Field) =  (c.tracer[c.γ.I[1]],1)
+#Base.iterate(c::Field,state) = state < length(c) ? (c.tracer[c.γ.I[state+1]],state+1) : nothing
+#Base.iterate(c::Field) =  (c.tracer[wet(c)][1],1)
+#Base.iterate(c::Field,state) = state < length(c) ? (c.tracer[wet(c)][state+1],state+1) : nothing
+
+Base.iterate(c::Field) =  (c[1],1)
+Base.iterate(c::Field,state) = state < length(c) ? (c[state+1],state+1) : nothing
+
+Base.getindex(c::Field,i::Int) = c.tracer[wet(c)][i]
+
+"""
+    Specialize Base.sum(c::Field)
+
+    so that it doesn't use the slow iteration method
+"""
+Base.sum(c::Field) = sum(c.tracer[wet(c)])
 
 """
     `function \\(A,d::Field)::Field`
