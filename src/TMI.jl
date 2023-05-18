@@ -146,11 +146,6 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     println(io, size(x.tracer))
     println(io, "Surface view")
     show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
-    #show(io, mime, x.x)
-    # println(io, "\nsingular values:")
-    # show(io, mime, F.S)
-    # println(io, "\nV (right singular vectors):")
-    # show(io, mime, F.V)
 end
 
 """
