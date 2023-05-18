@@ -175,6 +175,13 @@ struct BoundaryCondition{T}
     units::String
 end
 
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::BoundaryCondition)
+    summary(io, x); println(io)
+    print(io, "Field size ")
+    println(io, size(x.tracer))
+    show(io,mime,heatmap(transpose(x.tracer),zlabel=x.units,title=x.longname))
+end
+
 """
     function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
 
@@ -838,10 +845,18 @@ function cellarea(γ)
     I = γ.I
     [area[I[ii][1],I[ii][2]] = dx[I[ii][2]] * dy for ii ∈ eachindex(I) if I[ii][3] == 1]
 
-    return area
+    dim = 3 # 3rd dimension is fixed 
+    dimval = 1 # surface
+
+    # is it really a Boundary Condition? (sorta, but more of a 2D Field)
+    return BoundaryCondition(area,γ.lon,γ.lat,γ.depth[dimval],dim,dimval,γ.wet[:,:,dimval],
+             :area,"cell area","m²")
+    #return area
 end
 
 """
+    function cellvolume(γ)::Field
+
     Volume of each grid cell.
 """
 function cellvolume(γ)
@@ -855,8 +870,10 @@ function cellvolume(γ)
 
     # for ocean volume only
     I = γ.I
-    [volume[I[ii]] = area[I[ii][1],I[ii][2]] * dz[I[ii][3]] for ii ∈ eachindex(I)]
-    return volume
+    [volume[I[ii]] = area.tracer[I[ii][1],I[ii][2]] * dz[I[ii][3]] for ii ∈ eachindex(I)]
+
+    # turn it into a Field
+    return Field(volume,γ,:vol,"cell volume","m³")
 end
 
 function layerthickness(γ::Grid)
