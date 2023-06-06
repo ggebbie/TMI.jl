@@ -1483,7 +1483,7 @@ Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
 """
 function Statistics.mean(c::Field)
     vol = cellvolume(c.γ)
-    return sum(vol[wet(c)].*c.tracer[wet(c)])/sum(vol[wet(c)])
+    return sum(vol.tracer[wet(c)].*c.tracer[wet(c)])/sum(vol.tracer[wet(c)])
 end
 
 """
