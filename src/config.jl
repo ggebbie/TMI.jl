@@ -10,7 +10,7 @@
 - `γ`: TMI grid properties
 - `TMIfile`: TMI file name
 """
-function config_from_nc(TMIversion)
+function config_from_nc(TMIversion; compute_lu = true)
 
     TMIfile = download_ncfile(TMIversion)
 
@@ -19,7 +19,11 @@ function config_from_nc(TMIversion)
 
     # LU factorization for efficient matrix inversions
     println("Alu")
-    @time Alu = lu(A)
+    if compute_lu
+        @time Alu = lu(A)
+    else
+        Alu = nothing
+    end
 
     γ = Grid(TMIfile)
     
