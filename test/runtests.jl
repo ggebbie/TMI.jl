@@ -13,53 +13,52 @@ end
     @testset "regional" begin
         # error-prone and long = run it first
         TMIversion = "nordic_201x115x46_B23"
-        A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
-
-        @testset "sourcemap" begin
-
-            using Statistics, Interpolations
-
-            lscale = true
-            surfacetoo = false
-            
-            yPO₄ = readfield(TMIfile,"PO₄",γ)
-            bPO₄ = (; surface = getsurfaceboundary(yPO₄),
-                    north = getnorthboundary(yPO₄),
-                    east = geteastboundary(yPO₄),
-                    south = getsouthboundary(yPO₄),
-                    west = getwestboundary(yPO₄))
-            qPO₄ = readsource(TMIfile,"qPO₄",γ) # truth
-            q₀ = 1e-2*onesource(γ) # first guess
-            
+        A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+        #= 
+        Nordic Seas Test 1: given 20 contaminated observations of temperature in the
+        region, and the climatological boundary values, adjust the boundary values
+        according to the contaminated obs. 
+        =#
+        @testset "temperature" begin
+            #read in yθ Field 
+            yθ = readfield(TMIfile, "Θ", γ)
+            #get climatological boundary conditions - this method basically slices at the extreme edges of the region 
+            bθ = (surface = getsurfaceboundary(yθ),
+                    north = getnorthboundary(yθ),
+                    east = geteastboundary(yθ),
+                    south = getsouthboundary(yθ),
+                  west = getwestboundary(yθ))
+            #get 20 random, contaminated observations of θ
             N = 20
-            σ = 0.01 # incomplete first guess error, use scalar
-            y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N,σ)
-
-            # Adjust surface only
-            #u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
-
-            # Adjust interior sources only
-            u = (; source = zerosource(γ,logscale=lscale))
-
-            # Adjust interior sources and lateral boundary conditions
-            u = (; source = zerosource(γ,logscale=lscale),
-                 north = zeronorthboundary(γ),
+            σ = 0.01
+            y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion, "Θ", γ, N, σ)
+            #assemble control vector - this is what we are attempting to solve for a new version of based upon the contaminated observations 
+            u = (north = zeronorthboundary(γ),
                  east = zeroeastboundary(γ),
                  south = zerosouthboundary(γ),
                  west = zerowestboundary(γ))
+            uvec = vec(u) #vectorized version 
 
-            PO₄true = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
-            PO₄₀ = steadyinversion(Alu,bPO₄,γ,q=q₀)
-            uvec = vec(u)
-
+            # how well is u known?
+            #this is associated with uvec 
             σq = 1.0
-            Q⁻ = 1.0/(σq^2) # how well is q (source) known?
-            fg(x) = costfunction_point_obs(x,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
-            f(x) = fg(x)[1]
-            J0 = f(uvec)
+            Q⁻ = 1.0/(σq^2)
+            
+            #invert boundary conditions to steady state 
+            θtrue = steadyinversion(Alu, bθ, γ)
+            #check to make sure the inversion of the boundary conditions is ≈similar to the true values
+            #@test sum(isapprox.(θtrue.tracer, yθ.tracer)) == sum((!).(isnan.(yθ.tracer))) #of the 1million points in yθ, are they approximately = θtrue?
+            #this fails, is that an issue? 
+            
+            #test out the costfunction, this is what sparsemap will use
+            fg(x) = costfunction_point_obs(x,Alu,bθ,u,y,W⁻,wis,locs,Q⁻,γ,q=nothing)
+            f(x) = fg(x)[1] #just get J
+            #calculate the original 
+            J0 = f(uvec) #identical to J̃₀
             J̃₀,∂J₀∂u = fg(uvec)
-            fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
+            fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,bθ,u,y,W⁻,wis,locs,Q⁻,γ,q₀=nothing)
 
+            #use perturbations to compute the gradient, compare to output from fg 
             ϵ = 1e-3 # size of finite perturbation
             ii = rand(1:length(uvec))
             println("gradient check location=",ii)
@@ -71,10 +70,107 @@ end
             ∇f = ∂J₀∂u[ii]
             println("∇f=",∇f)
 
+            #are the two methods to compute ∂J∂u giving the same result? 
+            println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+            @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1 #10^-7
+
+            #now, use sparsedatamap to adjust boundary conditions according to new data 
+            iters = 5
+            out = sparsedatamap(uvec, Alu, bθ, u, y, W⁻, wis, locs, 0, γ, q = nothing, r = nothing, iterations = iters)
+
+            #is the cost function lower now? 
+            @test out.minimum < J̃₀
+            ũ = out.minimizer
+            J̃,∂J̃∂ũ = fg(ũ)
+            @test J̃ < J̃₀
+
+            # get new boundary conditions
+            b̃ = TMI.adjustboundarycondition(bθ,unvec(u,ũ))
+
+            # are lateral boundaries adjusted?
+            @test ~iszero(minimum(b̃.south-bθ.south))
+        end 
+
+        @testset "sourcemap" begin
+            #= 
+            Nordic Seas Test 2: given 20 contaminated observations of phosphate in
+            the region, and the climatological boundary + source values, adjust the
+            boundary values AND SOURCE VALUES according to the contaminated obs. 
+            =#
+            #using Statistics, Interpolations #I don't think this is needed??
+
+            lscale = true #logscale, computational trick to keep phosphate positive
+            #surfacetoo = false
+            
+            yPO₄ = readfield(TMIfile,"PO₄",γ) #field of observed phosphate values 
+            bPO₄ = (surface = getsurfaceboundary(yPO₄),
+                    north = getnorthboundary(yPO₄),
+                    east = geteastboundary(yPO₄),
+                    south = getsouthboundary(yPO₄),
+                    west = getwestboundary(yPO₄))
+            qPO₄ = readsource(TMIfile,"qPO₄",γ) # truth, NamedTuple of BoundaryConditions
+            #show that the elements of bPO₄ are simply equal to the lateral and surface boundaries of yPO₄
+            @test sum(yPO₄.tracer[:, end, :] .== bPO₄.north.tracer) == sum((!).(isnan.(bPO₄.north.tracer)))
+            
+            q₀ = 1e-2*onesource(γ) # first guess
+
+            #generate 20 random observations that have a 
+            N = 20
+            σ = 0.01 # incomplete first guess error, use scalar
+            y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"PO₄",γ,N,σ)
+
+            # Adjust surface only
+            #u = (; surface = zerosurfaceboundary(γ), source = zerosource(γ))
+
+            # Adjust interior sources only
+            #u = (; source = zerosource(γ,logscale=lscale))
+
+            # Adjust interior sources and lateral boundary conditions
+            u = ( source = zerosource(γ,logscale=lscale),
+                 north = zeronorthboundary(γ),
+                 east = zeroeastboundary(γ),
+                 south = zerosouthboundary(γ),
+                 west = zerowestboundary(γ))
+
+            #invert for tracer distribution given boundary conditions and known source
+            PO₄true = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
+            #invert for tracer dist. given BC and first guess source 
+            PO₄₀ = steadyinversion(Alu,bPO₄,γ,q=q₀)
+            uvec = vec(u) #all zeros, control 
+
+            # how well is q (source) known?
+            #this is associated with uvec 
+            σq = 1.0
+            Q⁻ = 1.0/(σq^2)
+            
+            #cost function for pointwise observations
+            #Get initial cost function and cost function gradient value
+            fg(x) = costfunction_point_obs(x,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀)
+            f(x) = fg(x)[1] #just get J 
+            J0 = f(uvec)
+            J̃₀,∂J₀∂u = fg(uvec)
+
+            #efficient in-place calculation of cost function/cost function gradient
+            fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q₀)
+            #make a finite perturbation to a random location in the control vector and then check the perturbation this makes to the function 
+            ϵ = 1e-3 # size of finite perturbation
+            ii = rand(1:length(uvec))
+            println("gradient check location=",ii)
+            δu = copy(uvec); δu[ii] += ϵ
+            ∇f_finite = (f(δu) - f(uvec))/ϵ
+            println("∇f_finite=",∇f_finite)
+
+            #check to see if our in-place function works the same 
+            fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+            ∇f = ∂J₀∂u[ii]
+            println("∇f=",∇f)
+
             # error less than 10 percent?
             println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
             @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
             iters = 5
+
+            #sparsedatamap: find the global dist. of PO₄ given A, first guess of BC and interior sources (bPO₄), based on the contaminated observations of PO₄
             out = sparsedatamap(uvec,Alu,bPO₄,u,y,W⁻,wis,locs,Q⁻,γ,q=q₀,r=1.0,iterations=iters)
             # was cost function decreased?
             @test out.minimum < J̃₀
@@ -98,7 +194,7 @@ end
                 # are lateral boundaries adjusted?
                 @test ~iszero(minimum(b̃.south-bPO₄.south))
             end
-        end
+        end        
     end
 
     TMIversion = "modern_90x45x33_GH10_GH12"
@@ -320,15 +416,17 @@ end
             f(x) = fg(x)[1]
             J0 = f(uvec)
             J̃₀,∂J₀∂u = fg(uvec)
+            #I think F = J, G = ∂J / ∂u (maybe) 
             fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
+            #make a small perterburation to uvec (all 0s rn) 
             ϵ = 1e-3 # size of finite perturbation
             ii = rand(1:length(uvec))
             println("gradient check location=",ii)
             δu = copy(uvec); δu[ii] += ϵ
             ∇f_finite = (f(δu) - f(uvec))/ϵ
             println("∇f_finite=",∇f_finite)
-
+            
             ∂J₀∂u = 0.0 .* uvec
             fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
             ∇f = ∂J₀∂u[ii]

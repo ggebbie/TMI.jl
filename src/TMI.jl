@@ -478,13 +478,20 @@ end
     W⁻ is a (sparse) weighting matrix.
     See Supplementary Section 2, Gebbie & Huybers 2011.
 # Arguments
-- `u₀`:
-- `Alu`:
+- `u₀`: vector form of `u`
+- `Alu`: pathways matrx
 - `b`: first guess of boundary conditions and interior sources
+- `u`: NamedTuple version of `u` (fg! needs this) 
 - `y`: observations on 3D grid
-- `W⁻`: weighting matrix best chosen as inverse error covariance matrix
+- `W⁻`: weighting matrix best chosen as inverse error covariance matrix 
+- `wis`: weighted indices for interpolation to locs sites
+- `locs`: 3-tuples of locations for observations
+- `Q⁻`: inverse covariance matrix for q (similar to a tapering matrix) 
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
+- `q`: first guess of sources
+- `r`:
+- `iterations`: how many iterations to run Optim.jl solver 
 """
 function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
 #function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
@@ -1150,6 +1157,11 @@ function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
     return d
 end
 
+"""
+    function zerosource
+
+    for some Grid γ, return Source with 0 in all interior points, and NaN at surface
+"""
 function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
     T = eltype(γ.depth)
     tracer = Array{T}(undef,size(γ.interior))
@@ -1158,11 +1170,16 @@ function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logsc
     return Source(tracer,γ,name,longname,units,logscale)
 end
 
+"""
+    function onesource
+
+    for some Grid γ, return Source with 1 in all interior points, and NaN at surface
+"""
 function onesource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
     T = eltype(γ.depth)
-    tracer = Array{T}(undef,size(γ.interior))
-    tracer[γ.interior] .= one(T)
-    tracer[.!γ.interior] .= zero(T)/zero(T)
+    tracer = Array{T}(undef,size(γ.interior)) #initialize an array that has the same size as the interior ocean 
+    tracer[γ.interior] .= one(T) #initialize the interior to 1 
+    tracer[.!γ.interior] .= zero(T)/zero(T) #initialize the surface to the appropriate NaN/missing value 
     return Source(tracer,γ,name,longname,units,logscale)
 end
 
@@ -1807,6 +1824,7 @@ end
 - `TMIversion::String`: version of TMI water-mass/circulation model
 - `variable::String`: variable name to use as template
 - `N`: number of observations
+- `σ`: Add 𝒩(0, σ) contamination to observations 
 # Output
 - `y`: contaminated observations on 3D grid
 - `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
@@ -2058,18 +2076,22 @@ end
 - `uvec`: controls, vector format
 - `Alu`: LU decomposition of water-mass matrix
 - `b`: boundary condition
+- `u₀`: controls, original format (required for 
 - `y`: pointwise observations
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `wis`: weights for interpolation (data sampling, E)
 - `locs`: data locations (lon,lat,depth)
 - `Q⁻`: weights for control vector
 - `γ`: grid
+- `q₀`: 
 """
 function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Vector,Wⁱ::Diagonal,wis,locs,Q⁻,γ::Grid;q₀=nothing,r=1.0)
+    
+    u = unvec(u₀,uvec) #create u with same properties as u₀, but data from u
+    b = adjustboundarycondition(b₀,u) # combine b₀, u (add corresponding elements) 
 
-    u = unvec(u₀,uvec)
-    b = adjustboundarycondition(b₀,u) # combine b₀, u
-
+    #if sources provided, add them to u
+    #compute c, initial inversion of b + u 
     if !isnothing(q₀)
         # careful with scope of c
         q = adjustsource(q₀,u)
@@ -2082,7 +2104,8 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
     ỹ = observe(c,wis,γ)
     n = ỹ - y
 
-    if guvec != nothing
+    #if you have a gradient, propagate it through 
+    if guvec != nothing #is this a fair call?, should it just be an optional arg? 
         ## start adjoint model
 
         # initialize to zero
@@ -2154,6 +2177,7 @@ end
     ADJOINT invert for a steady-state tracer distribution
 
 # Arguments
+- `gc`: 
 - `Alu`: LU decomposition of water-mass matrix
 - `b`: BoundaryCondition
 - `γ`::Grid
