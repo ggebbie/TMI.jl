@@ -13,7 +13,7 @@ end
     @testset "regional" begin
         # error-prone and long = run it first
         TMIversion = "nordic_201x115x46_B23"
-        A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+        A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
         @testset "sourcemap" begin
 
