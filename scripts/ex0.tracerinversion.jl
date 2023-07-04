@@ -73,7 +73,7 @@ planviewplot(PO₄total, depth, cntrs, titlelabel=label)
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
-lims = 0:0.05:3.0
+lims = 0:0.1:3.0
 sectionplot(PO₄total,lon_section,lims)
 
 ## oxygen distribution
@@ -84,7 +84,8 @@ O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
 # but different contours
-cntrs = 0:10:400 # μmol/kg
+cntrs = 0:20:400 # μmol/kg
+label = "oxygen [μmol/kg], depth = "*string(depth)*" m"
 planviewplot(O₂, depth, cntrs, titlelabel=label) 
 
 # Section view of oxygen on same phosphate section.
