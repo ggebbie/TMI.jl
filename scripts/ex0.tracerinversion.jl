@@ -66,7 +66,10 @@ depth = γ.depth[level]
 label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-planviewplot(PO₄total, depth, cntrs, titlelabel=label) 
+GGplot.pygui(true) # to help plots appear on screen using Python GUI
+planviewplot(PO₄total, depth, cntrs, titlelabel=label)
+# alternatively push to Julia backend (VS Code)
+# GGplot.display(GGplot.gcf())
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
