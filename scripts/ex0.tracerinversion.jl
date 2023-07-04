@@ -18,9 +18,6 @@ using TMI
 using Test
 using GGplot
 
-#GoogleDrive: in TMI.jl
-#using PyPlot, PyCall: in GGplot.jl
-
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
@@ -69,11 +66,14 @@ depth = γ.depth[level]
 label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-planviewplot(PO₄total, depth, cntrs, titlelabel=label) 
+GGplot.pygui(true) # to help plots appear on screen using Python GUI
+planviewplot(PO₄total, depth, cntrs, titlelabel=label)
+# alternatively push to Julia backend (VS Code)
+# GGplot.display(GGplot.gcf())
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
-lims = 0:0.05:3.0
+lims = 0:0.1:3.0
 sectionplot(PO₄total,lon_section,lims)
 
 ## oxygen distribution
@@ -84,7 +84,8 @@ O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
 # but different contours
-cntrs = 0:10:400 # μmol/kg
+cntrs = 0:20:400 # μmol/kg
+label = "oxygen [μmol/kg], depth = "*string(depth)*" m"
 planviewplot(O₂, depth, cntrs, titlelabel=label) 
 
 # Section view of oxygen on same phosphate section.

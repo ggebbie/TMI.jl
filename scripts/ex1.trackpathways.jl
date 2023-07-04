@@ -29,7 +29,7 @@ lonbox = [-50,0]; # 50 W -> prime meridian
 c = trackpathways(Alu,latbox,lonbox,γ);
 
 # do plotting (could be a function)
-plotextent(latbox, lonbox)
+plotbox(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330; # only works if exact
