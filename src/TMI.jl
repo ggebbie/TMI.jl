@@ -52,16 +52,18 @@ export config, config_from_mat, config_from_nc,
     getsouthboundary,getwestboundary,
     setboundarycondition!,
     wetmask, interiormask,
-    adjustboundarycondition!,
+    adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
     #maximum, minimum,
     (+), (-), (*), dot,
     zerosource, onesource,
-    Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
     adjustsource, adjustsource!,
-    zerowestboundary, zeronorthboundary, zeroeastboundary, zerosouthboundary,
-onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
+    zerowestboundary, zeronorthboundary,
+    zeroeastboundary, zerosouthboundary,
+    onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
+    distancematrix, gaussiandistancematrix
 
 import Base: zeros, one, oneunit, ones,  (\)
 #import Base: maximum, minimum
@@ -861,6 +863,53 @@ function cellarea(γ)
 end
 
 """
+    function distancematrix(γ;surface = true)
+
+    Matrix with size of surface points squared
+
+    Each entry gives distance in km between surface points
+    Gives only horizontal distance.
+"""
+function distancematrix(γ;surface = true)
+    if surface
+        nsfc = sum(γ.wet[:,:,1])
+        Dh = zeros(nsfc,nsfc)
+        lonlist = [γ.lon[γ.I[ii][1]] for ii in 1:nsfc]
+        latlist = [γ.lat[γ.I[ii][2]] for ii in 1:nsfc]
+
+        for ii in 1:nsfc
+            loc1 = (lonlist[ii],latlist[ii])
+            for jj in ii:nsfc
+                loc2 = (lonlist[jj],latlist[jj])
+                Dh[ii,jj] = TMI.haversine(loc1,loc2)./1000.0 # m -> km
+                Dh[jj,ii] = Dh[ii,jj] # make symmetric, save time
+            end
+        end
+    else
+        error("not implemented for whole ocean")
+    end
+    return Dh
+end
+
+"""
+    function gaussiandistancematrix(γ,σ,L)
+
+    uses distance matrix plus a lengthscale `L` (km)
+    and a size of the diagonal `σ`
+
+    returns values with inverse gaussian weighting
+"""
+function gaussiandistancematrix(γ,σ,L)
+
+    adhoc_factor = 0.01 # to make non-negative matrix
+    Dh = distancematrix(γ,surface=true)
+    factor1 = (1-adhoc_factor)*σ^2
+    factor2 = adhoc_factor*σ^2
+    N= size(Dh,1)
+    Dg = factor1 .* exp.(-(Dh./L).^2) + factor2*Diagonal(ones(N))
+end
+
+"""
     function cellvolume(γ)::Field
 
     Volume of each grid cell.
@@ -990,8 +1039,7 @@ end
 
 """
     function horizontaldistance(loc,γ)
-    return the Cartesian index and linear index 
-    of the nearest N neighbors
+
 # Arguments
 - `loc`: 3-tuple of lon,lat,depth location
 - `γ`: TMI.grid
@@ -1009,7 +1057,7 @@ function horizontaldistance(loc,γ::Grid)
     fill!(hordist,zero(T)/zero(T))
     
     # calculate haversine horizontal distance on sphere
-    [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),                  (γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
+    [hordist[γ.I[ii]] = haversine((loc[1],loc[2]),(γ.lon[γ.I[ii][1]],γ.lat[γ.I[ii][2]]))
        for ii ∈ eachindex(γ.I) if γ.I[ii][3] == 1]
     return hordist
 end
