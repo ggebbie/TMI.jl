@@ -308,8 +308,29 @@ function regeneratedphosphate(TMIversion,Alu,γ)
     # zero boundary condition
     b₀ = zerosurfaceboundary(γ)
     PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
-
     return PO₄ᴿ
+end
+
+""" 
+    function preformedphosphate(TMIversion,Alu,γ)
+    Preformed (i.e., NO accumulation or remineralization) phosphate
+# Arguments
+- `TMIversion`: version of TMI water-mass/circulation model
+- `Alu`: LU decomposition of water-mass matrix A
+- `γ`: TMI grid
+# Output
+- `PO₄⋆`: preformed phosphate
+"""
+function preformedphosphate(TMIversion,Alu,γ)
+
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # phosphate source = 0
+    # zero boundary condition
+    #PO₄ = readfield(TMIfile,variable,γ)
+    #PO₄ = readfield(TMIfile,"PO₄",γ)
+    bPO₄ = getsurfaceboundary(readfield(TMIfile,"PO₄",γ))
+    return steadyinversion(Alu,bPO₄,γ) # PO₄⋆
 end
 
 """ 
@@ -2088,7 +2109,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         # initialize to zero
         gu = unvec(u,0 .* uvec)
         
-        gtmp = 2*(Q⁻*uvec) # control penalty gradient
+        gu_ = 2*(Q⁻*uvec) # control penalty gradient
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
@@ -2101,7 +2122,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         end
         
         gadjustboundarycondition!(gu,gb)
-        gtmp += vec(gu)
+        gu_ += vec(gu)
         for (ii,vv) in enumerate(gtmp)
             guvec[ii] = vv
         end
