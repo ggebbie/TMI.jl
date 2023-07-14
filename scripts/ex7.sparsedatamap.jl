@@ -46,6 +46,7 @@ y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
 #b = mean(y) * onesurfaceboundary(γ)
+using Statistics
 b = (;surface = mean(y) * onesurfaceboundary(γ))
 
 # assume temperature known ± 5°C
