@@ -26,6 +26,7 @@ using TMI
 using Test
 using GGplot
 using Interpolations
+using Statistics
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
@@ -50,7 +51,19 @@ b = (;surface = mean(y) * onesurfaceboundary(γ))
 
 # assume temperature known ± 5°C
 σb = 5.0
-Q⁻ = 1.0/(σb^2)
+
+for i = 1:2
+    if i == 1
+        Q⁻ = 1.0/(σb^2) # a scalar
+        # spatially uniform first-guess expected size
+    elseif i==2
+        #adhoc_add = 0.1
+        #Dg = gaussiandistancematrix(γ,σb,1000.0) + adhoc_add.*Diagonal(ones(nsfc))
+        Dg = gaussiandistancematrix(γ,σb,1000.0)
+        #Cg = cholesky(Dg)
+        Q⁻ = inv(cholesky(Dg))
+    end
+end
 
 ## gradient checks
 # check with forward differences
@@ -101,20 +114,6 @@ label = "First guess misfit: Δc₀"
 planviewplot(Δc₀, depth, cntrs, titlelabel=label) 
 
 # % what is the uncertainty in the surface boundary condition?
-# err_d = 1;
-# diagonal = false; % or set to false.
-# if diagonal 
-#   S     = 1./err_d.^2; 
-# else
-#   % if diagonal==false
-#   % impose spatial smoothing in surface b.c.
-#   lengthscale = 4; % horizontal lengthscale in units of gridcells
-#   factor = 0.126.*(1/lengthscale)^2 ; 
-#   load Del2_4deg.mat
-#   S = factor.* sparse(1:Nsfc,1:Nsfc,1./err_d.^2);
-#   S = S + Del2'*(lengthscale^4.*S*Del2);
-# end
-  
 
 # % how much did the data points reduce the error (globally).
 # sqrt(sum((c-Tobs).^2)/Nfield)

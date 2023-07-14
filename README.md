@@ -56,7 +56,7 @@ Scripts can be run non-interactively like this:\
 `cd TMI.jl`\
 `julia --project=scripts scripts/ex1.trackpathways.jl`
 
-To show graphical results, TMI.jl uses `GGplot.jl` for plotting routines. In particular, matplotlib and cartopy are handled by `GGplot` so that they are not dependencies in `TMI.jl`. Thus the `scripts` directory has its own environment distinct from the TMI project. If you are working interactively, try the following commands to activate the scripts environment: \
+To show graphical results, TMI.jl uses `GGplot.jl` for plotting routines. In particular, matplotlib, cartopy and cmocean packages are handled by `GGplot` so that they are not dependencies in `TMI.jl`. Thus the `scripts` directory has its own environment distinct from the TMI project. If you are working interactively, try the following commands to activate the scripts environment: 
 
 `cd("scripts")`\
 `import Pkg; Pkg.activate(".")`
@@ -67,7 +67,7 @@ If you use the examples and `GGplot`, you will need a python environment in Juli
 GGplot will use a package-specific python environment built from scratch using the `CondaPkg.jl` package. Check out the `GGplot/deps/build.jl` file to see how this Python environment is set up. In particular, it executes:
 `ENV["PYTHON"]=""` 
 
-Rather than using the `PyCall.jl`, `GGplot.jl` uses `PythonCall.jl` in order to minimize errors that occur due to incompatible Python environments. 
+Rather than using the `PyCall.jl` package, `GGplot.jl` uses `PythonCall.jl` in order to minimize errors that occur due to incompatible Python environments. 
 `import Pkg; Pkg.add("PythonCall")`\
 `import Pkg; Pkg.build("PythonCall") # probably not necessary`
 

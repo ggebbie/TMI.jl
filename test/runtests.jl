@@ -298,7 +298,7 @@ end
     ## globalmap
     @testset "sparsedatamap" begin
 
-        using Statistics, Interpolations
+        using Statistics, Interpolations, LinearAlgebra
         
         N = 20
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
@@ -315,41 +315,51 @@ end
             end
             uvec = vec(u)
             σb = 5.0
-            Q⁻ = 1.0/(σb^2)
-            fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
-            f(x) = fg(x)[1]
-            J0 = f(uvec)
-            J̃₀,∂J₀∂u = fg(uvec)
-            fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
-            ϵ = 1e-3 # size of finite perturbation
-            ii = rand(1:length(uvec))
-            println("gradient check location=",ii)
-            δu = copy(uvec); δu[ii] += ϵ
-            ∇f_finite = (f(δu) - f(uvec))/ϵ
-            println("∇f_finite=",∇f_finite)
+            for jj = 1:2
+                if jj == 1
+                    Q⁻ = 1.0/(σb^2) # a scalar
+                    # spatially uniform first-guess expected size
+                elseif jj==2
+                    lengthscale = 1000.0
+                    Dg = gaussiandistancematrix(γ,σb,lengthscale)
+                    Q⁻ = inv(cholesky(Dg))
+                end
+            
+                fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+                f(x) = fg(x)[1]
+                J0 = f(uvec)
+                J̃₀,∂J₀∂u = fg(uvec)
+                fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
 
-            ∂J₀∂u = 0.0 .* uvec
-            fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
-            ∇f = ∂J₀∂u[ii]
-            println("∇f=",∇f)
+                ϵ = 1e-3 # size of finite perturbation
+                ii = rand(1:length(uvec))
+                println("gradient check location=",ii)
+                δu = copy(uvec); δu[ii] += ϵ
+                ∇f_finite = (f(δu) - f(uvec))/ϵ
+                println("∇f_finite=",∇f_finite)
 
-            # error less than 10 percent?
-            println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-            @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-            iters = 5
-            out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
+                ∂J₀∂u = 0.0 .* uvec
+                fg!(J̃₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+                ∇f = ∂J₀∂u[ii]
+                println("∇f=",∇f)
 
-            # was cost function decreased?
-            @test out.minimum < J̃₀
-            # reconstruct by hand to double-check.
-            ũ = out.minimizer
-            J̃,∂J̃∂ũ = fg(ũ)
-            @test J̃ < J̃₀
+                # error less than 10 percent?
+                println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+                @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+                iters = 5
+                out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
 
-
+                # was cost function decreased?
+                @test out.minimum < J̃₀
+                # reconstruct by hand to double-check.
+                ũ = out.minimizer
+                J̃,∂J̃∂ũ = fg(ũ)
+                @test J̃ < J̃₀
+            end
         end
     end
+
     @testset "sourcemap" begin
 
         using Statistics, Interpolations
