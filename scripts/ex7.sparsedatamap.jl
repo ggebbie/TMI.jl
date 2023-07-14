@@ -76,7 +76,7 @@ println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 
 # optimize the sparse data map with an Optim.jl method
 iterations = 10
-out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations)
+out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iterations)
 
 # reconstruct by hand to double-check.
 ũ = unvec(u,out.minimizer)
