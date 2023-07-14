@@ -16,6 +16,7 @@ using NCDatasets
 #using DataStructures
 using UnicodePlots
 using Statistics
+using OrderedCollections
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -35,7 +36,10 @@ export config, config_from_mat, config_from_nc,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
-    trackpathways, regeneratedphosphate, meanage,
+    trackpathways, meanage,
+    regeneratedphosphate, preformedphosphate,
+    regeneratednitrate, preformednitrate,
+    respiredoxygen, preformedoxygen,
     volumefilled, surfaceorigin, synthetic_observations,
     observe,
     steadyclimatology, steadyinversion,
@@ -287,51 +291,74 @@ function watermassdistribution(TMIversion,Alu,region,γ)
     return g
 end
 
-
 """ 
-    function regeneratedphosphate(TMIversion,Alu,γ)
-    Regenerated (i.e., accumulated, remineralized) phosphate
+    function regeneratednutrient(TMIversion,Alu,γ)
+
+    Regenerated (i.e., accumulated, remineralized) nutrient
+
 # Arguments
+- `tracer::Union{String,Symbol}`: tracer name
 - `TMIversion`: version of TMI water-mass/circulation model
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI grid
+- `r`: optional stoichiometric ratio relative to PO₄
 # Output
 - `PO₄ᴿ`: regenerated phosphate
 """
-function regeneratedphosphate(TMIversion,Alu,γ)
+function regeneratednutrient(tracer,
+    TMIversion,Alu,γ;r=1)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
+    # configure meta data
+    c = readfield(TMIfile,tracer,γ) 
+    name = Symbol(c.name,"ᴿ")
+    if c.longname == "dissolved oxygen"
+        longname = "respired "*c.longname
+    else
+        longname = "regenerated "*c.longname
+    end    
+    
     ## read phosphate source
     qPO₄ = readfield(TMIfile,"qPO₄",γ)
 
     # zero boundary condition
-    b₀ = zerosurfaceboundary(γ)
-    PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
-    return PO₄ᴿ
+    b = zerosurfaceboundary(γ,name=name,longname=longname,units=c.units)
+    cᴿ = steadyinversion(Alu,b,γ,q=qPO₄,r=r)
+    return cᴿ
 end
+regeneratedphosphate(TMIversion,Alu,γ) = regeneratednutrient("PO₄",TMIversion,Alu,γ,r=1)
+regeneratednitrate(TMIversion,Alu,γ) = regeneratednutrient("NO₃",TMIversion,Alu,γ,r=15.5)
+respiredoxygen(TMIversion,Alu,γ) = regeneratednutrient("O₂",TMIversion,Alu,γ,r=-170.0)
 
 """ 
-    function preformedphosphate(TMIversion,Alu,γ)
-    Preformed (i.e., NO accumulation or remineralization) phosphate
+    function preformednutrient(tracer::Union{String,Symbol},TMIversion,Alu,γ)
+
+    Preformed (i.e., NO accumulation or remineralization) nutrient
 # Arguments
+- `tracer::Union{Symbol,String}`: tracer name
 - `TMIversion`: version of TMI water-mass/circulation model
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI grid
 # Output
-- `PO₄⋆`: preformed phosphate
+- `c★`: preformed tracer
 """
-function preformedphosphate(TMIversion,Alu,γ)
+function preformednutrient(tracer::Union{String,Symbol},TMIversion,Alu,γ)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
-    # phosphate source = 0
-    # zero boundary condition
-    #PO₄ = readfield(TMIfile,variable,γ)
-    #PO₄ = readfield(TMIfile,"PO₄",γ)
-    bPO₄ = getsurfaceboundary(readfield(TMIfile,"PO₄",γ))
-    return steadyinversion(Alu,bPO₄,γ) # PO₄⋆
+    # get meta-data
+    c = readfield(TMIfile,tracer,γ)
+    name = Symbol(tracer,"★")
+    longname = "preformed "*c.longname
+
+    b = getsurfaceboundary(Field(c.tracer,c.γ,name,longname,c.units))
+    return steadyinversion(Alu,b,γ) 
 end
+
+preformedphosphate(TMIversion,Alu,γ) = preformednutrient("PO₄",TMIversion,Alu,γ)
+preformednitrate(TMIversion,Alu,γ) = preformednutrient("NO₃",TMIversion,Alu,γ)
+preformedoxygen(TMIversion,Alu,γ) = preformednutrient("O₂",TMIversion,Alu,γ)
 
 """ 
     function meanage(TMIversion,Alu,γ)
@@ -726,6 +753,7 @@ function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
         
     return nothing
 end
+
 function readsource(file,tracername,γ::Grid;logscale=false) 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     tracer, units, longname = readtracerplus(file,tracername)
@@ -2154,7 +2182,7 @@ end
 function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
-    d = zeros(γ)
+    d = zeros(γ,b.name,b.longname,b.units)
     
     # update d with the boundary condition b
     setboundarycondition!(d,b)
@@ -2313,15 +2341,15 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
+zerosurfaceboundary(γ::Grid;name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
 
-zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeronorthboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
 
-zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeroeastboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
 
-zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
+zerosouthboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
 
-zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
+zerowestboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
 
 onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,1,γ,name,longname,units)::BoundaryCondition
 
