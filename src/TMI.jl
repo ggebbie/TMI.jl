@@ -323,7 +323,7 @@ function regeneratednutrient(tracer,
     qPO₄ = readfield(TMIfile,"qPO₄",γ)
 
     # zero boundary condition
-    b = zerosurfaceboundary(γ,name=name,longname=longname,units=c.units)
+    b = zerosurfaceboundary(γ,name,longname,c.units)
     cᴿ = steadyinversion(Alu,b,γ,q=qPO₄,r=r)
     return cᴿ
 end
@@ -2151,7 +2151,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         
         gadjustboundarycondition!(gu,gb)
         gu_ += vec(gu)
-        for (ii,vv) in enumerate(gtmp)
+        for (ii,vv) in enumerate(gu_)
             guvec[ii] = vv
         end
     end
@@ -2341,15 +2341,15 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ::Grid;name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
+zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
 
-zeronorthboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
 
-zeroeastboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
 
-zerosouthboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
+zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
 
-zerowestboundary(γ;name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
+zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
 
 onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,1,γ,name,longname,units)::BoundaryCondition
 
