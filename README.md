@@ -116,6 +116,8 @@ The Julia code is designed to download input files from Google Drive and to plac
 				  
 `LGM_90x45x33_OG18`: Last Glacial Maximum version with 4x4 degree horizontal resolution and 33 levels (Oppo, Gebbie et al. 2018)
 
+`nordic_201x115x46_B23`: Nordic TMI regional version, 1/2 degree longitude by 1/4 degree latitude and 46 levels (Brakstad et al., 2013) 
+
 # Functions
 
 Available functions are listed in the documentation at https://ggebbie.github.io/TMI.jl/dev/ .
