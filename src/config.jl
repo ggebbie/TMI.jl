@@ -597,6 +597,8 @@ function maturl(TMIname)
 end
 
 """ 
+function config2nc(TMIversion,A,γ,L,B)
+
 Save TMI configuration to NetCDF format for non-proprietary access
 """
 function config2nc(TMIversion,A,γ,L,B)
@@ -622,6 +624,23 @@ function config2nc(TMIversion,A,γ,L,B)
     regions2nc(TMIversion,γ)
 
     optim2nc(TMIversion)
+
+end
+
+""" 
+function regions2nc(TMIversion,A,γ,L,B)
+
+Save TMI water-mass regions to NetCDF format for non-proprietary access
+"""
+function regions2nc(TMIversion,A,γ,L,B)
+
+    # make new netcdf file.
+    filenetcdf = pkgdatadir("regions_"*TMIversion*".nc")
+    isfile(filenetcdf) && rm(filenetcdf)
+    
+    #= is this part of the config? Or should it go to
+     a separate output? It is similar to the output fields above. Probably should be considered part of the config. =#
+    regions2nc(TMIversion,γ)
 
 end
 
