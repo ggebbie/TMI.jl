@@ -14,8 +14,8 @@ makedocs(;
         assets=String[],
     ),
     pages=[
-        "Home" => "index.md",
         "Top-level functions" => "top.md",
+        "Home" => "index.md",
         "Configuration" => "config.md",
         "Grid" => "grid.md",
         "Boundary Conditions" => "boundaries.md",

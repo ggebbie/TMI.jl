@@ -12,8 +12,6 @@
     `git branch -M main`
     `git push -u origin main`
 
-    First two commands probably unnecessary.
-    I didn't figure out how to do this with magit in emacs.
 """
 using Revise, PkgTemplates
 
@@ -21,7 +19,7 @@ t = Template(;
     user="ggebbie",
     dir="~/projects",
     authors="G Jake Gebbie",
-    julia=v"1.6",
+    julia=v"1.9",
     plugins=[
         License(; name="MIT"),
         Git(; manifest=true, ssh=true),
