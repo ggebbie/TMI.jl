@@ -705,8 +705,10 @@ function matfields2nc(TMIversion,γ)
     varnames, xvarnames = matvarnames(matfile)
     Izyx = cartesianindex(matfile)
 
-    for (kk,vv) in mat2ncfield()
-        if kk in varnames || kk in xvarnames #haskey(vars,kk)
+    for (kk,vv) in TMI.mat2ncfield()
+        println(kk)
+        if (!isnothing(varnames) && kk in varnames) ||
+            (!isnothing(xvarnames) && kk in xvarnames) 
             field = readfield(matfile,kk,γ,Izyx)
             writefield(netcdffile,field)
         end
@@ -724,7 +726,8 @@ function matsource2nc(TMIversion,γ)
     Izyx = cartesianindex(matfile)
 
     for (kk,vv) in mat2ncsource()
-        if kk in varnames || kk in xvarnames 
+        if (!isnothing(varnames) && kk in varnames) ||
+            (!isnothing(xvarnames) && kk in xvarnames) 
             source = readsource(matfile,kk,γ,Izyx)
             writesource(netcdffile,source)
         end
@@ -906,7 +909,11 @@ function circulationmatrix2nc(TMIversion,L,γ)
     fullmatrix = false # more efficient to just save F₀, then modify A to get L 
     filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     if !fullmatrix
-        F₀ = tracerinit(γ.wet,T)
+
+        # should this be I or Izyx?
+        F₀ = tracerinit(zeros(sum(γ.wet)),γ.I,γ.wet)
+        #F₀ = tracerinit(γ.wet,T) # didn't work, wrong arglist
+        #F₀ = zeros(γ)
         for nd ∈ eachindex(γ.I)
             # normalized mass flux out of gridcell is found on diagonal
             F₀[γ.I[nd]] = -L[nd,nd]
@@ -1007,7 +1014,7 @@ function grid2nc(TMIversion,γ)
 end
 
 """ 
-    function tracerinit(wet,vec,I)
+    function tracerinit(vec,I, wet)
           initialize tracer field on TMI grid
         perhaps better to have a tracer struct and constructor
 # Arguments
