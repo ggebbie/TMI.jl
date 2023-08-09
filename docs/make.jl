@@ -14,13 +14,13 @@ makedocs(;
         assets=String[],
     ),
     pages=[
-        "Top-level functions" => "top.md",
-        "Home" => "index.md",
+        "Top-level functions" => "index.md",
         "Configuration" => "config.md",
         "Grid" => "grid.md",
         "Boundary Conditions" => "boundaries.md",
         "Plots" => "plots.md",
         "Utilities" => "utils.md",
+        "Function List" => "functions.md",
         "Older functions" => "legacy.md",
     ],
 )
