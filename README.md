@@ -4,6 +4,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://ggebbie.github.io/TMI.jl/dev)
 [![Build Status](https://github.com/ggebbie/TMI.jl/workflows/CI/badge.svg)](https://github.com/ggebbie/TMI.jl/actions)
 [![Coverage](https://codecov.io/gh/ggebbie/TMI.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/ggebbie/TMI.jl)
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.402168850.svg)](https://doi.org/10.5281/zenodo.8226802)
 
 * Total Matrix Intercomparison codes for Julia\
 Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu 
