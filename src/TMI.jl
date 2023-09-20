@@ -2185,7 +2185,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         # initialize to zero
         gu = unvec(u,0 .* uvec)
         
-        gu_ = 2*(Q⁻*uvec) # control penalty gradient
+        gu_ = 2*(Q⁻.*uvec) # control penalty gradient
         gn = 2Wⁱ * n
         gỹ = gn
         gc = gobserve(gỹ,c,locs)
@@ -2206,7 +2206,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 
     if J !=nothing
         # control penalty and gradient
-        Jcontrol = uvec'*(Q⁻*uvec)
+        Jcontrol = uvec'*(Q⁻.*uvec)
         Jdata = n ⋅ (Wⁱ * n) # dot product
         #println("Jcontrol:",Jcontrol)
         #println("Jdata:",Jdata)
