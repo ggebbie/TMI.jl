@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.1"
+julia_version = "1.9.3"
 manifest_format = "2.0"
-project_hash = "dce1b41aa704afb9d197dbf4de99c918873c78fc"
+project_hash = "1ca919daa36e4be8b7647939f589a331075e715c"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -154,7 +154,7 @@ version = "3.46.2"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.2+0"
+version = "1.0.5+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -686,7 +686,7 @@ version = "1.3.0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.0"
+version = "1.9.2"
 
 [[deps.PooledArrays]]
 deps = ["DataAPI", "Future"]
@@ -906,10 +906,10 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "5.10.1+6"
 
 [[deps.TMI]]
-deps = ["CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "Interpolations", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
+deps = ["CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "Interpolations", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
 path = ".."
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-version = "0.1.32"
+version = "0.1.35"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -968,14 +968,15 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [[deps.UnicodePlots]]
 deps = ["ColorSchemes", "ColorTypes", "Contour", "Crayons", "Dates", "LinearAlgebra", "MarchingCubes", "NaNMath", "PrecompileTools", "Printf", "Requires", "SparseArrays", "StaticArrays", "StatsBase"]
-git-tree-sha1 = "9fbe3fb6c4bbe4cafb5ce4d15bbec82f0077e1d5"
+git-tree-sha1 = "b96de03092fe4b18ac7e4786bee55578d4b75ae8"
 uuid = "b8865327-cd53-5732-bb35-84acbb429228"
-version = "3.5.2"
+version = "3.6.0"
 
     [deps.UnicodePlots.extensions]
     FreeTypeExt = ["FileIO", "FreeType"]
     ImageInTerminalExt = "ImageInTerminal"
     IntervalSetsExt = "IntervalSets"
+    TermExt = "Term"
     UnitfulExt = "Unitful"
 
     [deps.UnicodePlots.weakdeps]
@@ -983,6 +984,7 @@ version = "3.5.2"
     FreeType = "b38be410-82b0-50bf-ab77-7b57e271db43"
     ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
     IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+    Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.UnsafePointers]]
