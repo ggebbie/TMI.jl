@@ -1,15 +1,6 @@
 #=%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Example : Find the distribution of a tracer given:              %
-%       (a) the pathways described by A,                          %
-%       (b) interior sources and sinks given by dC,               % 
-%           that best fits observations, Cobs,                    %
-%   and (c) inequality constraints on the tracer concentration.   %
-%                                                                  %
-% Mathematically, minimize J = (C-Cobs)^T W (C-Cobs) subject to    %
-%                         AC = d + Gamma u                         %
-%  where u is the estimated change in surface concentration.    % 
-%
-% See Supplementary Section 2, Gebbie & Huybers 2011.
+%      Under development: the goal is to invert model output 
+%                  and get the transport matrix
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
 
 import Pkg; Pkg.activate(".")
@@ -48,12 +39,12 @@ b = (;surface = getsurfaceboundary(θtrue))
 W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./(10^(-2) .* ones(sum(γ.wet))).^2)
 
 # get sample J value
-F,G = costfunction_gridded_obs(uvec,Alu,b,u,θtrue,W⁻,γ)
-fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,θtrue,W⁻,γ)
+F,G = costfunction_gridded_model(uvec,Alu,b,u,θtrue,W⁻,γ)
+fg!(F,G,x) = costfunction_gridded_model!(F,G,x,Alu,b,u,θtrue,W⁻,γ)
 
-fg(x) = costfunction_gridded_obs(x,Alu,b,u,θtrue,W⁻,γ)
-f(x) = fg(x)[1]
-J₀,gJ₀ = fg(uvec)
+#fg(x) = costfunction_gridded_model(x,Alu,b,u,θtrue,W⁻,γ)
+#f(x) = fg(x)[1]
+#J₀,gJ₀ = fg(uvec)
 
 #### gradient check ###################
 # check with forward differences
@@ -61,15 +52,15 @@ J₀,gJ₀ = fg(uvec)
 ii = rand(1:sum(γ.wet[:,:,1]))
 println("Location for test =",ii)
 δu = copy(uvec); δu[ii] += ϵ
-∇f_finite = (f(δu) - f(uvec))/ϵ
-println(∇f_finite)
+#∇f_finite = (f(δu) - f(uvec))
+#println(∇f_finite)
 
-fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-∇f = gJ₀[ii]
-println(∇f)
+#fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+#∇f = gJ₀[ii]
+#println(∇f)
 
 # error less than 10 percent?
-println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+#println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 #### end gradient check #################
 
 # filter the data with an Optim.jl method
