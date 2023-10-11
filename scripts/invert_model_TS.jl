@@ -74,7 +74,7 @@ println("Location for test =",ii)
 #### end gradient check #################
 
 # filter the data with an Optim.jl method
-iterations = 250
+iterations = 5
 out = steadyclimatology(uvec,fg!,iterations)
 
 # reconstruct by hand to double-check.
@@ -93,7 +93,7 @@ c̃  = θguess+ũ
 # plot the difference
 level = 15 # your choice 1-33
 depth = γ.depth[level]
-cntrs = -1:0.05:1
+cntrs = -15:0.5:15
 label = "Optimized misfit: Δc̃"
 # Help: needs work with continents and labels
 planviewplot(Δc̃, depth, cntrs, titlelabel=label) 

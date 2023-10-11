@@ -2216,7 +2216,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 end
 
 """ 
-    function costfunction_gridded_model(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+    function costfunction_gridded_model(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -2230,22 +2230,22 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_gridded_model(uvec,Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model(uvec,Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(u₀,uvec)
+    #u = unvec(u₀,uvec)
 
-    b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
-    n = steadyinversion(Alu,b,γ) - y  # gives the misfit
-    J = n ⋅ (Wⁱ * n) # dot product
+    #b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
+    #n = steadyinversion(Alu,b,γ) - y  # gives the misfit
+    J = uvec ⋅ uvec + sum((-Wⁱ * uvec - c + y).^2)  #n ⋅ (Wⁱ * n) # dot product
 
     # adjoint equations
-    gy = -2Wⁱ * n
-    gb = gsteadyinversion( gy, Alu, b, γ)
-    gu = gadjustboundarycondition(gb,u)
-    guvec = vec(gu)
+    #gy = -2Wⁱ * n
+    #gb = gsteadyinversion( gy, Alu, b, γ)
+    #gu = gadjustboundarycondition(gb,u)
+    guvec = uvec -2Wⁱ * (-Wⁱ * uvec -c +y)
 
-    return J, guvec
+    return J , guvec
 end
 
 
@@ -2254,31 +2254,31 @@ end
 """
     function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     # turn uvec into a boundary condition
-    u = unvec(u₀,uvec)
+    #u = unvec(u₀,uvec)
 
-    b = adjustboundarycondition(b₀,u) #b += u # easy c
+    #b = adjustboundarycondition(b₀,u) #b += u # easy c
     #adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
-    y -= steadyinversion(Alu,b,γ)  # gives the misfit
+    #y -= steadyinversion(Alu,b,γ)  # gives the misfit
 
     if guvec != nothing
-        # adjoint equations
-        gy = -2Wⁱ * y
-        gb = gsteadyinversion( gy, Alu, b, γ)
-        gu = gadjustboundarycondition(gb,u)
-        #guvec = vec(gu)
-
-        # next block just to modify the contents
-        tmp = vec(gu)
+    #    # adjoint equations
+    #    gy = -2Wⁱ * y
+    #    gb = gsteadyinversion( gy, Alu, b, γ)
+    #    gu = gadjustboundarycondition(gb,u)
+    #    #guvec = vec(gu)
+    #
+    #    # next block just to modify the contents
+        tmp = guvec
         for (ii,vv) in enumerate(tmp)
-            guvec[ii] = vv
+            guvec[ii] = uvec[ii] + (-2Wⁱ * (-Wⁱ * uvec -c +y))[ii]#vv
         end
     end
     
     if J !=nothing
-        return  y ⋅ (Wⁱ * y) # dot product
+        return  uvec ⋅ uvec+ sum((-Wⁱ * uvec - c + y ).^2)
     end
 end
 
