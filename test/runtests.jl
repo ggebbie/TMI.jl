@@ -178,7 +178,11 @@ end
                 "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
                 "TROPATL","TROPPAC","TROPIND")
         region = list[2]
+
+        #b = TMI.surfaceregion(TMIversion,region,γ)
+        #g = steadyinversion(Alu,b,γ)
         g = watermassdistribution(TMIversion,Alu,region,γ)
+
         @test maximum(g) ≤ 1.0
         @test minimum(g) ≥ 0.0
 

@@ -154,61 +154,7 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
 end
 
-"""
-    struct BoundaryCondition
-
-    a plane defined at `dim=dimval`
-
-# Attributes
-    `tracer::Array{T,2}`: values on plane
-    `i::Vector{T}`: coordinate values on local x-plane
-    `j::Vector{T}`: coordinate values on local y-plane
-    `k::T`: fixed coordinate value on local z-plane that defines the Boundary Condition plane
-    `dim::Int64`: dimension (1,2, or 3) along which the plane's index is fixed
-    `dimval::Int64`: plane defined at dim = dimval where dimval is a 1-based index number
-    `wet::BitArray{2}`: ocean mask for boundary condition
-"""
-struct BoundaryCondition{T}
-    tracer::Array{T,2}
-    i::Vector{T}
-    j::Vector{T}
-    k::T
-    dim::Int64
-    dimval::Int64
-    wet::BitArray{2}
-    name::Symbol
-    longname::String
-    units::String
-end
-
-function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::BoundaryCondition)
-    summary(io, x); println(io)
-    print(io, "Field size ")
-    println(io, size(x.tracer))
-    show(io,mime,heatmap(transpose(x.tracer),zlabel=x.units,title=x.longname))
-end
-
-"""
-    function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T <: Real
-
-    Outer constructor for BoundaryCondition if there's no worry about
-    tracer type, long name, or units.
-# Arguments
-- `tracer::Array{T,3}`
-- `i`
-- `j`
-- `k`
-- `dim`
-- `dimval`
-- `wet`
-# Output
-- `bc::BoundaryCondition`
-"""
-# an outer constructor that ignores units
-function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) #where T <: Real
-
-    return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
-end
+include("boundary_condition.jl")
 
 """
     struct Source
@@ -670,17 +616,6 @@ function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
     tracer = tracerinit(tvar, Izyx, γ.wet)
     checkgrid!(tracer,γ.wet)
 
-    # perform a check of file compatibility with grid
-    # if sum(isnan.(tracer[γ.wet])) > 0
-    #     error("readfield warning: NaN on grid")
-    # end
-    # # check for non NaN or nonzero off grid
-    # if sum(isnan.(tracer[.!(γ.wet)])) < length(isnan.(tracer[.!(γ.wet)]))
-    #     println("readfield warning: non-NaN value off grid")
-    #     println("resetting to NaN")
-    #     tracer[.!(γ.wet)] .= NaN
-    # end
-    
     nctracername = mat2ncfield()[mattracername]
     units = fieldsatts()[nctracername]["units"]
     longname = fieldsatts()[nctracername]["longname"]
@@ -1409,158 +1344,12 @@ function zeros(wet,ltype=Float64)
     return d
 end
 
-"""
-    function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
-
-       Help initialize boundary condition by getting some attributes
-"""
-function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
-
-    dimsize = size(γ.wet)
-    # dumb way to do it
-    if dim == 1
-        wet2d = γ.wet[dimval,:,:]
-        i = γ.lat
-        j = γ.depth
-        k = γ.lon[dimval]
-    elseif dim == 2
-        wet2d = γ.wet[:,dimval,:]
-        i = γ.lon
-        j = γ.depth
-        k = γ.lat[dimval]
-    elseif dim == 3
-        wet2d = γ.wet[:,:,dimval]
-        i = γ.lon
-        j = γ.lat
-        k = γ.depth[dimval]
-    else
-        error("boundary condition not implemented in 4+ dimensions")
-    end
-    return i,j,k,wet2d
-    
-end
-
-"""
-    function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
-
-       Initialize boundary condition with zeroes
-# Arguments
-- `dim`:
-- `dimval`
-- `γ::Grid`
-- `name::Symbol`
-- `longname::String`
-- `units::String`
-
-# Output
-- `b::BoundaryCondition`
-"""
-function zeros(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
-
-    i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
-
-    tracer = Array{Float64}(undef,size(wet))
-    tracer[wet] .= zero(Float64)
-    tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet,name,longname,units)
-
-end
 
 """
     zero(c::Field) = zeros(c.γ)
 """
 Base.zero(c::Field) = zeros(c.γ)
 
-"""
-    function ones(dim::Int64,dimval::Int64,γ::Grid)::BoundaryCondition
-
-       Initialize boundary condition with ones
-"""
-function ones(dim::Int64,dimval::Int64,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition
-
-    i,j,k,wet = boundaryconditionatts(dim,dimval,γ)
-
-    tracer = Array{Float64}(undef,size(wet))
-    tracer[wet] .= ones(Float64)
-    tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,i,j,k,dim,dimval,wet)
-
-end
-
-"""
-   Get boundary condition by extracting from 3D tracer
-"""
-function getboundarycondition(tracer3d,dim,dimval,γ::Grid)::BoundaryCondition
-
-    dimsize = size(γ.wet)
-    # dumb way to do it
-    if dim == 1
-        wet2d = γ.wet[dimval,:,:]
-        tracer2d = tracer3d[dimval,:,:]
-        i = γ.lat
-        j = γ.depth
-        k = γ.lon[dimval]
-    elseif dim == 2
-        wet2d = γ.wet[:,dimval,:]
-        tracer2d = tracer3d[:,dimval,:]
-        i = γ.lon
-        j = γ.depth
-        k = γ.lat[dimval]
-    elseif dim == 3
-        wet2d = γ.wet[:,:,dimval]
-        tracer2d = tracer3d[:,:,dimval]
-        i = γ.lon
-        j = γ.lat
-        k = γ.depth[dimval]
-    else
-        error("boundary condition not implemented in 4+ dimensions")
-    end
-    
-    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d)
-
-end
-
-
-"""
-    function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
-   Get boundary condition by extracting from Field (i.e., 3D tracer)
-# Arguments
-- `field::Field`: 3D tracer field with metadata and grid
-- `dim`: dimension number (1,2,3) that the boundary plane has constant value
-- `dimval`: index number in dimension `dim` that defines boundary plane
-# Output
-- `b::BoundaryCondition`: boundary condition on a plane with metadata and grid
-"""
-function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
-
-    dimsize = size(field.γ.wet)
-    # dumb way to do it
-    if dim == 1
-        wet2d = field.γ.wet[dimval,:,:]
-        tracer2d = field.tracer[dimval,:,:]
-        i = field.γ.lat
-        j = field.γ.depth
-        k = field.γ.lon[dimval]
-    elseif dim == 2
-        wet2d = field.γ.wet[:,dimval,:]
-        tracer2d = field.tracer[:,dimval,:]
-        i = field.γ.lon
-        j = field.γ.depth
-        k = field.γ.lat[dimval]
-    elseif dim == 3
-        wet2d = field.γ.wet[:,:,dimval]
-        tracer2d = field.tracer[:,:,dimval]
-        i = field.γ.lon
-        j = field.γ.lat
-        k = field.γ.depth[dimval]
-    else
-        error("boundary condition not implemented in 4+ dimensions")
-    end
-    
-    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d,
-                          field.name,field.longname,field.units)
-
-end
 
 # Define maximum for Field to not include NaNs
 Base.maximum(c::Union{Field,Source,BoundaryCondition}) = maximum(c.tracer[wet(c)])
@@ -1749,7 +1538,6 @@ end
     An in-place version of this function would be handy.
 """
 vec(u::Field) = u.tracer[u.γ.wet]
-vec(u::BoundaryCondition) = u.tracer[u.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
 function vec(u::NamedTuple) 
 
@@ -1799,63 +1587,6 @@ function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
         nlo = nhi + 1
     end
 end
-
-"""
-Surface oxygen saturation value and fraction of saturation value in field 
-"""
-function surface_oxygensaturation(file)
-    # read temperature and o2.
-    θ = readtracer(file,"θ")
-    θsurface = view(θ,:,:,1)
-
-    S = readtracer(file,"Sp")
-    Ssurface = view(S,:,:,1)
-
-    # GibbsSeaWater.jl for saturation value
-    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
-
-    O₂ = readtracer(file,"O₂")
-    O₂surface = view(O₂,:,:,1)
-    O₂fraction = O₂surface./O₂sol
-
-    return O₂sol, O₂fraction 
-end
-
-"""
-Reconstruct dissolved oxygen (that doesn't exist in TMI product)
-by assuming same oxygen saturation fraction as modern
-"""
-function oxygen(version,O₂fraction)
-
-    A, Alu, γ, file = config_from_nc(version)
-
-    o2po4ratio = 170
-    
-    # read temperature and o2.
-    θ = readtracer(file,"θ")
-    θsurface = view(θ,:,:,1)
-
-    S = readtracer(file,"Sp")
-    Ssurface = view(S,:,:,1)
-
-    # GibbsSeaWater.jl for saturation value
-    O₂sol = gsw_o2sol_sp_pt.(Ssurface, θsurface)
-
-    O₂surface = O₂sol.*O₂fraction
-
-    # invert with stoichiometric ratio
-    O₂ = tracerinit(γ.wet)
-    qPO₄ = readtracer(file,"qPO₄")
-    d = o2po4ratio*qPO₄
-
-    #d = qO₂lgm
-    d[:,:,1] = O₂surface;
-
-    O₂[γ.wet] =  Alu\d[γ.wet]
-
-    return O₂
-end
-
 
 """ 
     function synthetic_observations(TMIversion,variable)
