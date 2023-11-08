@@ -4,6 +4,7 @@ TMIversion = "modern_90x45x33_GH10_GH12"
 
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
+region = "ANT"
 b = TMI.surfaceregion(TMIversion,region,γ)
 
 # change b to a BitArray

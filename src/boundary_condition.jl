@@ -12,10 +12,10 @@
     `dimval::Int64`: plane defined at dim = dimval where dimval is a 1-based index number
     `wet::BitArray{2}`: ocean mask for boundary condition
 """
-struct BoundaryCondition{T}
-    tracer::Array{T,2}
-    i::Vector{T}
-    j::Vector{T}
+struct BoundaryCondition{B} where B <: AbstractMatrix{<:Real}
+    tracer::B
+    i::Vector{Float64}
+    j::Vector{Float64}
     k::T
     dim::Int64
     dimval::Int64
@@ -49,7 +49,7 @@ end
 - `bc::BoundaryCondition`
 """
 # an outer constructor that ignores units
-function BoundaryCondition(tracer::Array{Float64,2},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) #where T <: Real
+function BoundaryCondition(tracer::Matrix{T},i::Vector{Float64},j::Vector{Float64},k::Float64,dim::Int64,dimval::Int64,wet::BitArray{2}) where T 
 
     return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:none,"unknown","unknown") 
 end
