@@ -514,7 +514,7 @@ updatelinearindex(izyx,Izyx,R) = R[Izyx[izyx]]
 """
 function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
 
-    file = pkgdatadir("TMI_"*TMIversion*".nc")
+    file = pkgdatadir("regions_"*TMIversion*".nc")
     tracername = "d_"*region
 
     # Didn't use readfiled because dsfc is 2d.

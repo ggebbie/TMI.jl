@@ -15,4 +15,3 @@ sum(mask) ≤ sum(b.wet)
 sum(mask) == sum(b.tracer .==1)
 
 bnew = BoundaryCondition(mask,b.i,b.j,b.k,b.dim,b.dimval,b.wet) #where T <: Real
-
