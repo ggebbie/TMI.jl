@@ -2216,28 +2216,33 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 end
 
 """ 
-    function costfunction_gridded_model(uvec::Vector{T},Alu,b::BoundaryCondition{T},y::Field{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+    function costfunction_gridded_model(convec::Vector{T},non_zero_indices,b::BoundaryCondition{T},y::Field{T},u, c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
 # Arguments
+- `convec`: concatenated control vecotr incuding u and f
 - `J`: cost function of sum of squared misfits
 - `gJ`: derivative of cost function wrt to controls
-- `u`: controls, field format
-- `Alu`: LU decomposition of water-mass matrix
+- `u`: tracer controls, field format
+- `non_zero_indices`: Non-zero indices for reconstruction of water-mass matrix A
 - `b`: boundary conditions
-- `y`: observations on grid
+- `c`: tracer concentrations from GCM
 - `Wⁱ`: inverse of W weighting matrix for observations
+- `Qⁱ`: inverse of Q weighting matrix for tracer conservation
 - `γ`: grid
 """
-function costfunction_gridded_model(uvec,Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
-
+function costfunction_gridded_model(convec,non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+    ulength = sum(γ.wet)
+    uvec=convec[begin:ulength]
+    non_zero_values = convec[ulength+1:end]
+    A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
     # turn uvec into a boundary condition
-    #u = unvec(u₀,uvec)
+    #Aun = unvec(u₀,uvec)
 
     #b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
     #n = steadyinversion(Alu,b,γ) - y  # gives the misfit
-    J = uvec ⋅ uvec + sum((-Wⁱ * uvec - c + y).^2)  #n ⋅ (Wⁱ * n) # dot product
+    J = transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec + sum((-Wⁱ * uvec - c + y).^2)  #n ⋅ (Wⁱ * n) # dot product
 
     # adjoint equations
     #gy = -2Wⁱ * n
@@ -2252,12 +2257,16 @@ end
 
 
 """
-    function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+    function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
+    ulength = sum(γ.wet)
+    uvec = convec[begin:ulength]
+    non_zero_values = convec[ulength+1:end]
+    A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
     # turn uvec into a boundary condition
-    #u = unvec(u₀,uvec)
+    #u = unvec(A,uvec)
 
     #b = adjustboundarycondition(b₀,u) #b += u # easy c
     #adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
@@ -2273,12 +2282,16 @@ function costfunction_gridded_model!(J,guvec,uvec::Vector{T},Alu,b₀::Union{Bou
     #    # next block just to modify the contents
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
-            guvec[ii] = uvec[ii] + (-2Wⁱ * (-Wⁱ * uvec -c +y))[ii]#vv
+            if ii < ulength
+               guvec[ii] = uvec[ii] + (-2Wⁱ * (-Wⁱ * uvec -c +y))[ii]#vv
+            else
+               guvec[ii]=0
+            end
         end
     end
     
     if J !=nothing
-        return  uvec ⋅ uvec+ sum((-Wⁱ * uvec - c + y ).^2)
+        return  transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec+ sum((-Wⁱ * uvec - c + y ).^2)
     end
 end
 

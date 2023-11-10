@@ -9,11 +9,14 @@ using TMI
 using Test
 using GGplot
 using LinearAlgebra
+using SparseArrays
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
+
+# Example : Find the distribution of a tracer given:              %
 # first guess of change to surface boundary conditions
 # ocean values are 0
 #u = zerosurfaceboundary(γ)
@@ -48,13 +51,18 @@ b = (;surface = getsurfaceboundary(θtrue))
 #We need an error covariance matrix
 W⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)#(1/sum(γ.wet))
 
-# get sample J value
-F = costfunction_gridded_model(uvec,Alu,b,u,ctrue,cvec,W⁻,γ)
-fg!(F,G,x) = costfunction_gridded_model!(F,G,x,Alu,b,u,ctrue,cvec,W⁻,γ)
+non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A)
 
-#fg(x) = costfunction_gridded_model(x,Alu,b,u,θtrue,W⁻,γ)
-#f(x) = fg(x)[1]
-#J₀,gJ₀ = fg(uvec)
+non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
+
+
+convec = [uvec; non_zero_values]
+
+
+# get sample J value
+F = costfunction_gridded_model(convec,non_zero_indices,b,u,ctrue,cvec,W⁻,W⁻,γ)
+fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,b,u,ctrue,cvec,W⁻,W⁻,γ)
+
 
 #### gradient check ###################
 # check with forward differences
@@ -73,9 +81,11 @@ println("Location for test =",ii)
 #println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 #### end gradient check #################
 
+
+print(length(convec))
 # filter the data with an Optim.jl method
 iterations = 5
-out = steadyclimatology(uvec,fg!,iterations)
+out = steadyclimatology(convec,fg!,iterations)
 
 # reconstruct by hand to double-check.
 ũ = unvec((W⁻ * u),out.minimizer)
@@ -95,7 +105,7 @@ level = 15 # your choice 1-33
 depth = γ.depth[level]
 cntrs = -15:0.5:15
 label = "Optimized misfit: Δc̃"
-# Help: needs work with continents and labels
+## Help: needs work with continents and labels
 planviewplot(Δc̃, depth, cntrs, titlelabel=label) 
 readline()
 
