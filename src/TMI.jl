@@ -2237,18 +2237,26 @@ function costfunction_gridded_model(convec,non_zero_indices,b₀::Union{Boundary
     uvec=convec[begin:ulength]
     non_zero_values = convec[ulength+1:end]
     A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
-    # turn uvec into a boundary condition
-    #Aun = unvec(u₀,uvec)
 
-    #b = adjustboundarycondition(b₀,u) #b += u # easy case where u and b are on the same boundary
-    #n = steadyinversion(Alu,b,γ) - y  # gives the misfit
-    J = transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec + sum((-Wⁱ * uvec - c + y).^2)  #n ⋅ (Wⁱ * n) # dot product
+    # find lagrange multipliers
+    muk = transpose(A) * Qⁱ * (A * c)
+
+    J = transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec - 2 * transpose(muk) * ((-Wⁱ * uvec - c + y))  #n ⋅ (Wⁱ * n) # dot product
 
     # adjoint equations
-    #gy = -2Wⁱ * n
-    #gb = gsteadyinversion( gy, Alu, b, γ)
-    #gu = gadjustboundarycondition(gb,u)
-    guvec = uvec -2Wⁱ * (-Wⁱ * uvec -c +y)
+    guvec = zeros(length(convec))
+
+    for (ii,vv) in enumerate(convec)
+        if ii <= ulength 
+          #this is the derivative of the cost function wrt the part of the control vector
+          # associated with the tracer concentration
+          guvec[ii] = uvec[ii] + (2*transpose(muk) * Wⁱ)[ii]
+        else
+          #this is the derivative of the cost function wrt the part of the control vector
+          # associated with the transport vector
+          guvec[ii]=2 * Qⁱ[non_zero_indices[ii-ulength, 2],non_zero_indices[ii-ulength, 2]] * c[non_zero_indices[ii-ulength, 1]]^2 *convec[ii]
+        end
+    end
 
     return J , guvec
 end
@@ -2265,33 +2273,23 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     uvec = convec[begin:ulength]
     non_zero_values = convec[ulength+1:end]
     A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
-    # turn uvec into a boundary condition
-    #u = unvec(A,uvec)
-
-    #b = adjustboundarycondition(b₀,u) #b += u # easy c
-    #adjustboundarycondition!(b,u) # easy case where u and b are on the same boundary
-    #y -= steadyinversion(Alu,b,γ)  # gives the misfit
+ 
+    # find lagrange multipliers
+    muk = transpose(A) * Qⁱ * (A * c)
 
     if guvec != nothing
-    #    # adjoint equations
-    #    gy = -2Wⁱ * y
-    #    gb = gsteadyinversion( gy, Alu, b, γ)
-    #    gu = gadjustboundarycondition(gb,u)
-    #    #guvec = vec(gu)
-    #
-    #    # next block just to modify the contents
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
-            if ii < ulength
-               guvec[ii] = uvec[ii] + (-2Wⁱ * (-Wⁱ * uvec -c +y))[ii]#vv
+            if ii <= ulength
+               guvec[ii] = uvec[ii] + (2 * transpose(muk) * Wⁱ)[ii]#vv
             else
-               guvec[ii]=0
+               guvec[ii]=2 * Qⁱ[non_zero_indices[ii-ulength, 2],non_zero_indices[ii-ulength, 2]]* c[non_zero_indices[ii-ulength, 1]]^2 *convec[ii]
             end
         end
     end
     
     if J !=nothing
-        return  transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec+ sum((-Wⁱ * uvec - c + y ).^2)
+        return  transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec -2 * transpose(muk) *(-Wⁱ * uvec - c + y )
     end
 end
 

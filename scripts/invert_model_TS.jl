@@ -42,6 +42,7 @@ u =  Field(zeros(size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
 uvec = vec(u)
 
 
+
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
 # below surface = 0 % no internal sinks or sources.
@@ -51,17 +52,26 @@ b = (;surface = getsurfaceboundary(θtrue))
 #We need an error covariance matrix
 W⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)#(1/sum(γ.wet))
 
+#I want to allow a bunch of error in the surface part of the tracer conservation please
+Qerror = ones(size(γ.wet))
+Qerror[:,:,1].=0
+Qfield = Field(Qerror,γ,θtrue.name,θtrue.longname,θtrue.units)
+Qvec = vec(Qfield)
+
+
+Q⁻ = Diagonal(Qvec/100 ./( ones(sum(γ.wet))).^2)
+
 non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A)
 
 non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 
 
 convec = [uvec; non_zero_values]
-
+ulength=length(uvec)
 
 # get sample J value
-F = costfunction_gridded_model(convec,non_zero_indices,b,u,ctrue,cvec,W⁻,W⁻,γ)
-fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,b,u,ctrue,cvec,W⁻,W⁻,γ)
+F = costfunction_gridded_model(convec,non_zero_indices,b,u,ctrue,cvec,W⁻,Q⁻,γ)
+fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,b,u,ctrue,cvec,W⁻,Q⁻,γ)
 
 
 #### gradient check ###################
@@ -100,6 +110,8 @@ c̃  = θguess+ũ
 Δc̃ = c̃ - θtrue
 Δc₀ = θguess - θtrue
 
+Anew = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], convec[ulength+1:end])
+
 # plot the difference
 level = 15 # your choice 1-33
 depth = γ.depth[level]
@@ -122,3 +134,5 @@ readline()
 cntrs = 0:0.5:15
 label = "Optimized θ"
 planviewplot(c̃, depth, cntrs, titlelabel=label)
+
+
