@@ -1930,7 +1930,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition{T},γ::Grid;q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu,b::BoundaryCondition,γ::Grid;q=nothing,r=1.0)::Field
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)

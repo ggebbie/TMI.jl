@@ -293,7 +293,6 @@ end
 
 vec(u::BoundaryCondition) = u.tracer[u.wet]
 
-
 """
     function surfacepatch
     Make a surface boundary condition
@@ -359,7 +358,7 @@ getwestboundary(c::Field) = getboundarycondition(c,1,1)::BoundaryCondition
 - `d`::Field, equation constraints (i.e., right hand side)
 - `b`::BoundaryCondition
 """
-function setboundarycondition!(d::Field{T},b::BoundaryCondition{T}) where T<: Real
+function setboundarycondition!(d::Field,b::BoundaryCondition)
 
     if b.dim == 1
         d.tracer[b.dimval,:,:] += b.tracer
