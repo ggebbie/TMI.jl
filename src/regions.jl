@@ -4,16 +4,53 @@
     Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
     Return a BoundaryCondition
 """
-function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
+function surfaceregion(TMIversion::String,region::String,γ::Grid; v1 = false)::BoundaryCondition
 
     file = pkgdatadir("regions_"*TMIversion*".nc")
-    tracername = "d_"*region
 
-    # Didn't use readfiled because dsfc is 2d.
-    dsfc = ncread(file,tracername)
-    b = BoundaryCondition(dsfc,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    # version 1: region masks were stored with "d" prefix
+    # new version: regions defined by region name alone
+    v1 ? tracername = "d_"*region : tracername = Symbol(region)
+
+    #dsfc = ncread(file,tracername) # using NetCDF.jl
+    ds = Dataset(file,"r") # using NCDatasets.jl
+    v = ds[tracername]
+    mask = v[:,:]
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    #name = v.attrib["name"] # error
+    close(ds)
+    #return tracer,units,longname
+    
+    b = BoundaryCondition(mask,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],Symbol(region),longname,units)
     return b
 end
+
+regionlist() =  ("GLOBAL","ANT","SUBANT",
+    "NATL","NPAC","TROP","ARC",
+    "MED","ROSS","WED","LAB","GIN",
+    "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
+    "TROPATL","TROPPAC","TROPIND")
+
+regionnames() = Dict("GLOBAL" => "globally uniform",
+    "ANT" => "Antarctic",
+    "SUBANT" => "Subantarctic",
+    "NATL" => "North Atlantic",
+    "NPAC" => "North Pacific",
+    "TROP" => "tropical and subtropical",
+    "ARC" => "Arctic",
+    "MED" => "Mediterranean",
+    "ROSS" => "Ross Sea sector",
+    "WED" => "Weddell Sea sector",
+    "LAB" => "Labrador and Irminger Seas",
+    "GIN" => "Greenland-Iceland-Norwegian Seas",
+    "ADEL" => "Adélie Land sector",
+    "SUBANTATL" => "Atlantic-sector Subantarctic",
+    "SUBANTPAC" => "Pacific-sector Subantarctic",
+    "SUBANTIND" => "Indian-sector Subantarctic",
+    "TROPATL" => "tropical and subtropical Atlantic",
+    "TROPPAC" => "tropical and subtropical Pacific",
+    "TROPIND" => "tropical and subtropical Indian")
 
 """
 Read vectors from mat file, translate to 3D,
@@ -27,31 +64,8 @@ function regions2nc(TMIversion,γ)
 
     # region names
     # didn't figure out how to use an ordered dict, instead use a tuple
-    list = ("GLOBAL","ANT","SUBANT",
-            "NATL","NPAC","TROP","ARC",
-            "MED","ROSS","WED","LAB","GIN",
-            "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
-            "TROPATL","TROPPAC","TROPIND")
-
-    regionname = Dict("GLOBAL" => "globally uniform",
-                      "ANT" => "Antarctic",
-                      "SUBANT" => "Subantarctic",
-                      "NATL" => "North Atlantic",
-                      "NPAC" => "North Pacific",
-                      "TROP" => "tropical and subtropical",
-                      "ARC" => "Arctic",
-                      "MED" => "Mediterranean",
-                      "ROSS" => "Ross Sea sector",
-                      "WED" => "Weddell Sea sector",
-                      "LAB" => "Labrador and Irminger Seas",
-                      "GIN" => "Greenland-Iceland-Norwegian Seas",
-                      "ADEL" => "Adélie Land sector",
-                      "SUBANTATL" => "Atlantic-sector Subantarctic",
-                      "SUBANTPAC" => "Pacific-sector Subantarctic",
-                      "SUBANTIND" => "Indian-sector Subantarctic",
-                      "TROPATL" => "tropical and subtropical Atlantic",
-                      "TROPPAC" => "tropical and subtropical Pacific",
-                      "TROPIND" => "tropical and subtropical Indian")
+    list = regionlist()
+    regionname = regionnames()
     
     matobj = matopen(filemat)
     if haskey(matobj,"d_all")
