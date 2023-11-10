@@ -31,5 +31,9 @@ end
 ds = NCDataset(TMI.pkgdatadir("regions_90x45.nc")) # looks ok although ncview has non-zero and non-one artifacts
 ds = NCDataset(TMI.pkgdatadir("regions_180x90.nc")) # looks ok although ncview has non-zero and non-one artifacts
 
-btest = TMI.surfaceregion(TMIversion,:ANT,γ)
+btest10 = TMI.surfaceregion(TMIversion,:ANT)
+
+Alu
+btest10
+g = steadyinversion(Alu,btest10,γ)
 
