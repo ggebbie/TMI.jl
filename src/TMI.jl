@@ -73,55 +73,9 @@ import Base: zeros, one, oneunit, ones,  (\)
 #import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
-include("grid.jl")
 
-"""
-    struct Field
-
-    This structure permits the grid to be 
-    automatically passed to functions with
-    the tracer field.
-
-    This structure assumes the Tracer type to be 
-    three-dimensional.
-
-    tracer::Array{T,3}
-    γ::Grid
-    name::Symbol
-    longname::String
-    units::String
-"""
-struct Field{T}
-    tracer::Array{T,3}
-    γ::Grid
-    name::Symbol
-    longname::String
-    units::String
-end
-
-"""
-    function Field(tracer::Array{T,3},γ::Grid) where T <: Real
-
-    Outer constructor for Field if there's no worry about
-    tracer type, long name, or units.
-# Arguments
-- `tracer::Array{T,3}`
-- `γ::Grid`
-# Output
-- `field::Field`
-"""
-#function Field(tracer::Array{T,3},γ::Grid) where T <: Real
-#   return Field(tracer,γ,:none,"unknown","unknown")
-#end
-
-function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
-    summary(io, x); println(io)
-    print(io, "Field size ")
-    println(io, size(x.tracer))
-    println(io, "Surface view")
-    show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
-end
-
+include(pkgsrcdir("grid.jl"))
+include(pkgsrcdir("field.jl"))
 
 """
     struct Source
@@ -194,16 +148,9 @@ end
 - `g`: water-mass fraction
 """
 function watermassdistribution(TMIversion,Alu,region,γ)
-
     
     b = surfaceregion(TMIversion,region,γ)
     g = steadyinversion(Alu,b,γ)
-
-    # # do matrix inversion to get quantity of dyed water throughout ocean:
-    # g = tracerinit(γ.wet); # pre-allocate c
-
-    # # make methods that make the "wet" index unnecessary
-    # g[γ.wet] = Alu\d[γ.wet] # equivalent but faster than `c = A\d`
 
     return g
 end
@@ -461,57 +408,6 @@ function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
-end
-
-"""
-    function cartesianindex(wet)
-    Read and assemble the grid coordinates
-    according to a 3D tracer in x,y,z order
-# Arguments
-- `wet`: BitArray logical mask for wet points
-# Output
-- `I`: 3D Cartesian indices
-"""
-cartesianindex(wet::BitArray{3}) = findall(wet)
-
-"""
-    function linearindex(wet)
-    Read and assemble the grid coordinates.
-# Arguments
-- `wet`: 3D mask for wet points
-# Output
-- `R`: array of linear indices, but not a LinearIndices type
-"""
-function linearindex(wet)
-    R = Array{Int64,3}(undef,size(wet))
-    fill!(R,0)
-    # R = Array{Union{Int64,Nothing},3}(nothing,size(wet))
-    R[wet]=1:sum(wet)
-    # R = LinearIndices((1:maximum(it),1:maximum(jt),1:maximum(kt)));
-    # R = LinearIndices((it,jt,kt));
-    #Rwet = R[γ.wet]
-    return R
-end
-
-"""
-    function checkgrid!(c,wet)
-
-    perform a check of file compatibility
-     with grid
-"""
-function checkgrid!(tracer,wet)
-    if sum(isnan.(tracer[wet])) > 0
-        println(sum(isnan.(tracer[wet]))," points")
-        error("readfield warning: NaN on grid")
-    end
-
-    # check for non NaN or nonzero off grid
-    # Need to rethink how to do this.
-    if sum(isnan.(tracer[.!(wet)])) < length(isnan.(tracer[.!(wet)]))
-        println("readfield warning: non-NaN value off grid")
-        println("resetting to NaN")
-        tracer[.!(wet)] .= NaN
-    end
 end
 
 """
