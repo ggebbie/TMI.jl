@@ -71,7 +71,6 @@ end
 """
 function write(file,b::BoundaryCondition{T,R,N,B}) where T <: Real where R <: Real where N <: Integer where B <: AbstractMatrix
 
-println(typeof(T))
     if T == Bool
         Tcheck = Int8
     else

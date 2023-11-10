@@ -4,25 +4,41 @@
     Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
     Return a BoundaryCondition
 """
-function surfaceregion(TMIversion::String,region::String,γ::Grid; v1 = false)::BoundaryCondition
+function surfaceregion(TMIversion::String,region::Union{String,Symbol},γ::Grid; v1 = false)::BoundaryCondition
 
-    file = pkgdatadir("regions_"*TMIversion*".nc")
-
+    if v1
+        file = pkgdatadir("regions_"*TMIversion*".nc") 
+    else
+        Nx,Ny,Nz = gridsize(TMIversion)
+        file = pkgdatadir("regions_"*Nx*"x"*Ny*".nc")
+    end
+    
     # version 1: region masks were stored with "d" prefix
     # new version: regions defined by region name alone
-    v1 ? tracername = "d_"*region : tracername = Symbol(region)
+    v1 ? tracername = "d_"*String(region) : tracername = Symbol(region)
 
     #dsfc = ncread(file,tracername) # using NetCDF.jl
     ds = Dataset(file,"r") # using NCDatasets.jl
     v = ds[tracername]
-    mask = v[:,:]
     units = v.attrib["units"]
     longname = v.attrib["longname"]
+
+    if v1
+        lon = γ.lon
+        lat = γ.lat
+        depth = γ.depth[1]
+        mask = v[:,:] # Float
+    else
+        lon = ds["lon"][:]
+        lat = ds["lat"][:]
+        depth = ds["depth"][1]
+        mask = Bool.(v[:,:]) # use BitMatrix to save some bits
+    end
+
     #name = v.attrib["name"] # error
     close(ds)
-    #return tracer,units,longname
     
-    b = BoundaryCondition(mask,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],Symbol(region),longname,units)
+    b = BoundaryCondition(mask,lon,lat,depth,3,1,γ.wet[:,:,1],Symbol(region),longname,units)
     return b
 end
 

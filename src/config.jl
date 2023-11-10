@@ -294,6 +294,22 @@ function gridprops(file)
 end
 
 """
+function gridsize(TMIversion)
+
+Parse the TMIversion string for the grid size
+
+Will break if the prefix contains underscores or 'x'
+"""
+function gridsize(TMIversion)
+    underscores = findall('_',TMIversion)
+    exes = findall('x',TMIversion)
+    Nx = TMIversion[underscores[1]+1:exes[1]-1]
+    Ny = TMIversion[exes[1]+1:exes[2]-1]
+    Nz = TMIversion[exes[2]+1:underscores[2]-1]
+    return Nx,Ny,Nz
+end
+
+"""
     function watermassmatrix(file)
     Read and assemble the water-mass matrix.
 # Arguments
