@@ -154,7 +154,6 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
 end
 
-include("boundary_condition.jl")
 
 """
     struct Source
@@ -188,6 +187,8 @@ pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
 include(pkgsrcdir("config.jl"))
+include(pkgsrcdir("boundary_condition.jl"))
+include(pkgsrcdir("regions.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)

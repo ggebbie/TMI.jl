@@ -19,7 +19,7 @@ struct BoundaryCondition{T <: Real,R <: Real, N <: Integer, B <: AbstractMatrix{
     k::R
     dim::N
     dimval::N
-    γ::Grid
+    wet::BitMatrix
     name::Symbol
     longname::String
     units::String
@@ -54,80 +54,95 @@ function BoundaryCondition(tracer::AbstractMatrix{T},i::Vector{R},j::Vector{R},k
     return BoundaryCondition(tracer,i,j,k,dim,dimval,γ,:bc,"boundary condition","unknown") 
 end
 
-# """
-#     function writeboundarycondition(file,b,gamma::Grid)
+"""
+    function writeboundarycondition(file,b,gamma::Grid)
 
-#     Write a BoundaryCondition to NetCDF.
+    Write a BoundaryCondition to NetCDF.
  
-#     Use NCDatasets so that Unicode is correct
+    Use NCDatasets so that Unicode is correct
 
-# # Arguments
-# - `file`: TMI NetCDF file name
-# - `b::BoundaryCondition`: a TMI.BoundaryCondition struct
-# # Output
-# - none
-# # Side-effect
-# - write to `file`
-# """
-# function write(file,b::BoundaryCondition,γ::Grid) 
+# Arguments
+- `file`: TMI NetCDF file name
+- `b::BoundaryCondition`: a TMI.BoundaryCondition struct
+# Output
+- none
+# Side-effect
+- write to `file`
+"""
+function write(file,b::BoundaryCondition{T,R,N,B}) where T <: Real where R <: Real where N <: Integer where B <: AbstractMatrix
 
-#     # Had to add γ to argument list, would be better to be self-contained in BoundaryCondition
-    
-#     if !isfile(file)
-#         # create new NetCDF file
-#         ds = Dataset(file,"c")
+println(typeof(T))
+    if T == Bool
+        Tcheck = Int8
+    else
+        Tcheck = T
+    end
 
-#         TMIgrids, TMIgridsatts = griddicts(γ)
+    # only 2 dimensions are needed
+    if b.dim == 1
+        lat = b.i
+        depth = b.j
+        lon = b.k
+        tuple2d = ("lat","depth")
+    elseif b.dim == 2
+        lon = b.i
+        depth = b.j
+        lat = b.k
+        tuple2d = ("lon","depth")
+    elseif b.dim == 3
+        lon = b.i
+        lat = b.j
+        depth = b.k
+        tuple2d = ("lon","lat")
+    end
+    Nx = length(lon)
+    Ny = length(lat)
+    Nz = length(depth)
 
-#         ds.attrib["title"] = "boundary condition"
+    if !isfile(file)
+        # create new NetCDF file
+        ds = Dataset(file,"c")
 
-#         # only 2 dimensions are needed
-#         if b.dim ≠ 1
-#             defDim(ds,"lon",length(b.γ.lon))
-#             vlon = defVar(ds,"lon",Float64,["lon"],
-#                 attrib = OrderedDict(TMIgridsatts["lon"]))
-#             vlon[:] = γ.lon
-#         end
-
-#         if b.dim ≠ 2
-#             defDim(ds,"lat",length(b.γ.lat))
-#             vlat = defVar(ds,"lat",Float64,["lat"],
-#                attrib = OrderedDict(TMIgridsatts["lat"]))
-#         vlat[:] = b.γ.lat
-
-#         end
-
-#         if b.dim ≠ 3
-
-#             defDim(ds,"depth",length(γ.depth)) 
-#             # may not be necessary
-#             vdepth = defVar(ds,"depth",Float64,["depth"],
-#                 attrib = OrderedDict(TMIgridsatts["depth"]))
-#             vdepth[:] = b.γ.depth
-
-#         end
+        atts = TMI.gridatts()
+        ds.attrib["title"] = "boundary condition"
         
-#         v = defVar(ds,String(b.name),Float64,("lon","lat","depth"),
-#                   attrib = OrderedDict("longname" => b.longname,
-#                                 "units" => b.units))
-#         v[:,:] = b.tracer
-
-#         close(ds)
-
-#     else
-#         # assumption: on the same grid
-#         ds = Dataset(file,"a")
-
-#         println(b.name)
-#         v = defVar(ds,String(b.name),Float64,("lon","lat","depth"),
-#                   attrib = OrderedDict("longname" => b.longname,
-#                                 "units" => b.units))
-#         v[:,:] = b.tracer
-#         close(ds)
-#     end
+        defDim(ds,"lon",Nx)
+        defDim(ds,"lat",Ny)
+        defDim(ds,"depth",Nz) 
         
-#     return nothing
-# end
+        vlon = defVar(ds,"lon",R,["lon"],
+            attrib = OrderedDict(atts["lon"]))
+        vlon[:] = lon
+
+        vlat = defVar(ds,"lat",R,["lat"],
+            attrib = OrderedDict(atts["lat"]))
+        vlat[:] = lat
+
+        vdepth = defVar(ds,"depth",R,["depth"],
+            attrib = OrderedDict(atts["depth"]))
+        vdepth[:] = depth
+        
+        v = defVar(ds,String(b.name),Tcheck,tuple2d,
+            attrib = OrderedDict("longname" => b.longname,
+                "units" => b.units))
+        v[:,:] = b.tracer
+
+        close(ds)
+
+    else
+        # assumption: on the same grid
+        ds = Dataset(file,"a")
+
+        println(b.name)
+        v = defVar(ds,String(b.name),Tcheck,tuple2d,
+            attrib = OrderedDict("longname" => b.longname,
+                      "units" => b.units))
+        v[:,:] = b.tracer
+        close(ds)
+    end
+        
+    return nothing
+end
 
 """
     function boundaryconditionatts(dim::Int64,dimval::Int64,γ::Grid)
