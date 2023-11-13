@@ -6,9 +6,8 @@
 """
 function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
 
-    Nx,Ny,Nz = gridsize(TMIversion)
-    file = pkgdatadir("regions_"*Nx*"x"*Ny*".nc")
-        
+    file,Nx,Ny = download_regionfile(TMIversion::String)
+    
     # version 1: region masks were stored with "d" prefix
     # new version: regions defined by region name alone
     tracername = Symbol(region)
@@ -29,6 +28,53 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
     
     b = BoundaryCondition(mask,lon,lat,depth,3,1,trues(parse(Int64,Nx),parse(Int64,Ny)),Symbol(region),longname,units)
     return b
+end
+
+"""
+function download_regionfile(TMIversion::String)
+
+Return file name of regional masks.
+
+Also download file from Google Drive, if not already done.
+
+File name refers to the 2D size of domain. It is the same for modern and LGM configs and only depends on number of points in Nx and Ny directions.
+"""
+function download_regionfile(TMIversion::String)
+
+    Nx,Ny,Nz = gridsize(TMIversion)
+    filename = "regions_"*Nx*"x"*Ny*".nc"
+    pathname = pkgdatadir(filename)
+    
+    #make pkgdatadir() if it doesn't exist 
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+
+    #if TMIfile doesn't exist, get GDrive url and download 
+    if !isfile(pathname)
+        println("read via GoogleDrive.jl")
+        #- `url`: Google Drive URL for data
+        url = regionurl(filename)
+        google_download(url,pkgdatadir())
+    end
+    return pathname,Nx,Ny
+end
+
+""" 
+    function regionurl(TMIversion)
+    placeholder function to give location (URL) of NetCDF Google Drive input
+    in the future, consider a struct or Dict that describes all TMI versions.
+# Arguments
+- `file`: name of file to look for on Google Drive
+# Output
+- `regionurl`: location (URL) for download of regional mask file
+"""
+function regionurl(file)
+    if file == "regions_90x45.nc"
+        return "https://docs.google.com/uc?export=download&id=1JODNUH7KKTT8d80DPSWYHXUHJxIRxoPs"
+    elseif file == "regions_180x90.nc"
+        return  "https://docs.google.com/uc?export=download&id=1Ymea-b3sxCV9pPuOLPDFIKxY0aUH4BDr"
+    else
+        return nothing
+    end
 end
 
 regionlist() =  ("GLOBAL","ANT","SUBANT",

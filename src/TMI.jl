@@ -149,7 +149,7 @@ end
 """
 function watermassdistribution(TMIversion,Alu,region,γ)
     
-    b = surfaceregion(TMIversion,region,γ)
+    b = surfaceregion(TMIversion,region) # version 2 of this routine
     g = steadyinversion(Alu,b,γ)
     return g
 end
