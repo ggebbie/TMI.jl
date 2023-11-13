@@ -112,7 +112,7 @@ end
         yPO₄ = readfield(TMIfile,"PO₄",γ)
         bPO₄ = getsurfaceboundary(yPO₄)
         PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = readfield(TMIfile,"qPO₄",γ)
+        qPO₄ = readsource(TMIfile,"qPO₄",γ)
         b₀ = zerosurfaceboundary(γ)
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
         PO₄total = PO₄ᴿ + PO₄pre
@@ -165,6 +165,7 @@ end
         latbox = [50,60]; # 50 N -> 60 N, for example.
         lonbox = [-50, 0]; # 50 W -> prime meridian
 
+        #b = surfacepatch(lonbox,latbox,γ)
         c = trackpathways(Alu,latbox,lonbox,γ)
 
         @test maximum(c) ≤ 1.0
@@ -172,11 +173,7 @@ end
     end
 
     @testset "watermassdistribution" begin
-        list = ("GLOBAL","ANT","SUBANT",
-                "NATL","NPAC","TROP","ARC",
-                "MED","ROSS","WED","LAB","GIN",
-                "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
-                "TROPATL","TROPPAC","TROPIND")
+        list = TMI.regionlist()
         region = list[2]
 
         #b = TMI.surfaceregion(TMIversion,region,γ)
@@ -241,10 +238,8 @@ end
         @test isapprox(sum(filter(!isnan,δ)),1.0) 
 
         origin = surfaceorigin(loc, Alu, γ)
-        
-        #@test isapprox(sum(filter(!isnan,origin)),1)
-        #@test isapprox(sum(filter(!isnan,origin)),1)
-        #@test minimum(origin) ≥ -20
+
+        @test 0.99 < sum(exp10.(origin.tracer[origin.wet])) < 1.01
         @test maximum(origin) ≤ 0 # log10(1) = 0
     end
     

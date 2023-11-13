@@ -618,7 +618,7 @@ function config2nc(TMIversion,A,γ,L,B)
 
     #= is this part of the config? Or should it go to
      a separate output? It is similar to the output fields above. Probably should be considered part of the config. =#
-    regions2nc(TMIversion,γ)
+    regions_mat2nc(TMIversion,γ)
 
     optim2nc(TMIversion)
 

@@ -49,13 +49,13 @@ function BoundaryCondition(tracer::AbstractMatrix{T},i::Vector{R},j::Vector{R},k
 - `b::BoundaryCondition`
 """
 # an outer constructor that ignores units
-function BoundaryCondition(tracer::AbstractMatrix{T},i::Vector{R},j::Vector{R},k::R,dim::N,dimval::N,γ::Grid) where T <: Real where R <: Real where N <: Integer
+function BoundaryCondition(tracer::AbstractMatrix{T},i::Vector{R},j::Vector{R},k::R,dim::N,dimval::N,wet::BitMatrix) where T <: Real where R <: Real where N <: Integer
 
-    return BoundaryCondition(tracer,i,j,k,dim,dimval,γ,:bc,"boundary condition","unknown") 
+    return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:bc,"boundary condition","unknown") 
 end
 
 """
-    function writeboundarycondition(file,b,gamma::Grid)
+    function write(file,b)
 
     Write a BoundaryCondition to NetCDF.
  
@@ -317,11 +317,10 @@ function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
     [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
 
     # 3,1 to identify surface
-    b = BoundaryCondition(patch,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    b = BoundaryCondition(patch,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:patch,"rectangular patch","none")
     
     return b
 end
-
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
@@ -402,7 +401,7 @@ end
 
     set all boundary conditions in a Named Tuple
 """
-function setboundarycondition!(d::Field{T},b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
+function setboundarycondition!(d::Field,b::NamedTuple)
     for b1 in b
         setboundarycondition!(d,b1)
     end
@@ -416,7 +415,7 @@ end
 - `d`::Field, equation constraints (i.e., right hand side)
 - `b`::BoundaryCondition
 """
-function gsetboundarycondition(gd::Field{T},b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}}) where {N, T<: Real}
+function gsetboundarycondition(gd::Field{T},b::NamedTuple) where T <: Real
 
     gb1 = Vector{BoundaryCondition{T}}(undef,length(keys(b)))
     for (ii,vv) in enumerate(b)

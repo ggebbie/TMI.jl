@@ -74,6 +74,20 @@ import Base: zeros, one, oneunit, ones,  (\)
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
+# Credit to DrWatson.jl for these functions
+# Didn't want to add dependency for these small functions
+#projectdir() = dirname(Base.active_project())
+
+# find packagedir even if TMI is not the active project
+pkgdir() = dirname(dirname(pathof(TMI)))
+pkgdir(args...) = joinpath(pkgdir(), args...)
+
+pkgdatadir() = joinpath(pkgdir(),"data")
+pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
+
+pkgsrcdir() = joinpath(pkgdir(),"src")
+pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
+
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
 
@@ -93,20 +107,6 @@ struct Source{T}
     units::String
     logscale::Bool
 end
-
-# Credit to DrWatson.jl for these functions
-# Didn't want to add dependency for these small functions
-#projectdir() = dirname(Base.active_project())
-
-# find packagedir even if TMI is not the active project
-pkgdir() = dirname(dirname(pathof(TMI)))
-pkgdir(args...) = joinpath(pkgdir(), args...)
-
-pkgdatadir() = joinpath(pkgdir(),"data")
-pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
-
-pkgsrcdir() = joinpath(pkgdir(),"src")
-pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
@@ -151,7 +151,6 @@ function watermassdistribution(TMIversion,Alu,region,γ)
     
     b = surfaceregion(TMIversion,region,γ)
     g = steadyinversion(Alu,b,γ)
-
     return g
 end
 
@@ -184,7 +183,7 @@ function regeneratednutrient(tracer,
     end    
     
     ## read phosphate source
-    qPO₄ = readfield(TMIfile,"qPO₄",γ)
+    qPO₄ = readsource(TMIfile,"qPO₄",γ)
 
     # zero boundary condition
     b = zerosurfaceboundary(γ,name,longname,c.units)
@@ -243,7 +242,7 @@ function meanage(TMIversion,Alu,γ)
         #F = ncread(file,"F")
         ## read age source
         F₀ = readfield(TMIfile,"F₀",γ)
-        qPO₄ = readfield(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+        qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
 
         # better to define a Source type
         Iq = findall(x -> x > 0,qPO₄.tracer)
@@ -327,22 +326,18 @@ end
 """
 function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
 
-    #A, Alu, γ = config(TMIversion)
-    #ctmp = tracerinit(γ.wet)
     δ = interpweights(loc,γ)
-    
-    # Find nearest neighbor on grid
-    # set δ = 1 at grid cell of interest
-    #δ = nearestneighbormask(loc,γ)
-    # Note: ctrue[γ.wet]'*δ[γ.wet] returns interpolated value
-
     dvlocdd = zeros(γ.wet); # pre-allocate c
     dvlocdd[γ.wet] = Alu'\δ[γ.wet]
 
     # origin is defined at sea surface
     #origin = view(dvlocdd,:,:,1)
+
+    println(sum(dvlocdd[:,:,1][γ.wet[:,:,1]]))
     dvlocdd = log10.(dvlocdd[:,:,1])
-    origin = BoundaryCondition(dvlocdd,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1])
+    small_cutoff = -10 # 1e-10
+    replace!(x -> x < small_cutoff ? small_cutoff : x,dvlocdd) 
+    origin = BoundaryCondition(dvlocdd,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:origin,"surface origin","log₁₀(m³)")
     
     return origin
 end
@@ -989,35 +984,6 @@ function interpweights(loc,γ)
     return δ
 end
 
-""" 
-    function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
-
-      initialize tracer field on TMI grid
-      using a Field struct and constructor
-# Arguments
-- `γ`::TMI.Grid
-# Output
-- `d`::Field,  3d tracer field with NaN on dry points
-"""
-function zeros(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
-
-    # use depth (could have been lon, lat)
-    # to get element type
-    T = eltype(γ.depth)
-    
-    # preallocate
-    tracer = Array{T}(undef,size(γ.wet))
-
-    # set ocean to zero, land to NaN
-    # consider whether land should be nothing or missing
-    tracer[γ.wet] .= zero(T)
-    tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
-
-    d = Field(tracer,γ,name,longname,units)
-
-    return d
-end
-
 function zerosource(γ::Grid,name=:none,longname="unknown",units="unknown";logscale=false)::Source
     T = eltype(γ.depth)
     tracer = Array{T}(undef,size(γ.interior))
@@ -1626,7 +1592,12 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+#function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition,NamedTuple{<:Any, NTuple{N1,BoundaryCondition}}},u₀::Union{BoundaryCondition,NamedTuple{<:Any, NTuple{N2,BoundaryCondition}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+
+# works with Boundary Conditions, not with NamedTuples
+#function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition{T,R,N1,B},NamedTuple},u₀::Union{BoundaryCondition{T,R,N2,B},NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {N1, N2, R <: Real, T <: Real, B <: AbstractMatrix{T}}
+
+function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {T <: Real}
 
     # turn uvec into a boundary condition
     u = unvec(u₀,uvec)
@@ -1647,7 +1618,8 @@ end
 """
     function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+#function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple},u₀::Union{BoundaryCondition{T},NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {T <: Real}
 
     # turn uvec into a boundary condition
     u = unvec(u₀,uvec)
@@ -1794,7 +1766,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition,γ::Grid;q=nothing,r=1.0)::Field
+function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)
@@ -1846,7 +1818,8 @@ end
 
     steady inversion for b::NamedTuple
 """
-function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+#function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
 
     # preallocate Field for equation constraints
     d = zeros(γ,first(b).name,first(b).longname,first(b).units)

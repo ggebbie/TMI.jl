@@ -14,7 +14,7 @@ for TMIversion in ["modern_90x45x33_GH10_GH12","modern_180x90x33_GH11_GH12"]
 
     for region in TMI.regionlist()
         # read v1 of regions from NetCDF file: used Floating point numbers for mask
-        b = TMI.surfaceregion(TMIversion,region,γ,v1=true)
+        b = TMI.surfaceregion(TMIversion,region,γ)
 
         # change b to a BitArray
         mask = (b.tracer .==1 .&& b.wet)

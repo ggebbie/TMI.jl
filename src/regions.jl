@@ -58,10 +58,14 @@ regionnames() = Dict("GLOBAL" => "globally uniform",
     "TROPIND" => "tropical and subtropical Indian")
 
 """
-Read vectors from mat file, translate to 3D,
- and save surface field to NetCDF file.
-"""
 function regions2nc(TMIversion,γ)
+
+Read vectors from mat file, translate to 3D,
+and save surface field to NetCDF file.
+
+Consider deprecating this function.
+"""
+function regions_mat2nc(TMIversion,γ)
 
     # save in a different file.
     filenetcdf = pkgdatadir("regions_"*TMIversion*".nc")
@@ -97,7 +101,7 @@ function regions2nc(TMIversion,γ)
         push!(regions, list[rr] => d[:,:,1])
         
         push!(regionatts, list[rr] =>
-         Dict("longname" => regionname[list[rr]]*" surface region", "units" => "[]"))
+         Dict("longname" => regionname[list[rr]], "units" => "[]"))
     end
 
     TMIgrids, TMIgridsatts = griddicts(γ)
