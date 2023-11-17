@@ -8,7 +8,7 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
     #get wet mask 
     TMIfile = download_ncfile(TMIversion)
     γ = Grid(TMIfile)
-    wet = γ[:, :, 1]
+    wet = γ.wet[:, :, 1]
     
     file,Nx,Ny = download_regionfile(TMIversion::String)
     
