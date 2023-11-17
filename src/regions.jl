@@ -5,7 +5,11 @@
     Return a BoundaryCondition
 """
 function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
-
+    #get wet mask 
+    TMIfile = download_ncfile(TMIversion)
+    γ = Grid(TMIfile)
+    wet = γ[:, :, 1]
+    
     file,Nx,Ny = download_regionfile(TMIversion::String)
     
     # version 1: region masks were stored with "d" prefix
@@ -26,7 +30,8 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
     #name = v.attrib["name"] # error
     close(ds)
     
-    b = BoundaryCondition(mask,lon,lat,depth,3,1,trues(parse(Int64,Nx),parse(Int64,Ny)),Symbol(region),longname,units)
+    #b = BoundaryCondition(mask,lon,lat,depth,3,1,trues(parse(Int64,Nx),parse(Int64,Ny)),Symbol(region),longname,units)
+    b = BoundaryCondition(mask,lon,lat,depth,3,1,wet,Symbol(region),longname,units)
     return b
 end
 
