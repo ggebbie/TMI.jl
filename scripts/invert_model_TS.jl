@@ -10,18 +10,13 @@ using Test
 using GGplot
 using LinearAlgebra
 using SparseArrays
+using Statistics
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 
-# Example : Find the distribution of a tracer given:              %
-# first guess of change to surface boundary conditions
-# ocean values are 0
-#u = zerosurfaceboundary(γ)
-#u = (;surface = zerosurfaceboundary(γ))
-#uvec = vec(u)
   
 pkgdir() = dirname(dirname(pathof(TMI)))
 pkgdir(args...) = joinpath(pkgdir(), args...)
@@ -30,24 +25,23 @@ pkgdatadir() = joinpath(pkgdir(),"data")
 pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 
 TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
-θtrue = readfield(TMIfile,"θ",γ) 
+θtrue = readfield(TMIfile,"θ",γ)
+
 ctrue = vec(θtrue)
 
-# take firtst guess as ones
-θguess =  Field(ones(size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
-cvec=vec(θguess)
+q = -A * ctrue
 
-#first guess control vector is zero
-u =  Field(zeros(size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
+# The first guess for the tracer concentration should be close to the actual tracer concentration
+# take first guess as θtrue+0.01
+cvec=vec(θtrue).+ 0.01
+θguess = unvec(θtrue,cvec)
+
+#first guess tracer control vector is near zero, and we want this to remain relatively small
+u =  Field(-0.01.*ones(size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
 uvec = vec(u)
 
 
 
-# a first guess: observed surface boundary conditions are perfect.
-# set surface boundary condition to the observations.
-# below surface = 0 % no internal sinks or sources.
-#b = getsurfaceboundary(y)
-b = (;surface = getsurfaceboundary(θtrue))
 
 #We need an error covariance matrix
 W⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)#(1/sum(γ.wet))
@@ -59,19 +53,20 @@ Qfield = Field(Qerror,γ,θtrue.name,θtrue.longname,θtrue.units)
 Qvec = vec(Qfield)
 
 
-Q⁻ = Diagonal(Qvec/100 ./( ones(sum(γ.wet))).^2)
+Q⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)
 
 non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A)
 
 non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 
 
-convec = [uvec; non_zero_values]
+convec = [uvec; non_zero_values-non_zero_values]
+A0=A
 ulength=length(uvec)
 
 # get sample J value
-F = costfunction_gridded_model(convec,non_zero_indices,b,u,ctrue,cvec,W⁻,Q⁻,γ)
-fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,b,u,ctrue,cvec,W⁻,Q⁻,γ)
+F = costfunction_gridded_model(convec,non_zero_indices,u,A0,ctrue,cvec,W⁻,Q⁻,γ)
+fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,u,A0,ctrue,cvec,W⁻,Q⁻,γ)
 
 
 #### gradient check ###################

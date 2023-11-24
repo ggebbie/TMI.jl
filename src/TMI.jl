@@ -2216,7 +2216,7 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
 end
 
 """ 
-    function costfunction_gridded_model(convec::Vector{T},non_zero_indices,b::BoundaryCondition{T},y::Field{T},u, c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+    function costfunction_gridded_model(convec::Vector{T},non_zero_indices,y::Field{T},u,A0,c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     squared model-data misfit for gridded data
     controls are a vector input for Optim.jl
@@ -2226,22 +2226,21 @@ end
 - `gJ`: derivative of cost function wrt to controls
 - `u`: tracer controls, field format
 - `non_zero_indices`: Non-zero indices for reconstruction of water-mass matrix A
-- `b`: boundary conditions
 - `c`: tracer concentrations from GCM
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `Qⁱ`: inverse of Q weighting matrix for tracer conservation
 - `γ`: grid
 """
-function costfunction_gridded_model(convec,non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
     ulength = sum(γ.wet)
     uvec=convec[begin:ulength]
     non_zero_values = convec[ulength+1:end]
-    A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
-
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
+    A=A0 + Actl
     # find lagrange multipliers
     muk = transpose(A) * Qⁱ * (A * c)
 
-    J = transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec - 2 * transpose(muk) * ((-Wⁱ * uvec - c + y))  #n ⋅ (Wⁱ * n) # dot product
+    J =  transpose(A * c) * Qⁱ * (A*c) +uvec ⋅ uvec - 2 * transpose(muk)*( Wⁱ * uvec+c-y) #* transpose(muk) * Wⁱ
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -2250,11 +2249,11 @@ function costfunction_gridded_model(convec,non_zero_indices,b₀::Union{Boundary
         if ii <= ulength 
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the tracer concentration
-          guvec[ii] = uvec[ii] + (2*transpose(muk) * Wⁱ)[ii]
+          guvec[ii] = uvec[ii]  - (2 * transpose(muk) * Wⁱ)[ii]
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
-          guvec[ii]=2 * Qⁱ[non_zero_indices[ii-ulength, 2],non_zero_indices[ii-ulength, 2]] * c[non_zero_indices[ii-ulength, 1]]^2 *convec[ii]
+          guvec[ii]=0
         end
     end
 
@@ -2265,15 +2264,17 @@ end
 
 
 """
-    function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+    function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Field{T},y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 
     ulength = sum(γ.wet)
     uvec = convec[begin:ulength]
     non_zero_values = convec[ulength+1:end]
-    A = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
- 
+    
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
+    A=A0 + Actl
+
     # find lagrange multipliers
     muk = transpose(A) * Qⁱ * (A * c)
 
@@ -2281,15 +2282,15 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
             if ii <= ulength
-               guvec[ii] = uvec[ii] + (2 * transpose(muk) * Wⁱ)[ii]#vv
+               guvec[ii] = uvec[ii]  -(2 * transpose(muk) * Wⁱ)[ii]
             else
-               guvec[ii]=2 * Qⁱ[non_zero_indices[ii-ulength, 2],non_zero_indices[ii-ulength, 2]]* c[non_zero_indices[ii-ulength, 1]]^2 *convec[ii]
+               guvec[ii]=0
             end
         end
     end
     
     if J !=nothing
-        return  transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec -2 * transpose(muk) *(-Wⁱ * uvec - c + y )
+        return transpose(A * c) * Qⁱ * (A*c) + uvec ⋅ uvec - 2 * transpose(muk)*( Wⁱ * uvec+c-y)
     end
 end
 
