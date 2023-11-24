@@ -42,7 +42,6 @@ uvec = vec(u)
 
 
 
-
 #We need an error covariance matrix
 W⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)#(1/sum(γ.wet))
 
@@ -65,8 +64,8 @@ A0=A
 ulength=length(uvec)
 
 # get sample J value
-F = costfunction_gridded_model(convec,non_zero_indices,u,A0,ctrue,cvec,W⁻,Q⁻,γ)
-fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,u,A0,ctrue,cvec,W⁻,Q⁻,γ)
+F = costfunction_gridded_model(convec,non_zero_indices,u,A0,ctrue,cvec,q,W⁻,Q⁻,γ)
+fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,u,A0,ctrue,cvec,q,W⁻,Q⁻,γ)
 
 
 #### gradient check ###################
@@ -106,6 +105,8 @@ c̃  = θguess+ũ
 Δc₀ = θguess - θtrue
 
 Anew = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], convec[ulength+1:end])
+
+
 
 # plot the difference
 level = 15 # your choice 1-33
