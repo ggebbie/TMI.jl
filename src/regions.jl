@@ -4,13 +4,14 @@
     Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
     Return a BoundaryCondition
 """
-function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
+function surfaceregion(TMIversion::String,region::Union{String,Symbol}, region_filepath = nothing)::BoundaryCondition
     #get wet mask 
     TMIfile = download_ncfile(TMIversion)
     γ = Grid(TMIfile)
     wet = γ.wet[:, :, 1]
+
     
-    file,Nx,Ny = download_regionfile(TMIversion::String)
+    file,Nx,Ny = download_regionfile(TMIversion::String, region_filepath) 
     
     # version 1: region masks were stored with "d" prefix
     # new version: regions defined by region name alone
@@ -35,6 +36,8 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
     return b
 end
 
+
+
 """
 function download_regionfile(TMIversion::String)
 
@@ -44,23 +47,27 @@ Also download file from Google Drive, if not already done.
 
 File name refers to the 2D size of domain. It is the same for modern and LGM configs and only depends on number of points in Nx and Ny directions.
 """
-function download_regionfile(TMIversion::String)
+function download_regionfile(TMIversion::String, region_filepath = nothing)
 
     Nx,Ny,Nz = gridsize(TMIversion)
     filename = "regions_"*Nx*"x"*Ny*".nc"
     pathname = pkgdatadir(filename)
-    
-    #make pkgdatadir() if it doesn't exist 
-    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
 
-    #if TMIfile doesn't exist, get GDrive url and download 
-    if !isfile(pathname)
-        println("read via GoogleDrive.jl")
-        #- `url`: Google Drive URL for data
-        url = regionurl(filename)
-        google_download(url,pkgdatadir())
+    if isnothing(region_filepath) 
+        #make pkgdatadir() if it doesn't exist 
+        !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+
+        #if TMIfile doesn't exist, get GDrive url and download 
+        if !isfile(pathname)
+            println("read via GoogleDrive.jl")
+            #- `url`: Google Drive URL for data
+            url = regionurl(filename)
+            google_download(url,pkgdatadir())
+        end
+        return pathname,Nx,Ny
+    else
+        return region_filepath, Nx, Ny 
     end
-    return pathname,Nx,Ny
 end
 
 """ 
@@ -165,4 +172,72 @@ function regions_mat2nc(TMIversion,γ)
         ncwrite(varvals,filenetcdf,dvarname)
 
     end
+end
+
+"""
+function return_regions(TMIversion, region_filepath = nothing)
+
+    return list of regions for default or custom region file 
+"""
+function return_regions(TMIversion::String, region_filepath = nothing)
+    Nx,Ny,Nz = gridsize(TMIversion)
+    filename = "regions_"*Nx*"x"*Ny*".nc"
+    pathname = isnothing(region_filepath) ? pkgdatadir(filename) : region_filepath
+    nc = NCDataset(pathname)
+    k = keys(nc)
+    close(nc) 
+    return [i for i in k if i ∉ ["lat", "lon", "depth"]]
+end
+
+"""
+function remove_region(TMIversion::String, region::Symbol, output_file::String, region_filepath = nothing)
+    
+    doesn't seem to be any easy way to do this besides write a whole new file without that BC
+"""
+function remove_region(TMIversion::String, region::Symbol, output_file::String, region_filepath = nothing)
+    Nx,Ny,Nz = gridsize(TMIversion)
+    filename = "regions_"*Nx*"x"*Ny*".nc"
+    pathname = isnothing(region_filepath) ? pkgdatadir(filename) : region_filepath
+    nc = NCDataset(pathname, "r")
+    key = keys(nc)
+    bcs = [surfaceregion(TMIversion, k, region_filepath) for k in key]
+    close(nc)
+    [TMI.write(output_file, bc) for bc in bcs if bcs.name != region]
+end
+
+
+"""
+function rename_region(TMIversion::String, region::Symbol, nameto::Tuple{Symbol, String}, output_file::String, region_filepath = nothing)
+
+    doesn't seem to be any easy way to do this besides write a whole new file without that BC
+"""
+function rename_region(TMIversion::String, region::Symbol, nameto::Tuple{Symbol, String}, output_file::String, region_filepath = nothing)
+    Nx,Ny,Nz = gridsize(TMIversion)
+    filename = "regions_"*Nx*"x"*Ny*".nc"
+    pathname = isnothing(region_filepath) ? pkgdatadir(filename) : region_filepath
+    key = return_regions(TMIversion, region_filepath)
+    bcs = [surfaceregion(TMIversion, k, region_filepath) for k in key]
+    for bc in bcs
+        if bc.name == region
+            newbc = BoundaryCondition(bc.tracer, bc.i, bc.j, bc.k, bc.dim, bc.dimval, bc.wet, nameto[1], nameto[2], "none")
+            TMI.write(output_file, newbc) 
+        else
+            TMI.write(output_file, bc)
+        end
+    end
+    
+end
+
+"""
+function decrease_res(b_fine::BoundaryCondition, wet)
+
+    convert a BoundaryCondition in 180x90 to 90x45 using a nearest neighbor approach 
+"""
+function decrease_res(b_fine::BoundaryCondition, wet)
+    i = StepRange(convert.(Int64, [b_fine.i[1], unique(diff(b_fine.i))[1], b_fine.i[end]])...)
+    j = StepRange(convert.(Int64, [b_fine.j[1], unique(diff(b_fine.j))[1], b_fine.j[end]])...)
+    itp = Interpolations.scale(interpolate(Matrix(b_fine.tracer), BSpline(Constant())), i, j)
+    j_c = collect(-88:4:88)
+    i_c = collect(2:4:358)
+    return BoundaryCondition(convert(BitMatrix, [itp(x,y) for y in j_c, x in i_c]'), i_c, j_c, 0, b_fine.dim, b_fine.dimval, wet, b_fine.name, b_fine.longname, b_fine.units)
 end
