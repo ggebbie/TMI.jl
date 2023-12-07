@@ -36,8 +36,6 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol}, region_f
     return b
 end
 
-
-
 """
 function download_regionfile(TMIversion::String)
 
