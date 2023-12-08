@@ -107,6 +107,20 @@ end
     
     A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
+    @testset "regions" begin
+        # test that all global values sum to 1.
+        Nr = length(TMI.regionlist())
+        sumb = zeros(Int,Nr)
+        for i in 1:Nr
+            # read v1 of regions from NetCDF file: used Floating point numbers for mask
+            sumb[i] = sum(TMI.surfaceregion(TMIversion,TMI.regionlist()[i]).tracer)
+        end
+
+        @test sum(sumb[1]) == sum(sumb[2:8])
+        @test sum(sumb[1]) == sum(sumb[vcat(5,7:Nr)])
+
+    end
+
     @testset "steadyinversion" begin
 
         yPO₄ = readfield(TMIfile,"PO₄",γ)

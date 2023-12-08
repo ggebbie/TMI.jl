@@ -4,20 +4,18 @@
     Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
     Return a BoundaryCondition
 """
-function surfaceregion(TMIversion::String,region::Union{String,Symbol}, region_filepath = nothing)::BoundaryCondition
+function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
     #get wet mask 
     TMIfile = download_ncfile(TMIversion)
     γ = Grid(TMIfile)
     wet = γ.wet[:, :, 1]
-
     
-    file,Nx,Ny = download_regionfile(TMIversion::String, region_filepath) 
+    file,Nx,Ny = download_regionfile(TMIversion::String) 
     
     # version 1: region masks were stored with "d" prefix
     # new version: regions defined by region name alone
     tracername = Symbol(region)
 
-    #dsfc = ncread(file,tracername) # using NetCDF.jl
     ds = Dataset(file,"r") # using NCDatasets.jl
     v = ds[tracername]
     units = v.attrib["units"]
@@ -45,27 +43,24 @@ Also download file from Google Drive, if not already done.
 
 File name refers to the 2D size of domain. It is the same for modern and LGM configs and only depends on number of points in Nx and Ny directions.
 """
-function download_regionfile(TMIversion::String, region_filepath = nothing)
+function download_regionfile(TMIversion::String)
 
     Nx,Ny,Nz = gridsize(TMIversion)
     filename = "regions_"*Nx*"x"*Ny*".nc"
     pathname = pkgdatadir(filename)
 
-    if isnothing(region_filepath) 
-        #make pkgdatadir() if it doesn't exist 
-        !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+    # make pkgdatadir() if it doesn't exist
 
-        #if TMIfile doesn't exist, get GDrive url and download 
-        if !isfile(pathname)
-            println("read via GoogleDrive.jl")
-            #- `url`: Google Drive URL for data
-            url = regionurl(filename)
-            google_download(url,pkgdatadir())
-        end
-        return pathname,Nx,Ny
-    else
-        return region_filepath, Nx, Ny 
+    !isdir(pkgdatadir()) && mkpath(pkgdatadir()) 
+
+    #if TMIfile doesn't exist, get GDrive url and download 
+    if !isfile(pathname)
+        println("read via GoogleDrive.jl")
+        #- `url`: Google Drive URL for data
+        url = regionurl(filename)
+        google_download(url,pkgdatadir())
     end
+    return pathname,Nx,Ny
 end
 
 """ 
