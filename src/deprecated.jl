@@ -353,3 +353,37 @@ function matfields2nc_orig(TMIversion,γ)
 
     end
 end
+
+"""
+     function surfaceregion(TMIversion::String,region::String,γ::Grid)::BoundaryCondition
+
+    Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
+Return a BoundaryCondition
+
+    Version 1: operates on a 2D Float field 
+"""
+function surfaceregion(TMIversion::String,region::Union{String,Symbol},γ::Grid)::BoundaryCondition
+
+    file = pkgdatadir("regions_"*TMIversion*".nc") 
+    
+    # version 1: region masks were stored with "d" prefix
+    # new version: regions defined by region name alone
+    tracername = "d_"*String(region) 
+
+    #dsfc = ncread(file,tracername) # using NetCDF.jl
+    ds = Dataset(file,"r") # using NCDatasets.jl
+    v = ds[tracername]
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+
+    lon = γ.lon
+    lat = γ.lat
+    depth = γ.depth[1]
+    mask = v[:,:] # Float
+
+    #name = v.attrib["name"] # error
+    close(ds)
+    
+    b = BoundaryCondition(mask,lon,lat,depth,3,1,γ.wet[:,:,1],Symbol(region),longname,units)
+    return b
+end
