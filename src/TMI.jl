@@ -88,6 +88,9 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
+pkgutilsdir() = joinpath(pkgdir(),"utils")
+pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
+
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
 

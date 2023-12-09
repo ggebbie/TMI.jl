@@ -123,43 +123,16 @@ end
 
     @testset "steadyinversion" begin
 
-        include("steadyinversion_numerics.jl")
+        include(pkgutilsdir("phosphate_steadyinversion.jl"))
         
         ## how big is the maximum difference?
         # could replace with abs function
         @test maximum(PO₄direct - PO₄total) < 0.1
         @test minimum(PO₄direct - PO₄total) > -0.1
 
+        
         ## oxygen distribution, just be sure it runs
-        yO₂ = readfield(TMIfile,"O₂",γ)
-        bO₂ = getsurfaceboundary(yO₂)
-        O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
-
-    end
-
-    @testset "steadyinversion with Source type" begin
-
-        yPO₄ = readfield(TMIfile,"PO₄",γ)
-        bPO₄ = getsurfaceboundary(yPO₄)
-        PO₄pre = steadyinversion(Alu,bPO₄,γ)
-
-        # this line changes
-        qPO₄ = readsource(TMIfile,"qPO₄",γ)
-        b₀ = zerosurfaceboundary(γ)
-        PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
-        PO₄total = PO₄ᴿ + PO₄pre
-        PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
-
-        ## how big is the maximum difference?
-        # could replace with abs function
-        @test maximum(PO₄direct - PO₄total) < 0.1
-        @test minimum(PO₄direct - PO₄total) > -0.1
-
-        ## oxygen distribution, just be sure it runs
-        yO₂ = readfield(TMIfile,"O₂",γ)
-        bO₂ = getsurfaceboundary(yO₂)
-        O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
-
+        include(pkgutilsdir("oxygen_steadyinversion.jl"))
     end
 
     ############################
