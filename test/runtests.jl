@@ -123,15 +123,8 @@ end
 
     @testset "steadyinversion" begin
 
-        yPO₄ = readfield(TMIfile,"PO₄",γ)
-        bPO₄ = getsurfaceboundary(yPO₄)
-        PO₄pre = steadyinversion(Alu,bPO₄,γ)
-        qPO₄ = readsource(TMIfile,"qPO₄",γ)
-        b₀ = zerosurfaceboundary(γ)
-        PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
-        PO₄total = PO₄ᴿ + PO₄pre
-        PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
-
+        include("steadyinversion_numerics.jl")
+        
         ## how big is the maximum difference?
         # could replace with abs function
         @test maximum(PO₄direct - PO₄total) < 0.1
