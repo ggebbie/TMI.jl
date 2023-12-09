@@ -17,7 +17,7 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"
