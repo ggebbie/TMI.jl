@@ -238,31 +238,9 @@ end
                 u = zerosurfaceboundary(γ)
                 b = getsurfaceboundary(y)
             end
-            
             uvec = vec(u)
-            F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
-            fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
-            fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
-            f(x) = fg(x)[1]
-            J₀,gJ₀ = fg(uvec)
 
-            iterations = 10
-            out = steadyclimatology(uvec,fg!,iterations)
-
-            # check with forward differences
-            ϵ = 1e-3
-            ii = rand(1:length(uvec))
-            println("Location for test =",ii)
-            δu = copy(uvec); δu[ii] += ϵ
-            ∇f_finite = (f(δu) - f(uvec))/ϵ
-
-            fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-            ∇f = gJ₀[ii]
-            
-            # error less than 10 percent?
-            println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-            @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
-
+            include(utilsdir("optim_steadyclimatology.jl"
             # was cost function decreased?
             @test out.minimum < J₀
 
@@ -270,6 +248,11 @@ end
             ũ = out.minimizer
             J,gJ = fg(ũ)
             @test J < J₀
+
+            include(utilsdir("gradient_check.jl"))
+            @test abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite) < 0.1
+
+
         end
     end
     

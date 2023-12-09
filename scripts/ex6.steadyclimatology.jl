@@ -39,33 +39,37 @@ y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 b = (;surface = getsurfaceboundary(y))
 
 # get sample J value
-F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
-fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
+include(utilsdir("optim_steadyclimatology.jl"))
 
-fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
-f(x) = fg(x)[1]
-J₀,gJ₀ = fg(uvec)
+# F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
+# fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
+
+# fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
+# f(x) = fg(x)[1]
+# J₀,gJ₀ = fg(uvec)
 
 #### gradient check ###################
 # check with forward differences
-ϵ = 1e-3
-ii = rand(1:sum(γ.wet[:,:,1]))
-println("Location for test =",ii)
-δu = copy(uvec); δu[ii] += ϵ
-∇f_finite = (f(δu) - f(uvec))/ϵ
-println(∇f_finite)
+include(utilsdir("gradient_check.jl"))
 
-fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-∇f = gJ₀[ii]
-println(∇f)
+# ϵ = 1e-3
+# ii = rand(1:sum(γ.wet[:,:,1]))
+# println("Location for test =",ii)
+# δu = copy(uvec); δu[ii] += ϵ
+# ∇f_finite = (f(δu) - f(uvec))/ϵ
+# println(∇f_finite)
 
-# error less than 10 percent?
-println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+# fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
+# ∇f = gJ₀[ii]
+# println(∇f)
+
+# # error less than 10 percent?
+# println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 #### end gradient check #################
 
 # filter the data with an Optim.jl method
-iterations = 15
-out = steadyclimatology(uvec,fg!,iterations)
+#iterations = 15
+#out = steadyclimatology(uvec,fg!,iterations)
 
 # reconstruct by hand to double-check.
 ũ = unvec(u,out.minimizer)
