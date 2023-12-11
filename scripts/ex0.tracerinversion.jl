@@ -15,7 +15,7 @@ import Pkg; Pkg.activate("..")
 
 using Revise
 using TMI
-#using GeoPythonPlot
+using GeoPythonPlot # will load optional extension
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
