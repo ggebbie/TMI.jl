@@ -421,14 +421,14 @@ function sparsedatamap_optim(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTu
     return out    
 end
 
-function sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iters)
-    fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
+function sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ;q = nothing, r = 1.0,iterations=10)
+    fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r)
     f(x) = fg(x)[1]
     #J0 = f(uvec)
     #J₀,∂J₀∂u = fg(uvec)
     uvec = vec(u)
-    fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
-    out = sparsedatamap_optim(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
+    fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q,r=r)
+    out = sparsedatamap_optim(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r,iterations=iterations)
     return out, f, fg, fg!
 end
 
