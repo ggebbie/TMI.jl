@@ -10,7 +10,7 @@ end
 
 @testset "TMI.jl" begin
 
-    #include("test_nordic.jl")
+    include("test_nordic.jl")
 
     include("test_modern.jl")
 
