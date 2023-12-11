@@ -7,7 +7,7 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 using BenchmarkTools
 
 # A, Alu, γ, inputfile = config(url,inputdir)
