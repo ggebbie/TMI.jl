@@ -7,7 +7,7 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 
 #TMIversion = "modern_90x45x33_GH10_GH12"
 TMIversion = "modern_180x90x33_GH11_GH12"

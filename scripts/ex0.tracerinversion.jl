@@ -15,8 +15,7 @@ import Pkg; Pkg.activate(".")
 
 using Revise
 using TMI
-using Test
-using GGplot
+using GeoPythonPlot
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
@@ -30,31 +29,26 @@ yPO₄ = readfield(TMIfile,"PO₄",γ)
 
 # choice: BoundaryCondition or NamedTuple(BoundaryCondition)
 #bPO₄ = getsurfaceboundary(yPO₄)
-bPO₄ = (;surface = getsurfaceboundary(yPO₄))
+bPO₄ = getsurfaceboundary(yPO₄)
 
 ## preformed phosphate
 PO₄pre = steadyinversion(Alu,bPO₄,γ)
 
 ## read phosphate source
-qPO₄ = readfield(TMIfile,"qPO₄",γ)
+qPO₄ = readsource(TMIfile,"qPO₄",γ)
 
 # zero boundary condition, choose one line of next two
 #b₀ = zerosurfaceboundary(γ)
-b₀ = (;surface = zerosurfaceboundary(γ,:PO₄,"phosphate","μmol/kg"))
+b₀ = zerosurfaceboundary(γ)
+
+# remineralized phosphate
 PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
+
+# total (observed) phosphate
 PO₄total = PO₄ᴿ + PO₄pre
 
 ## compute total phosphate directly
 PO₄direct = steadyinversion(Alu,bPO₄,γ,q=qPO₄)
-
-## how big is the maximum difference?
-# could replace with abs function
-@test maximum(PO₄direct - PO₄total) < 0.1
-@test minimum(PO₄direct - PO₄total) > -0.1
-
-## compare to observations
-@test maximum(PO₄direct - yPO₄) < 1.2 # lenient test
-@test minimum(PO₄direct - yPO₄) > -1.2
 
 ## Plot a plan view
 # view the surface
@@ -66,7 +60,7 @@ depth = γ.depth[level]
 label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-GGplot.pygui(true) # to help plots appear on screen using Python GUI
+GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
 planviewplot(PO₄total, depth, cntrs, titlelabel=label)
 # alternatively push to Julia backend (VS Code)
 # GGplot.display(GGplot.gcf())
@@ -76,11 +70,17 @@ lon_section = 330; # only works if exact
 lims = 0:0.1:3.0
 sectionplot(PO₄total,lon_section,lims)
 
-## oxygen distribution
+## oxygen distribution, just be sure it runs
 yO₂ = readfield(TMIfile,"O₂",γ)
+
 bO₂ = getsurfaceboundary(yO₂)
-# set the optional stoichiometric ratio.
+
 O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
+
+# yO₂ = readfield(TMIfile,"O₂",γ)
+# bO₂ = getsurfaceboundary(yO₂)
+# # set the optional stoichiometric ratio.
+# O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
 # but different contours

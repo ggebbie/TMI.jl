@@ -88,6 +88,9 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
+pkgutilsdir() = joinpath(pkgdir(),"utils")
+pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
+
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
 
@@ -343,7 +346,7 @@ function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
 end
 
 """
-function steadyclimatology(u₀,fg!,iterations)
+function steadyclimatology_optim(u₀,fg!,iterations)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -359,7 +362,7 @@ function steadyclimatology(u₀,fg!,iterations)
 - `fg!`: compute cost function and gradient in place
 - `iterations`: number of optimization iterations
 """
-function steadyclimatology(u₀,fg!,iterations)
+function steadyclimatology_optim(u₀,fg!,iterations)
 #function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
@@ -369,6 +372,19 @@ function steadyclimatology(u₀,fg!,iterations)
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
+end
+
+function steadyclimatology(Alu,b,u,y,W⁻,γ)
+    uvec = vec(u)
+    F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
+    fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
+    fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
+    f(x) = fg(x)[1]
+
+    J₀,gJ₀ = fg(uvec)
+    iterations = 10
+    out = steadyclimatology_optim(uvec,fg!,iterations)
+    return out, f, fg, fg!
 end
 
 """
@@ -393,7 +409,7 @@ end
 - `fg!`: compute cost function and gradient in place
 - `γ`: grid
 """
-function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
+function sparsedatamap_optim(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple},y::Vector,W⁻,wis::Vector,locs,Q⁻,γ::Grid;q = nothing, r = 1.0,iterations=10) #where {N1, N2, T <: Real}
 #function sparsedatamap(u₀::Vector{T},Alu,b::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Vector{T},W⁻,wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}, Interpolations.WeightedAdjIndex{2,T}}},locs,Q⁻,γ::Grid,iterations=10) where {N1, N2, T <: Real}
 
      fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q,r=r)
@@ -403,6 +419,35 @@ function sparsedatamap(u₀::Vector,Alu,b::Union{BoundaryCondition,NamedTuple},u
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
+end
+
+function sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ;q = nothing, r = 1.0,iterations=10)
+    fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r)
+    f(x) = fg(x)[1]
+    #J0 = f(uvec)
+    #J₀,∂J₀∂u = fg(uvec)
+    uvec = vec(u)
+    fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q₀=q,r=r)
+    out = sparsedatamap_optim(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,q=q,r=r,iterations=iterations)
+    return out, f, fg, fg!
+end
+
+function gradient_check(uvec,f,fg,fg!)
+    # check with forward differences
+    ϵ = 1e-3
+    ii = rand(1:length(uvec))
+    println("Location for test =",ii)
+    δu = copy(uvec); δu[ii] += ϵ
+    ∇f_finite = (f(δu) - f(uvec))/ϵ
+
+    J₀,∂J₀∂u = fg(uvec)
+    fg!(J₀,∂J₀∂u,(uvec+δu)./2) # J̃₀ is not overwritten
+    ∇f = ∂J₀∂u[ii]
+    println("∇f=",∇f)
+
+    # error less than 10 percent?
+    println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+    return ∇f, ∇f_finite
 end
 
 """

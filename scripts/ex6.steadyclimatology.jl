@@ -17,11 +17,11 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
@@ -39,33 +39,7 @@ y, W⁻, ctrue = synthetic_observations(TMIversion,"θ",γ)
 b = (;surface = getsurfaceboundary(y))
 
 # get sample J value
-F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
-fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
-
-fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
-f(x) = fg(x)[1]
-J₀,gJ₀ = fg(uvec)
-
-#### gradient check ###################
-# check with forward differences
-ϵ = 1e-3
-ii = rand(1:sum(γ.wet[:,:,1]))
-println("Location for test =",ii)
-δu = copy(uvec); δu[ii] += ϵ
-∇f_finite = (f(δu) - f(uvec))/ϵ
-println(∇f_finite)
-
-fg!(J₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-∇f = gJ₀[ii]
-println(∇f)
-
-# error less than 10 percent?
-println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-#### end gradient check #################
-
-# filter the data with an Optim.jl method
-iterations = 15
-out = steadyclimatology(uvec,fg!,iterations)
+out, f, fg, fg! = steadyclimatology(Alu,b,u,y,W⁻,γ)
 
 # reconstruct by hand to double-check.
 ũ = unvec(u,out.minimizer)
