@@ -346,7 +346,7 @@ function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
 end
 
 """
-function steadyclimatology(u₀,fg!,iterations)
+function steadyclimatology_optim(u₀,fg!,iterations)
      Find the distribution of a tracer given:
      (a) the pathways described by A or its LU decomposition Alu,
      (b) first-guess boundary conditions and interior sources given by d₀,
@@ -362,7 +362,7 @@ function steadyclimatology(u₀,fg!,iterations)
 - `fg!`: compute cost function and gradient in place
 - `iterations`: number of optimization iterations
 """
-function steadyclimatology(u₀,fg!,iterations)
+function steadyclimatology_optim(u₀,fg!,iterations)
 #function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
 
     # a first guess: observed surface boundary conditions are perfect.
@@ -372,6 +372,19 @@ function steadyclimatology(u₀,fg!,iterations)
     out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
 
     return out    
+end
+
+function steadyclimatology(Alu,b,u,y,W⁻,γ)
+    uvec = vec(u)
+    F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
+    fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
+    fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
+    f(x) = fg(x)[1]
+
+    J₀,gJ₀ = fg(uvec)
+    iterations = 10
+    out = steadyclimatology_optim(uvec,fg!,iterations)
+    return out, f, fg, fg!
 end
 
 """
