@@ -24,9 +24,10 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 using Interpolations
 using Statistics
+using LinearAlgebra
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
@@ -51,45 +52,12 @@ b = (;surface = mean(y) * onesurfaceboundary(γ))
 
 # assume temperature known ± 5°C
 σb = 5.0
+Dg = gaussiandistancematrix(γ,σb,1000.0)
+Q⁻ = inv(cholesky(Dg))
 
-for i = 1:2
-    if i == 1
-        Q⁻ = 1.0/(σb^2) # a scalar
-        # spatially uniform first-guess expected size
-    elseif i==2
-        #adhoc_add = 0.1
-        #Dg = gaussiandistancematrix(γ,σb,1000.0) + adhoc_add.*Diagonal(ones(nsfc))
-        Dg = gaussiandistancematrix(γ,σb,1000.0)
-        #Cg = cholesky(Dg)
-        Q⁻ = inv(cholesky(Dg))
-    end
-end
-
-## gradient checks
-# check with forward differences
-fg(x) = costfunction_point_obs(x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
-f(x) = fg(x)[1]
-J0 = f(uvec)
-J̃₀,gJ₀ = fg(uvec)
-fg!(F,G,x) = costfunction_point_obs!(F,G,x,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ)
-
-ϵ = 1e-3 # size of finite perturbation
-ii = rand(1:sum(γ.wet[:,:,1]))
-println("gradient check location=",ii)
-δu = copy(uvec); δu[ii] += ϵ
-∇f_finite = (f(δu) - f(uvec))/ϵ
-println("∇f_finite=",∇f_finite)
-
-fg!(J̃₀,gJ₀,(uvec+δu)./2) # J̃₀ is not overwritten
-∇f = gJ₀[ii]
-println("∇f=",∇f)
-
-# error less than 10 percent?
-println("Percent error=",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
-
-# optimize the sparse data map with an Optim.jl method
-iterations = 10
-out = sparsedatamap(uvec,Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iterations)
+iters =5
+                
+out, f, fg, fg! = TMI.sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iters)
 
 # reconstruct by hand to double-check.
 ũ = unvec(u,out.minimizer)
