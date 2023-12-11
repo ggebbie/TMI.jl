@@ -66,3 +66,58 @@ function zeros(γ::Grid{T},name=:none,longname="unknown",units="unknown")::Field
     tracer[.!γ.wet] .= zero(T) / zero(T) # NaNs with right type
     return Field(tracer,γ,name,longname,units)
 end
+
+"""
+    function planviewplot: from NobleGasRelic
+
+    formerly planviewplotcartopy
+"""
+function planviewplot(c::Field, depth) 
+#function planviewplot(c::Field{<:Real}, depth, lims; titlelabel="planview plot",fname=nothing,cenlon=-160.0) #where T <: Real
+    cplan = planview(c,depth)
+    #test = ax.contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_hot, transform = proj0)
+    #show(io,mime,heatmap(c.γ.lon,c.γ.lat,transpose(cplan),zlabel=c.units,title=c.longname))
+    #UnicodePlots.heatmap(c.γ.lon,c.γ.lat,transpose(cplan),zlabel=c.units,title=c.longname)
+    UnicodePlots.heatmap(transpose(cplan),zlabel=c.units,title=c.longname)
+end
+
+function planview(c::Field{T},depth)::Matrix{T} where T <: Real
+ 
+    isec = findall(==(depth),c.γ.depth)
+
+    # use view so that a new array is not allocated
+    # note: if cfld changes, so does csection (automatically)
+    cplan = dropdims(view(c.tracer,:,:,isec),dims=3)
+    return cplan
+end
+
+function sectionplot(c::Field,lon)
+    csection = section(c,lon)
+    #cmap_seismic = get_cmap("seismic")
+    z = c.γ.depth/1000.0
+    UnicodePlots.heatmap(transpose(csection),zlabel=c.units,title=c.longname,yflip=true)
+end
+
+"""
+    function section
+    View latitude-depth slice of field
+# Arguments
+- `c::Field`, 3D tracer field plus meta data
+- `lon`: longitude of section
+# Output
+- `csection`: 2d slice of field
+"""
+function section(c::Field{T},lon)::Array{T,2} where T <: Real
+
+    # handle longitudinal ambiguities
+    if lon < minimum(c.γ.lon)
+        lon += 360
+    end
+    
+    isec = findall(==(lon),c.γ.lon)
+
+    # use view so that a new array is not allocated
+    # note: if cfld changes, so does csection (automatically)
+    csection= dropdims(view(c.tracer,isec,:,:),dims=1)
+    return csection
+end
