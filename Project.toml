@@ -1,7 +1,7 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
-version = "0.2.3"
+version = "0.2.4"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
