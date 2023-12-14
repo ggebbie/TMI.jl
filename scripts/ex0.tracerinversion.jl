@@ -71,7 +71,6 @@ planviewplot(PO₄total, depth, cntrs, titlelabel=label)
 lon_section = 330; # only works if exact
 lims = 0:0.1:3.0
 sectionplot(PO₄total,lon_section,lims)
-TMI.sectionplot(PO₄total,lon_section)
 
 ## oxygen distribution, just be sure it runs
 yO₂ = readfield(TMIfile,"O₂",γ)
