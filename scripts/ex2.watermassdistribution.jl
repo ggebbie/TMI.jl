@@ -21,13 +21,8 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 # choose water mass (i.e., surface patch) of interest
 # Enhancement: provide list of choices
-list = ("GLOBAL","ANT","SUBANT",
-            "NATL","NPAC","TROP","ARC",
-            "MED","ROSS","WED","LAB","GIN",
-            "ADEL","SUBANTATL","SUBANTPAC","SUBANTIND",
-            "TROPATL","TROPPAC","TROPIND")
-
-region = list[2]
+list = TMI.regionlist()
+region = list[2] # sample region
 
 # do numerical analysis
 g = watermassdistribution(TMIversion,Alu,region,γ);
@@ -36,4 +31,4 @@ g = watermassdistribution(TMIversion,Alu,region,γ);
 lon_section = 330 # only works if exact
 lims = 0:5:100
 tlabel = region * " water-mass fraction [%]"
-sectionplot(100g,lon_section,lims,titlelabel = tlabel)
+sectionplot(100g,lon_section,lims,titlelabel = tlabel) # add longitude to title

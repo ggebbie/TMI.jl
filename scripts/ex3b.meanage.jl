@@ -18,8 +18,8 @@ a = meanage(TMIversion,Alu,γ)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 #lon_section = 330 # only works if exact
-#lon_section = -150
-lon_section = -151
+lon_section = -150
+#lon_section = -151
 lims = 0:100:2000
 tlabel = string(lon_section)*"°E, Mean Age [yr]"
-sectionplot(a,lon_section,lims,titlelabel = tlabel)
+sectionplot(a,lon_section,lims,titlelabel = tlabel,units="yr") # units display as unknown, should be years
