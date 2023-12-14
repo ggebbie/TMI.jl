@@ -15,7 +15,7 @@ import Pkg; Pkg.activate(".")
 
 using Revise
 using TMI
-using GeoPythonPlot
+using GeoPythonPlot # will load optional extension
 
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
@@ -39,7 +39,7 @@ qPO₄ = readsource(TMIfile,"qPO₄",γ)
 
 # zero boundary condition, choose one line of next two
 #b₀ = zerosurfaceboundary(γ)
-b₀ = zerosurfaceboundary(γ)
+b₀ = zerosurfaceboundary(γ,:PO₄,"phosphate","μmol/kg")
 
 # remineralized phosphate
 PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
@@ -61,9 +61,11 @@ label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
 GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
+
 planviewplot(PO₄total, depth, cntrs, titlelabel=label)
+
 # alternatively push to Julia backend (VS Code)
-# GGplot.display(GGplot.gcf())
+# GeoPythonPlot.display(GeoPythonPlot.gcf())
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact
@@ -72,15 +74,8 @@ sectionplot(PO₄total,lon_section,lims)
 
 ## oxygen distribution, just be sure it runs
 yO₂ = readfield(TMIfile,"O₂",γ)
-
 bO₂ = getsurfaceboundary(yO₂)
-
 O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
-
-# yO₂ = readfield(TMIfile,"O₂",γ)
-# bO₂ = getsurfaceboundary(yO₂)
-# # set the optional stoichiometric ratio.
-# O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
 
 # Plan view of oxygen at same depth as phosphate
 # but different contours

@@ -2060,39 +2060,6 @@ function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: NamedTuple
     end
 end
 
-"""
-    function section
-    View latitude-depth slice of field
-# Arguments
-- `c::Field`, 3D tracer field plus meta data
-- `lon`: longitude of section
-# Output
-- `csection`: 2d slice of field
-"""
-function section(c::Field{T},lon)::Array{T,2} where T <: Real
-
-    # handle longitudinal ambiguities
-    if lon < minimum(c.γ.lon)
-        lon += 360
-    end
-    
-    isec = findall(==(lon),c.γ.lon)
-
-    # use view so that a new array is not allocated
-    # note: if cfld changes, so does csection (automatically)
-    csection= dropdims(view(c.tracer,isec,:,:),dims=1)
-    return csection
-end
-
-function planview(c::Field{T},depth)::Array{T,2} where T <: Real
- 
-    isec = findall(==(depth),c.γ.depth)
-
-    # use view so that a new array is not allocated
-    # note: if cfld changes, so does csection (automatically)
-    cplan = dropdims(view(c.tracer,:,:,isec),dims=3)
-    return cplan
-end
 
 wet(a::BoundaryCondition) = a.wet
 wet(a::Field) = a.γ.wet

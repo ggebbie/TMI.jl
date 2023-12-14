@@ -27,4 +27,4 @@ volume = volumefilled(TMIversion,Alu,γ)
 # view the surface
 cntrs = 1:0.25:6
 tlabel="Volume filled by surface patch [log₁₀(m)]"
-planviewplot(volume,cntrs,γ,titlelabel=tlabel) 
+planviewplot(volume,cntrs,titlelabel=tlabel) 

@@ -35,4 +35,4 @@ plotbox(latbox, lonbox)
 lon_section = 330; # only works if exact
 lims = 0:5:100
 tlabel = "water-mass fraction [%]"
-sectionplot(100c,lon_section,lims,titlelabel = tlabel)
+sectionplot(100c,lon_section,lims,titlelabel = tlabel) # heat colormap would be better
