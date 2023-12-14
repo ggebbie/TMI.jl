@@ -22,17 +22,17 @@ struct Field{T}
     units::String
 end
 
-"""
-    function Field(tracer::Array{T,3},γ::Grid) where T <: Real
+# """
+#     function Field(tracer::Array{T,3},γ::Grid) where T <: Real
 
-    Outer constructor for Field if there's no worry about
-    tracer type, long name, or units.
-# Arguments
-- `tracer::Array{T,3}`
-- `γ::Grid`
-# Output
-- `field::Field`
-"""
+#     Outer constructor for Field if there's no worry about
+#     tracer type, long name, or units.
+# # Arguments
+# - `tracer::Array{T,3}`
+# - `γ::Grid`
+# # Output
+# - `field::Field`
+# """
 #function Field(tracer::Array{T,3},γ::Grid) where T <: Real
 #   return Field(tracer,γ,:none,"unknown","unknown")
 #end
@@ -67,19 +67,10 @@ function zeros(γ::Grid{T},name=:none,longname="unknown",units="unknown")::Field
     return Field(tracer,γ,name,longname,units)
 end
 
-"""
-    function planviewplot: from NobleGasRelic
-
-    formerly planviewplotcartopy
-"""
-function planviewplot(c::Field, depth) 
-#function planviewplot(c::Field{<:Real}, depth, lims; titlelabel="planview plot",fname=nothing,cenlon=-160.0) #where T <: Real
-    cplan = planview(c,depth)
-    #test = ax.contourf(c.γ.lon,c.γ.lat, cplan', lims, cmap=cmap_hot, transform = proj0)
-    #show(io,mime,heatmap(c.γ.lon,c.γ.lat,transpose(cplan),zlabel=c.units,title=c.longname))
-    #UnicodePlots.heatmap(c.γ.lon,c.γ.lat,transpose(cplan),zlabel=c.units,title=c.longname)
-    UnicodePlots.heatmap(transpose(cplan),zlabel=c.units,title=c.longname)
-end
+# function planviewplot(c::Field, depth) 
+#     cplan = planview(c,depth)
+#     UnicodePlots.heatmap(transpose(cplan),zlabel=c.units,title=c.longname)
+# end
 
 function planview(c::Field{T},depth)::Matrix{T} where T <: Real
  
@@ -91,12 +82,12 @@ function planview(c::Field{T},depth)::Matrix{T} where T <: Real
     return cplan
 end
 
-function sectionplot(c::Field,lon)
-    csection = section(c,lon)
-    #cmap_seismic = get_cmap("seismic")
-    z = c.γ.depth/1000.0
-    UnicodePlots.heatmap(transpose(csection),zlabel=c.units,title=c.longname,yflip=true)
-end
+# function sectionplot(c::Field,lon)
+#     csection = section(c,lon)
+#     #cmap_seismic = get_cmap("seismic")
+#     z = c.γ.depth/1000.0
+#     UnicodePlots.heatmap(transpose(csection),zlabel=c.units,title=c.longname,yflip=true)
+# end
 
 """
     function section

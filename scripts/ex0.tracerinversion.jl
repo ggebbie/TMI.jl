@@ -11,7 +11,7 @@
 %
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
-import Pkg; Pkg.activate("..")
+import Pkg; Pkg.activate(".")
 
 using Revise
 using TMI
@@ -60,12 +60,12 @@ depth = γ.depth[level]
 label = PO₄total.longname*", depth = "*string(depth)*" m"
 
 # Help: needs work with continents and labels
-#GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
-#TMI.planviewplot(PO₄total, depth, cntrs, titlelabel=label)
-TMI.planviewplot(PO₄total, depth)
+GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
+
+planviewplot(PO₄total, depth, cntrs, titlelabel=label)
 
 # alternatively push to Julia backend (VS Code)
-# GGplot.display(GGplot.gcf())
+# GeoPythonPlot.display(GeoPythonPlot.gcf())
 
 ## Plot a lat-depth section
 lon_section = 330; # only works if exact

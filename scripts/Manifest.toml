@@ -332,10 +332,8 @@ deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[deps.GeoPythonPlot]]
-deps = ["Conda", "CondaPkg", "DelimitedFiles", "GoogleDrive", "HTTP", "Pkg", "PythonCall", "PythonPlot", "Revise", "TMI"]
-git-tree-sha1 = "16d44163485dc5951a830c48b234423b8fa9e694"
-repo-rev = "main"
-repo-url = "https://github.com/ggebbie/GeoPythonPlot.jl"
+deps = ["Conda", "CondaPkg", "Pkg", "PythonCall", "PythonPlot"]
+path = "/home/gebbie/projects/GeoPythonPlot/"
 uuid = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
 version = "0.1.2"
 
@@ -890,7 +888,11 @@ version = "5.10.1+6"
 deps = ["CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "Interpolations", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
 path = ".."
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-version = "0.2.2"
+version = "0.2.3"
+weakdeps = ["GeoPythonPlot"]
+
+    [deps.TMI.extensions]
+    TMIGeoPythonPlotExt = "GeoPythonPlot"
 
 [[deps.TOML]]
 deps = ["Dates"]
