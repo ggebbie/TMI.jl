@@ -333,9 +333,11 @@ uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
 [[deps.GeoPythonPlot]]
 deps = ["Conda", "CondaPkg", "Pkg", "PythonCall", "PythonPlot"]
-path = "/home/gebbie/projects/GeoPythonPlot/"
+git-tree-sha1 = "9b5796d57de9f1eb9cc91b9b2b4100a704932f78"
+repo-rev = "main"
+repo-url = "https://github.com/ggebbie/GeoPythonPlot.jl"
 uuid = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
-version = "0.1.2"
+version = "0.1.3"
 
 [[deps.GibbsSeaWater]]
 deps = ["Compat", "GibbsSeaWater_jll", "Libdl", "Test"]
@@ -888,7 +890,7 @@ version = "5.10.1+6"
 deps = ["CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "Interpolations", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
 path = ".."
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-version = "0.2.3"
+version = "0.2.4"
 weakdeps = ["GeoPythonPlot"]
 
     [deps.TMI.extensions]
