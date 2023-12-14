@@ -35,4 +35,4 @@ origin = surfaceorigin(loc, Alu, γ)
 # view the surface
 cntrs = -8:1:0
 tlabel="Surface origin of interior location [log10(fraction)]"
-planviewplot(origin,cntrs,γ,titlelabel=tlabel) 
+planviewplot(origin,cntrs,titlelabel=tlabel) # units inconsistent with title

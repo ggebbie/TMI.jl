@@ -38,7 +38,6 @@ N = 20
 
 # first guess of change to surface boundary conditions
 # ocean values are 0
-#u = zerosurfaceboundary(γ)
 u = (;surface = zerosurfaceboundary(γ))
 uvec = vec(u)
 
@@ -46,8 +45,6 @@ uvec = vec(u)
 y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
 
 # make a silly first guess for surface
-#b = mean(y) * onesurfaceboundary(γ)
-using Statistics
 b = (;surface = mean(y) * onesurfaceboundary(γ))
 
 # assume temperature known ± 5°C
@@ -57,7 +54,7 @@ Q⁻ = inv(cholesky(Dg))
 
 iters =5
                 
-out, f, fg, fg! = TMI.sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iters)
+out, f, fg, fg! = TMI.sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
 
 # reconstruct by hand to double-check.
 ũ = unvec(u,out.minimizer)
@@ -75,14 +72,12 @@ level = 15 # your choice 1-33
 depth = γ.depth[level]
 cntrs = -10:0.5:10
 label = "Optimized misfit: Δc̃"
-# Help: needs work with continents and labels
 planviewplot(Δc̃, depth, cntrs, titlelabel=label) 
 
 label = "First guess misfit: Δc₀"
 planviewplot(Δc₀, depth, cntrs, titlelabel=label) 
 
 # % what is the uncertainty in the surface boundary condition?
-
 # % how much did the data points reduce the error (globally).
 # sqrt(sum((c-Tobs).^2)/Nfield)
 # sqrt(sum((c0-Tobs).^2)/Nfield)
