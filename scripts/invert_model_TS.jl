@@ -59,8 +59,8 @@ non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A)
 non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 
 
-convec = [uvec; non_zero_values-non_zero_values]
-A0=A
+convec = [uvec; non_zero_values]
+A0= A  .* 0.5
 ulength=length(uvec)
 
 # get sample J value
@@ -86,16 +86,14 @@ println("Location for test =",ii)
 #### end gradient check #################
 
 
-print(length(convec))
+#print(length(convec))
 # filter the data with an Optim.jl method
 iterations = 5
 out = steadyclimatology(convec,fg!,iterations)
 
 # reconstruct by hand to double-check.
-ũ = unvec((W⁻ * u),out.minimizer)
+ũ = unvec((W⁻ * u),out.minimizer[begin:ulength])
 
-# apply to the boundary conditions
-#b̃ = adjustboundarycondition(b,ũ)
 
 # reconstruct tracer map
 c₀ = θguess
@@ -104,8 +102,19 @@ c̃  = θguess+ũ
 Δc̃ = c̃ - θtrue
 Δc₀ = θguess - θtrue
 
-Anew = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], convec[ulength+1:end])
+Anew = A0 + sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], out.minimizer[ulength+1:end])
 
+
+Adiff1 = sum((A.-A0).^2)
+Adiff2 = sum((A.-Anew).^2)
+oldf = sum((non_zero_values).^2)
+newf = sum((out.minimizer[ulength+1:end]).^2)
+
+
+println("A difference before: $Adiff1")
+println("A difference after: $Adiff2")
+println("old f sum:$oldf")
+println("new f sum:$newf")
 
 
 # plot the difference

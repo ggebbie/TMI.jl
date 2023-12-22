@@ -2233,14 +2233,20 @@ end
 """
 function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
     ulength = sum(γ.wet)
+    
+    #control vectors
     uvec=convec[begin:ulength]
-    non_zero_values = convec[ulength+1:end]
-    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
+    ufvec = convec[ulength+1:end]
+
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
     A=A0 + Actl
+
+
     # find lagrange multipliers
     muk = transpose(A) * Qⁱ * (A * c - q)
 
-    J =  transpose(A * c - q) * Qⁱ * (A*c - q) +uvec ⋅ uvec - 2 * transpose(muk)*( Wⁱ * uvec+c-y) #* transpose(muk) * Wⁱ
+    J =  transpose(A * c - q) * Qⁱ * (A*c - q) +uvec ⋅ uvec - 
+          2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -2253,7 +2259,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
-          guvec[ii]=0
+          guvec[ii]=convec[ii]
         end
     end
 
@@ -2270,9 +2276,9 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
 
     ulength = sum(γ.wet)
     uvec = convec[begin:ulength]
-    non_zero_values = convec[ulength+1:end]
+    ufvec = convec[ulength+1:end]
     
-    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], non_zero_values)
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
     A=A0 + Actl
 
     # find lagrange multipliers
@@ -2284,13 +2290,14 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
             if ii <= ulength
                guvec[ii] = uvec[ii]  -(2 * transpose(muk) * Wⁱ)[ii]
             else
-               guvec[ii]=0
+               guvec[ii]=convec[ii]
             end
         end
     end
     
     if J !=nothing
-        return transpose(A * c - q) * Qⁱ * (A*c - q) + uvec ⋅ uvec - 2 * transpose(muk)*( Wⁱ * uvec+c-y)
+        return transpose(A * c - q) * Qⁱ * (A*c - q) + uvec ⋅ uvec - 
+                  2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec
     end
 end
 
