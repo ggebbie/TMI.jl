@@ -2240,13 +2240,28 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
 
     Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
     A=A0 + Actl
+    dummy,dummy,fguess  = findnz(A0)
+    dummy,dummy,fnow  = findnz(A) 
+    onesvec = ones(size(q))
+    csum = Wⁱ * uvec+c
 
 
     # find lagrange multipliers
     muk = transpose(A) * Qⁱ * (A * c - q)
+    dAcdf = spzeros(length(ufvec),length(c))
+    dA1df = spzeros(length(ufvec),length(c))
+    for (ii,vv) in enumerate(size(ufvec))
+          dAcdf[ii,non_zero_indices[ii, 2]] = csum[non_zero_indices[ii, 1]]
+          dA1df[ii,non_zero_indices[ii, 2]] = 1
+    end
+    
 
-    J =  transpose(A * c - q) * Qⁱ * (A*c - q) +uvec ⋅ uvec - 
-          2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec
+    muf = dAcdf * Qⁱ * (A * csum - q)#+dA1df * Qⁱ * (A * onesvec - onesvec)
+
+    J =  transpose(A * csum - q) * Qⁱ * (A*csum - q) +uvec ⋅ uvec - 
+          2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec +
+          #transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec) 
+          2 * transpose(muf) * (fnow - ufvec - fguess)
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -2255,11 +2270,11 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
         if ii <= ulength 
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the tracer concentration
-          guvec[ii] = uvec[ii]  - (2 * transpose(muk) * Wⁱ)[ii]
+          guvec[ii] =  2 * uvec[ii] - (2 * transpose(muk) * Wⁱ)[ii]
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
-          guvec[ii]=convec[ii]
+          guvec[ii]=convec[ii]+2 * muf[ii-ulength]
         end
     end
 
@@ -2280,24 +2295,38 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     
     Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
     A=A0 + Actl
+    dummy,dummy,fguess  = findnz(A0)
+    dummy,dummy,fnow  = findnz(A)
+    onesvec = ones(size(q))
+    csum = Wⁱ * uvec+c
 
     # find lagrange multipliers
     muk = transpose(A) * Qⁱ * (A * c - q)
+    dAcdf = spzeros(length(ufvec),length(c))
+    dA1df = spzeros(length(ufvec),length(c))
+    for (ii,vv) in enumerate(size(ufvec))
+          dAcdf[ii,non_zero_indices[ii, 2]] = csum[non_zero_indices[ii, 1]]
+          dA1df[ii,non_zero_indices[ii, 2]] = 1
+    end
+    muf = dAcdf * Qⁱ * (A * csum - q)#+dA1df * Qⁱ * (A * onesvec - onesvec)
+
 
     if guvec != nothing
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
             if ii <= ulength
-               guvec[ii] = uvec[ii]  -(2 * transpose(muk) * Wⁱ)[ii]
+               guvec[ii] = 2 * uvec[ii]-(2 * transpose(muk) * Wⁱ)[ii]
             else
-               guvec[ii]=convec[ii]
+               guvec[ii]=2 * convec[ii] + 2 * muf[ii-ulength]
             end
         end
     end
     
     if J !=nothing
-        return transpose(A * c - q) * Qⁱ * (A*c - q) + uvec ⋅ uvec - 
-                  2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec
+        return transpose(A * csum - q) * Qⁱ * (A*csum - q) + uvec ⋅ uvec - 
+                  2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec +
+#                   #transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
+                     2 * transpose(muf) * (fnow - ufvec- fguess)
     end
 end
 

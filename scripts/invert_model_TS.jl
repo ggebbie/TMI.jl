@@ -29,11 +29,11 @@ TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
 ctrue = vec(θtrue)
 
-q = -A * ctrue
+q = A * ctrue
 
 # The first guess for the tracer concentration should be close to the actual tracer concentration
 # take first guess as θtrue+0.01
-cvec=vec(θtrue).+ 0.01
+cvec=vec(θtrue).+ 0.1
 θguess = unvec(θtrue,cvec)
 
 #first guess tracer control vector is near zero, and we want this to remain relatively small
@@ -60,7 +60,7 @@ non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 
 
 convec = [uvec; non_zero_values]
-A0= A  .* 0.5
+A0= A  .* 0.2
 ulength=length(uvec)
 
 # get sample J value
@@ -109,12 +109,15 @@ Adiff1 = sum((A.-A0).^2)
 Adiff2 = sum((A.-Anew).^2)
 oldf = sum((non_zero_values).^2)
 newf = sum((out.minimizer[ulength+1:end]).^2)
+tracer_cons1 = sum((A0*cvec-q).^2)
+tracer_cons2 = sum((Anew*(cvec+out.minimizer[begin:ulength])-q).^2)
+
 
 
 println("A difference before: $Adiff1")
 println("A difference after: $Adiff2")
-println("old f sum:$oldf")
-println("new f sum:$newf")
+println("old cons:$tracer_cons1")
+println("new cons:$tracer_cons2")
 
 
 # plot the difference
