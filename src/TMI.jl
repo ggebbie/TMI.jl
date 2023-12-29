@@ -2250,18 +2250,17 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     muk = transpose(A) * Qⁱ * (A * c - q)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
-    for (ii,vv) in enumerate(size(ufvec))
-          dAcdf[ii,non_zero_indices[ii, 2]] = csum[non_zero_indices[ii, 1]]
+    for ii in eachindex(ufvec)
+          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
           dA1df[ii,non_zero_indices[ii, 2]] = 1
     end
     
 
-    muf = dAcdf * Qⁱ * (A * csum - q)#+dA1df * Qⁱ * (A * onesvec - onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
 
-    J =  transpose(A * csum - q) * Qⁱ * (A*csum - q) +uvec ⋅ uvec - 
-          2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec +
-          #transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec) 
-          2 * transpose(muf) * (fnow - ufvec - fguess)
+    J =  uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) - 
+          2 * transpose(muk)*( Wⁱ * uvec+c-y) +
+          transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -2274,7 +2273,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
-          guvec[ii]=convec[ii]+2 * muf[ii-ulength]
+          guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii]+
         end
     end
 
@@ -2304,11 +2303,11 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     muk = transpose(A) * Qⁱ * (A * c - q)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
-    for (ii,vv) in enumerate(size(ufvec))
-          dAcdf[ii,non_zero_indices[ii, 2]] = csum[non_zero_indices[ii, 1]]
-          dA1df[ii,non_zero_indices[ii, 2]] = 1
+    for ii in eachindex(ufvec)
+          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
+          dA1df[ii,non_zero_indices[ii, 1]] = 1
     end
-    muf = dAcdf * Qⁱ * (A * csum - q)#+dA1df * Qⁱ * (A * onesvec - onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
 
 
     if guvec != nothing
@@ -2317,16 +2316,15 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
             if ii <= ulength
                guvec[ii] = 2 * uvec[ii]-(2 * transpose(muk) * Wⁱ)[ii]
             else
-               guvec[ii]=2 * convec[ii] + 2 * muf[ii-ulength]
+               guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii] +
             end
         end
     end
     
     if J !=nothing
-        return transpose(A * csum - q) * Qⁱ * (A*csum - q) + uvec ⋅ uvec - 
-                  2 * transpose(muk)*( Wⁱ * uvec+c-y) +  ufvec ⋅ ufvec +
-#                   #transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
-                     2 * transpose(muf) * (fnow - ufvec- fguess)
+        return uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)-
+                  2 * transpose(muk)*( Wⁱ * uvec+c-y)+
+               transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
     end
 end
 
