@@ -7,7 +7,7 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GGplot
+using GeoPythonPlot
 using LinearAlgebra
 using SparseArrays
 using Statistics
@@ -94,7 +94,7 @@ println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 #print(length(convec))
 # filter the data with an Optim.jl method
 iterations = 5
-out = steadyclimatology(convec,fg!,iterations)
+out = steadyclimatology_optim(convec,fg!,iterations)
 
 # reconstruct by hand to double-check.
 ũ = unvec((W⁻ * u),out.minimizer[begin:ulength])
