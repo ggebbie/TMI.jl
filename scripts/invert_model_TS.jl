@@ -29,13 +29,15 @@ TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
 ctrue = vec(θtrue)
 
+minoffdiag = minimum(A - spdiagm(diag(A)))
+println(minoffdiag)
 #An = A./sum(A;dims=1)
 
 q = A * ctrue
-
+surfind = surfaceindex(γ.I)
 # The first guess for the tracer concentration should be close to the actual tracer concentration
-# take first guess as θtrue+0.01
-cvec=vec(θtrue).+ 0.1
+# take first guess as θtrue
+cvec=vec(θtrue)
 θguess = unvec(θtrue,cvec)
 
 #first guess tracer control vector is near zero, and we want this to remain relatively small
@@ -53,8 +55,9 @@ Qerror[:,:,1].=0
 Qfield = Field(Qerror,γ,θtrue.name,θtrue.longname,θtrue.units)
 Qvec = vec(Qfield)
 
-
-Q⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)
+Qdiag = 1 ./ ones(sum(γ.wet))
+Qdiag[surfind] .= 10^(-7)
+Q⁻ = Diagonal(Qdiag)
 A0= A  .* 0.2
 non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A0)
 
@@ -114,10 +117,10 @@ Adiff1 = sum((A.-A0).^2)
 Adiff2 = sum((A.-Anew).^2)
 oldf = sum((non_zero_values).^2)
 newf = sum((out.minimizer[ulength+1:end]).^2)
-tracer_cons1 = sum((A0*cvec-q).^2)
-tracer_cons2 = sum((Anew*(cvec+out.minimizer[begin:ulength])-q).^2)
-mass_cons1 = sum((A0*onesvec-onesvec).^2)
-mass_cons2 = sum((Anew*onesvec-onesvec).^2)
+tracer_cons1 = sum((A0*cvec).^2)
+tracer_cons2 = sum((Anew*(cvec+out.minimizer[begin:ulength])).^2)
+mass_cons1 = sum((A0*onesvec).^2)
+mass_cons2 = sum((Anew*onesvec).^2)
 
 
 println("A difference before: $Adiff1")

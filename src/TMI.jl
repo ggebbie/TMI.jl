@@ -1826,12 +1826,12 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     A=A0 + Actl
     dummy,dummy,fguess  = findnz(A0)
     dummy,dummy,fnow  = findnz(A) 
-    onesvec = ones(size(q))
+    onesvec = ones(size(uvec))
     csum = Wⁱ * uvec+c
 
 
     # find lagrange multipliers
-    muk = transpose(A) * Qⁱ * (A * c - q)
+    muk = transpose(A) * Qⁱ * (A * c)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
     for ii in eachindex(ufvec)
@@ -1840,11 +1840,11 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     end
     
 
-    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c) + dA1df * (A * onesvec)
 
-    J =  uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) - 
+    J =  uvec ⋅ uvec + transpose(A * c) * Qⁱ * (A*c) - 
           2 * transpose(muk)*( Wⁱ * uvec+c-y) +
-          transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
+          transpose(A * onesvec)* (A* onesvec)
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -1880,18 +1880,18 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     A=A0 + Actl
     dummy,dummy,fguess  = findnz(A0)
     dummy,dummy,fnow  = findnz(A)
-    onesvec = ones(size(q))
+    onesvec = ones(size(uvec))
     csum = Wⁱ * uvec+c
 
     # find lagrange multipliers
-    muk = transpose(A) * Qⁱ * (A * c - q)
+    muk = transpose(A) * Qⁱ * (A * c)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
     for ii in eachindex(ufvec)
           dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
           dA1df[ii,non_zero_indices[ii, 1]] = 1
     end
-    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c) + dA1df * (A * onesvec)
 
 
     if guvec != nothing
@@ -1906,9 +1906,9 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     end
     
     if J !=nothing
-        return uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)-
+        return uvec ⋅ uvec + transpose(A * c) * Qⁱ * (A*c)-
                   2 * transpose(muk)*( Wⁱ * uvec+c-y)+
-               transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
+               transpose(A * onesvec) * (A* onesvec)
     end
 end
 

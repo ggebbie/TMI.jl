@@ -167,12 +167,12 @@ function wetmask(c::Array,nx,ny,nz)
     return wet
 end
 
-function interiormask(A,wet,nx,ny,nz)
-    interior = falses(nx,ny,nz)
-    I = cartesianindex(wet)
-    list = findall(.!(isone.(sum(abs.(A),dims=2))))
-    interior[I[list]] .= true 
-    return interior
-end
+#function interiormask(A,wet,nx,ny,nz)
+#    interior = falses(nx,ny,nz)
+#    I = cartesianindex(wet)
+#    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+#    interior[I[list]] .= true 
+#    return interior
+#end
 
 
