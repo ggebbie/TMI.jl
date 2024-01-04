@@ -33,8 +33,9 @@ minoffdiag = minimum(A - spdiagm(diag(A)))
 println(minoffdiag)
 #An = A./sum(A;dims=1)
 
-q = A * ctrue
+#q = A * ctrue
 surfind = surfaceindex(γ.I)
+
 # The first guess for the tracer concentration should be close to the actual tracer concentration
 # take first guess as θtrue
 cvec=vec(θtrue)
@@ -43,7 +44,8 @@ cvec=vec(θtrue)
 #first guess tracer control vector is near zero, and we want this to remain relatively small
 u =  Field(-0.01.*ones(size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
 uvec = vec(u)
-
+q = zeros(size(uvec))
+q[surfind] = cvec[surfind]
 
 
 #We need an error covariance matrix
@@ -56,7 +58,7 @@ Qfield = Field(Qerror,γ,θtrue.name,θtrue.longname,θtrue.units)
 Qvec = vec(Qfield)
 
 Qdiag = 1 ./ ones(sum(γ.wet))
-Qdiag[surfind] .= 10^(-7)
+#Qdiag[surfind] .= 10^(-7)
 Q⁻ = Diagonal(Qdiag)
 A0= A  .* 0.2
 non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A0)
@@ -96,7 +98,7 @@ println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 
 #print(length(convec))
 # filter the data with an Optim.jl method
-iterations = 5
+iterations = 20
 out = steadyclimatology_optim(convec,fg!,iterations)
 
 # reconstruct by hand to double-check.
@@ -117,9 +119,9 @@ Adiff1 = sum((A.-A0).^2)
 Adiff2 = sum((A.-Anew).^2)
 oldf = sum((non_zero_values).^2)
 newf = sum((out.minimizer[ulength+1:end]).^2)
-tracer_cons1 = sum((A0*cvec).^2)
-tracer_cons2 = sum((Anew*(cvec+out.minimizer[begin:ulength])).^2)
-mass_cons1 = sum((A0*onesvec).^2)
+tracer_cons1 = sum((Q⁻*A*cvec - q).^2)
+tracer_cons2 = sum((Q⁻*Anew*(cvec+out.minimizer[begin:ulength]) - q).^2)
+mass_cons1 = sum((A*onesvec).^2)
 mass_cons2 = sum((Anew*onesvec).^2)
 
 
@@ -130,6 +132,9 @@ println("new tracer cons:$tracer_cons2")
 println("old mass cons:$mass_cons1")
 println("new mass cons:$mass_cons2")
 
+b = getsurfaceboundary(θtrue)
+Alu2 = lu(Anew)
+final_θ = steadyinversion(Alu2,b,γ)
 
 # plot the difference
 level = 15 # your choice 1-33
@@ -141,7 +146,7 @@ planviewplot(θtrue, depth, cntrs, titlelabel=label)
 readline()
 
 cntrs = 0:0.5:15
-label = "Optimized θ"
-planviewplot(c̃, depth, cntrs, titlelabel=label)
-
+label = "Final θ"
+planviewplot(final_θ, depth, cntrs, titlelabel=label)
+readline()
 

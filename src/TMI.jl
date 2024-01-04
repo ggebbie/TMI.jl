@@ -1831,7 +1831,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
 
 
     # find lagrange multipliers
-    muk = transpose(A) * Qⁱ * (A * c)
+    muk = transpose(A) * Qⁱ * (A * c - q)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
     for ii in eachindex(ufvec)
@@ -1840,9 +1840,9 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     end
     
 
-    dAdf_terms = dAcdf * Qⁱ * (A * c) + dA1df * (A * onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * (A * onesvec)
 
-    J =  uvec ⋅ uvec + transpose(A * c) * Qⁱ * (A*c) - 
+    J =  uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) - 
           2 * transpose(muk)*( Wⁱ * uvec+c-y) +
           transpose(A * onesvec)* (A* onesvec)
 
@@ -1884,14 +1884,14 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     csum = Wⁱ * uvec+c
 
     # find lagrange multipliers
-    muk = transpose(A) * Qⁱ * (A * c)
+    muk = transpose(A) * Qⁱ * (A * c - q)
     dAcdf = spzeros(length(ufvec),length(c))
     dA1df = spzeros(length(ufvec),length(c))
     for ii in eachindex(ufvec)
           dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
           dA1df[ii,non_zero_indices[ii, 1]] = 1
     end
-    dAdf_terms = dAcdf * Qⁱ * (A * c) + dA1df * (A * onesvec)
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * (A * onesvec)
 
 
     if guvec != nothing
@@ -1906,7 +1906,7 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     end
     
     if J !=nothing
-        return uvec ⋅ uvec + transpose(A * c) * Qⁱ * (A*c)-
+        return uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)-
                   2 * transpose(muk)*( Wⁱ * uvec+c-y)+
                transpose(A * onesvec) * (A* onesvec)
     end
