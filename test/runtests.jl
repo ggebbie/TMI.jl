@@ -14,4 +14,5 @@ end
 
     include("test_modern.jl")
 
+    include("test_mitgcm.jl")
 end

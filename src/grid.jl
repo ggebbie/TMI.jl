@@ -36,7 +36,7 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
 end
 
 """
-function Grid(foreign_file::String, tracername,lonname,latname, depthname, maskname)
+function Grid(foreign_file::String, tracername, lonname,latname, depthname, maskname)
 
     Construct the Grid from a non-TMI file given the names of relevant fields.
 
@@ -52,6 +52,7 @@ function Grid(foreign_file::String, tracername,lonname,latname, depthname, maskn
 - `lonname::String`
 - `latname::String`
 - `depthname::String`
+- `maskname::String`
 # Output
 - `γ::Grid`: TMI grid struct
 """
@@ -65,7 +66,7 @@ function Grid(foreign_file::S, tracername::S, lonname::S, latname::S, depthname:
     lat = convert(Vector{Float32},ds[latname])
     depth = - convert(Vector{Float32},ds[depthname]) # flip sign for actual "depth"
 
-    # make interior mask
+    # make interior mask: Assume no lateral or bottom boundaries (CAUTION)
     interior = deepcopy(wet)
     interior[:,:,1] .= false
 
@@ -154,25 +155,4 @@ function interiormask(A,wet,nx,ny,nz)
     interior[I[list]] .= true 
     return interior
 end
-
-function wetmask(c::Array,nx,ny,nz)
-
-    # read Cartesian Index from file.
-    I = cartesianindex(TMIfile)
-
-    # make a mask
-    # first choice: smaller but inconsistent with input grid
-    wet = falses(nx,ny,nz)
-    wet[I] .= true
-    return wet
-end
-
-#function interiormask(A,wet,nx,ny,nz)
-#    interior = falses(nx,ny,nz)
-#    I = cartesianindex(wet)
-#    list = findall(.!(isone.(sum(abs.(A),dims=2))))
-#    interior[I[list]] .= true 
-#    return interior
-#end
-
 

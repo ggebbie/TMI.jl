@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "afba66f49f0163f1bfa599ee69b3f0c0a51b746d"
+project_hash = "6f3e7d525e4b2eff10d9cf99ba23a3e3224a2ad2"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -641,9 +641,9 @@ uuid = "429524aa-4258-5aef-a3af-852621145aeb"
 version = "1.7.5"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "d321bf2de576bf25ec4d3e4360faca399afca282"
+git-tree-sha1 = "dfdf5519f235516220579f949664f1bf44e741c5"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "1.6.0"
+version = "1.6.3"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
