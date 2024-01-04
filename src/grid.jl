@@ -1,4 +1,3 @@
-
 """
     struct Grid
 
@@ -10,6 +9,68 @@ struct Grid{T <: Real}
     depth::Vector{T}
     wet::BitArray{3}
     interior::BitArray{3}
+end
+
+"""
+function Grid(TMIfile)
+
+    Construct the Grid given a file name
+
+# Arguments
+- `TMIfile::String`: NetCDF file name for TMI version
+
+# Output
+- `γ::Grid`: TMI grid struct
+"""
+function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
+    # get properties of grid
+    lon,lat,depth = gridprops(TMIfile)
+    
+    # make ocean mask
+    wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+
+    # make interior mask
+    interior = interiormask(A,wet,length(lon),length(lat),length(depth))
+
+    return Grid(lon,lat,depth,wet,interior)
+end
+
+"""
+function Grid(foreign_file::String, tracername, lonname,latname, depthname, maskname)
+
+    Construct the Grid from a non-TMI file given the names of relevant fields.
+
+    Assumes that an ocean mask is available.
+    Assumes a NetCDF file.
+    Assumes everything below the top layer is part of the interior. 
+    Assumes Float32 fields.
+    `tracername` not actually used right now.
+
+# Arguments
+- `foreign_file::String`
+- `tracername::String`
+- `lonname::String`
+- `latname::String`
+- `depthname::String`
+- `maskname::String`
+# Output
+- `γ::Grid`: TMI grid struct
+"""
+function Grid(foreign_file::S, tracername::S, lonname::S, latname::S, depthname::S, maskname::S) where S <: String
+    
+    # make ocean mask
+    ds = Dataset(foreign_file)
+    wet = Bool.(ds[maskname])::BitArray # very slow! (couple of secs), use `convert` instead?
+
+    lon = convert(Vector{Float32},ds[lonname]) 
+    lat = convert(Vector{Float32},ds[latname])
+    depth = - convert(Vector{Float32},ds[depthname]) # flip sign for actual "depth"
+
+    # make interior mask: Assume no lateral or bottom boundaries (CAUTION)
+    interior = deepcopy(wet)
+    interior[:,:,1] .= false
+
+    return Grid(lon,lat,depth,wet,interior)
 end
 
 """
@@ -51,11 +112,7 @@ cartesianindex(wet::BitArray{3}) = findall(wet)
 function linearindex(wet)
     R = Array{Int64,3}(undef,size(wet))
     fill!(R,0)
-    # R = Array{Union{Int64,Nothing},3}(nothing,size(wet))
     R[wet]=1:sum(wet)
-    # R = LinearIndices((1:maximum(it),1:maximum(jt),1:maximum(kt)));
-    # R = LinearIndices((it,jt,kt));
-    #Rwet = R[γ.wet]
     return R
 end
 
@@ -78,4 +135,23 @@ function checkgrid!(tracer,wet)
         println("resetting to NaN")
         tracer[.!(wet)] .= NaN
     end
+end
+
+function wetmask(TMIfile::String,nx,ny,nz)
+    # read Cartesian Index from file.
+    I = cartesianindex(TMIfile)
+    # make a mask
+    # first choice: smaller but inconsistent with input grid
+    #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
+    wet = falses(nx,ny,nz)
+    wet[I] .= 1
+    return wet
+end
+
+function interiormask(A,wet,nx,ny,nz)
+    interior = falses(nx,ny,nz)
+    I = cartesianindex(wet)
+    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+    interior[I[list]] .= true 
+    return interior
 end

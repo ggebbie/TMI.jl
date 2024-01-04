@@ -36,6 +36,7 @@ export config, config_from_mat, config_from_nc,
     cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
+    costfunction_gridded_model, costfunction_gridded_model!,
     trackpathways, meanage,
     regeneratedphosphate, preformedphosphate,
     regeneratednitrate, preformednitrate,
@@ -1797,6 +1798,121 @@ function costfunction_point_obs!(J,guvec::Union{Nothing,Vector},uvec::Vector,Alu
         return Jdata + Jcontrol
     end
 end
+
+""" 
+    function costfunction_gridded_model(convec::Vector{T},non_zero_indices,y::Field{T},u,A0,c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
+
+    squared model-data misfit for gridded data
+    controls are a vector input for Optim.jl
+# Arguments
+- `convec`: concatenated control vecotr incuding u and f
+- `J`: cost function of sum of squared misfits
+- `gJ`: derivative of cost function wrt to controls
+- `u`: tracer controls, field format
+- `non_zero_indices`: Non-zero indices for reconstruction of water-mass matrix A
+- `c`: tracer concentrations from GCM
+- `Wⁱ`: inverse of W weighting matrix for observations
+- `Qⁱ`: inverse of Q weighting matrix for tracer conservation
+- `γ`: grid
+"""
+function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+    ulength = sum(γ.wet)
+    
+    #control vectors
+    uvec=convec[begin:ulength]
+    ufvec = convec[ulength+1:end]
+
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
+    A=A0 + Actl
+    dummy,dummy,fguess  = findnz(A0)
+    dummy,dummy,fnow  = findnz(A) 
+    onesvec = ones(size(q))
+    csum = Wⁱ * uvec+c
+
+
+    # find lagrange multipliers
+    muk = transpose(A) * Qⁱ * (A * c - q)
+    dAcdf = spzeros(length(ufvec),length(c))
+    dA1df = spzeros(length(ufvec),length(c))
+    for ii in eachindex(ufvec)
+          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
+          dA1df[ii,non_zero_indices[ii, 2]] = 1
+    end
+    
+
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
+
+    J =  uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) - 
+          2 * transpose(muk)*( Wⁱ * uvec+c-y) +
+          transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
+
+    # adjoint equations
+    guvec = zeros(length(convec))
+
+    for (ii,vv) in enumerate(convec)
+        if ii <= ulength 
+          #this is the derivative of the cost function wrt the part of the control vector
+          # associated with the tracer concentration
+          guvec[ii] =  2 * uvec[ii] - (2 * transpose(muk) * Wⁱ)[ii]
+        else
+          #this is the derivative of the cost function wrt the part of the control vector
+          # associated with the transport vector
+          guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii]+
+        end
+    end
+
+    return J , guvec
+end
+
+
+
+
+"""
+    function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+"""
+function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+
+    ulength = sum(γ.wet)
+    uvec = convec[begin:ulength]
+    ufvec = convec[ulength+1:end]
+    
+    Actl = sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], ufvec)
+    A=A0 + Actl
+    dummy,dummy,fguess  = findnz(A0)
+    dummy,dummy,fnow  = findnz(A)
+    onesvec = ones(size(q))
+    csum = Wⁱ * uvec+c
+
+    # find lagrange multipliers
+    muk = transpose(A) * Qⁱ * (A * c - q)
+    dAcdf = spzeros(length(ufvec),length(c))
+    dA1df = spzeros(length(ufvec),length(c))
+    for ii in eachindex(ufvec)
+          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
+          dA1df[ii,non_zero_indices[ii, 1]] = 1
+    end
+    dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
+
+
+    if guvec != nothing
+        tmp = guvec
+        for (ii,vv) in enumerate(tmp)
+            if ii <= ulength
+               guvec[ii] = 2 * uvec[ii]-(2 * transpose(muk) * Wⁱ)[ii]
+            else
+               guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii] +
+            end
+        end
+    end
+    
+    if J !=nothing
+        return uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)-
+                  2 * transpose(muk)*( Wⁱ * uvec+c-y)+
+               transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
+    end
+end
+
+
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
