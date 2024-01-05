@@ -1,3 +1,20 @@
+"""
+    struct Source
+
+    This structure describes Sources, which are
+    similar to Fields, but they may be
+    1) non-negative
+    2) have only interior mask
+"""
+struct Source{T}
+    tracer::Array{T,3}
+    γ::Grid
+    name::Symbol
+    longname::String
+    units::String
+    logscale::Bool
+end
+
 function readsource(file,tracername,γ::Grid;logscale=false) 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     tracer, units, longname = readtracerplus(file,tracername)

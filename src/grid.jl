@@ -36,23 +36,22 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
 end
 
 """
-function Grid(foreign_file::String, tracername, lonname,latname, depthname, maskname)
+function Grid(foreign_file, maskname, lonname, latname, depthname)
 
     Construct the Grid from a non-TMI file given the names of relevant fields.
 
     Assumes that an ocean mask is available.
-    Assumes a NetCDF file.
+    Assumes an input NetCDF file.
     Assumes everything below the top layer is part of the interior. 
     Assumes Float32 fields.
     `tracername` not actually used right now.
 
 # Arguments
 - `foreign_file::String`
-- `tracername::String`
+- `maskname::String`
 - `lonname::String`
 - `latname::String`
 - `depthname::String`
-- `maskname::String`
 # Output
 - `γ::Grid`: TMI grid struct
 """
@@ -62,6 +61,8 @@ function Grid(foreign_file::S, tracername::S, lonname::S, latname::S, depthname:
     ds = Dataset(foreign_file)
     wet = Bool.(ds[maskname])::BitArray # very slow! (couple of secs), use `convert` instead?
 
+    println(eltype(ds[lonname]))
+    
     lon = convert(Vector{Float32},ds[lonname]) 
     lat = convert(Vector{Float32},ds[latname])
     depth = - convert(Vector{Float32},ds[depthname]) # flip sign for actual "depth"

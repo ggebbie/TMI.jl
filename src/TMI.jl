@@ -94,24 +94,7 @@ pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
 
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
-
-"""
-    struct Source
-
-    This structure describes Sources, which are
-    similar to Fields, but they may be
-    1) non-negative
-    2) have only interior mask
-"""
-struct Source{T}
-    tracer::Array{T,3}
-    γ::Grid
-    name::Symbol
-    longname::String
-    units::String
-    logscale::Bool
-end
-
+include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
@@ -1676,7 +1659,7 @@ end
 - `Qⁱ`: inverse of Q weighting matrix for tracer conservation
 - `γ`: grid
 """
-function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
     ulength = sum(γ.wet)
     
     #control vectors
@@ -1725,13 +1708,10 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     return J , guvec
 end
 
-
-
-
 """
     function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     ulength = sum(γ.wet)
     uvec = convec[begin:ulength]
@@ -1754,7 +1734,6 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     end
     dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * Qⁱ * (A * onesvec - onesvec)
 
-
     if guvec != nothing
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
@@ -1772,8 +1751,6 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
                transpose(A * onesvec - onesvec) * Qⁱ * (A* onesvec - onesvec)
     end
 end
-
-
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
