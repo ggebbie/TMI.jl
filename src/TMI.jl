@@ -94,27 +94,11 @@ pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
 
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
-
-"""
-    struct Source
-
-    This structure describes Sources, which are
-    similar to Fields, but they may be
-    1) non-negative
-    2) have only interior mask
-"""
-struct Source{T}
-    tracer::Array{T,3}
-    γ::Grid
-    name::Symbol
-    longname::String
-    units::String
-    logscale::Bool
-end
-
+include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
+include(pkgsrcdir("deprecated.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -451,85 +435,6 @@ function gradient_check(uvec,f,fg,fg!)
     return ∇f, ∇f_finite
 end
 
-"""
-    function readtracer(file,tracername)
-    Read a tracer field from NetCDF.
-# Arguments
-- `file`: TMI NetCDF file name
-- `tracername`: name of tracer
-# Output
-- `c`: 3D tracer field
-"""
-function readtracer(file,tracername)
-    c = ncread(file,tracername)
-    return c
-end
-
-function readtracerplus(file,tracername)
-    ds = Dataset(file,"r")
-    v = ds[tracername]
-    # load all data
-    tracer = v[:,:,:]
-    # load an attribute
-    units = v.attrib["units"]
-    longname = v.attrib["longname"]
-    close(ds)
-    return tracer,units,longname
-end
-
-"""
-    function readfield(file,tracername,γ)
-    Read a tracer field from NetCDF but return it 
-    as a Field.
-
-    Use NCDatasets so that Unicode is correct
-
-# Arguments
-- `file`: TMI NetCDF file name
-- `tracername`: name of tracer
-- `γ::Grid`, TMI grid specification
-# Output
-- `c`::Field
-
----------------------------------------------------
-    MATLAB version
-    function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
-
-    read MATLAB field and transfer zyx format to xyz
-"""
-function readfield(file,tracername,γ::Grid) 
-
-    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    tracer, units, longname = readtracerplus(file,tracername)
-    checkgrid!(tracer,γ.wet)
-    c = Field(tracer,γ,Symbol(tracername),longname,units)
-
-    return c
-end
-function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
-    # read MATLAB field and transfer zyx format to xyz
-
-    matobj = matopen(matfile)
-    varnames, xvarnames = matvarnames(matfile)
-
-    if mattracername in varnames
-        tvar = read(matobj,mattracername)
-    elseif mattracername in xvarnames
-        tvar = read(matobj,"x")[mattracername]
-    end
-
-    # put zyx vector into xyz 3D array
-    tracer = tracerinit(tvar, Izyx, γ.wet)
-    checkgrid!(tracer,γ.wet)
-
-    nctracername = mat2ncfield()[mattracername]
-    units = fieldsatts()[nctracername]["units"]
-    longname = fieldsatts()[nctracername]["longname"]
-
-    close(matobj)
-    return Field(tracer,γ,Symbol(nctracername),longname,units)
-end
-readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfield(file,mattracername,γ,Izyx)
 
 """
     function writefield(file,field)
@@ -546,7 +451,7 @@ readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfiel
 # Side-effect
 - write to `file`
 """
-function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
+function write(file,field::Union{Source{T},Field{T}}) where T <: Real
 
     if !isfile(file)
         # create new NetCDF file
@@ -596,66 +501,6 @@ function writefield(file,field::Union{Source{T},Field{T}}) where T <: Real
         
     return nothing
 end
-
-function readsource(file,tracername,γ::Grid;logscale=false) 
-    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    tracer, units, longname = readtracerplus(file,tracername)
-    checkgrid!(tracer,γ.interior)
-    if logscale
-        ct = log.(tracer)
-    else
-        ct = tracer
-    end
-
-    #c = Field(tracer,γ,Symbol(tracername),longname,units)
-    return Source(ct,γ,Symbol(tracername),longname,units,logscale)
-end
-
-# function readsource(file,tracername,γ::Grid;logscale=false)
-#     c = readfield(file,tracername,γ)
-#     if logscale
-#         ct = log.(c.tracer)
-#     else
-#         ct = c.tracer
-#     end
-#     q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
-#     return q
-# end
-function readsource(matfile,matsourcename,γ::Grid,Izyx) # for MATLAB
-    # read MATLAB field and transfer zyx format to xyz
-
-    matobj = matopen(matfile)
-    varnames, xvarnames = matvarnames(matfile)
-
-    if matsourcename in varnames
-        tvar = read(matobj,matsourcename)
-    elseif matsourcename in xvarnames
-        tvar = read(matobj,"x")[matsourcename]
-    end
-
-    # put zyx vector into xyz 3D array
-    source = sourceinit(tvar, Izyx, γ)
-
-    # perform a check of file compatibility with grid
-    if sum(isnan.(source[γ.interior])) > 0
-        error("readsource warning: NaN on interior grid")
-    end
-    # check for non NaN or nonzero off grid
-    if sum(isnan.(source[.!(γ.interior)])) < length(isnan.(source[.!(γ.interior)]))
-        println("readsource warning: non-NaN value off grid")
-        println("resetting to NaN")
-        source[.!(γ.interior)] .= NaN
-    end
-    ncsourcename = mat2ncsource()[matsourcename]
-    units = fieldsatts()[ncsourcename]["units"]
-    longname = fieldsatts()[ncsourcename]["longname"]
-    logscale = false # not implemented for true case
-    close(matobj)
-    return Source(source,γ,Symbol(ncsourcename),longname,units,logscale)
-end
-readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsource(file,matsourcename,γ,Izyx)
-
-writesource(file,field::Source) = writefield(file,field) 
 
 """
     function depthindex(I) 
@@ -1815,7 +1660,7 @@ end
 - `Qⁱ`: inverse of Q weighting matrix for tracer conservation
 - `γ`: grid
 """
-function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
     ulength = sum(γ.wet)
     
     #control vectors
@@ -1864,13 +1709,10 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     return J , guvec
 end
 
-
-
-
 """
     function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},c,y::Field{T},Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
+function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,u₀::Field{T},A0,y::Vector{T},c,q,Wⁱ::Diagonal{T, Vector{T}},Qⁱ::Diagonal{T, Vector{T}},γ::Grid) where T <: Real
 
     ulength = sum(γ.wet)
     uvec = convec[begin:ulength]
@@ -1893,7 +1735,6 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     end
     dAdf_terms = dAcdf * Qⁱ * (A * c - q) + dA1df * (A * onesvec)
 
-
     if guvec != nothing
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
@@ -1911,8 +1752,6 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
                transpose(A * onesvec) * (A* onesvec)
     end
 end
-
-
 
 """ 
     function steadyinversion(Alu,b;q=nothing,r=1.0)
@@ -2088,99 +1927,35 @@ function iswet(loc,γ)
     return Interpolations.InterpGetindex(wetwrap)[wis...] > wetness
 end
 
-function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
-    q = deepcopy(q₀)
-    adjustsource!(q,u)
-    return q
-end
-    
-function adjustsource!(q::Field,u::Field)
-    # write it out so b changes when returned
-    q.tracer[q.γ.wet] += u.tracer[u.γ.wet] 
-end
-function adjustsource!(q::Source,u::Source)
-    if q.logscale && u.logscale
-        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
-        q.logscale = false
-    elseif ~q.logscale && u.logscale
-        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
-        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
-    elseif q.logscale && ~u.logscale
-        error("not implemented: logscale would not lead to non-negative source")
-        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
-        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
-    else 
-        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-    end        
-end
-function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
-    for qkey in keys(q)
-        if haskey(u,qkey)
-            adjustsource!(q[qkey],u[qkey])
-        else
-            error("adjustsource!: u doesn't have qkey ",qkey)
-        end
-    end
-end
-function adjustsource!(q::Union{Field,Source},u::NamedTuple) #where {N1, N2, T <: Real}
-    qkey = :source
-    if haskey(u,qkey)
-        adjustsource!(q,u[qkey])
-    else
-        error("adjustsource!: u doesn't have source info")
-    end
-end
-
-function gadjustsource!(gu::Field,gq::Field)
-    # write it out so b changes when returned
-    gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
-end
-function gadjustsource!(gu::Source,gq::Source,q₀::Source)
-    q = deepcopy(q₀)
-    if gq.logscale && gu.logscale
-        error("not implemented")
-        # gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
-        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
-        # q.logscale = false
-        gq.logscale = false
-        
-    elseif gu.logscale
-        q.tracer[q.γ.interior] = log.(q.tracer[q.γ.interior])
-        gq.tracer[gq.γ.interior] = gq.tracer[gq.γ.interior] .* exp.(q.tracer[q.γ.interior])
-        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
-        # no need to adjoint this next line?
-    elseif gq.logscale
-        error("not implemented: logscale would not lead to non-negative source")
-        # u.tracer[u.γ.interior] = log.(u.tracer[u.γ.interior])
-        # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
-        # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
-    else 
-        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
-    end        
-end
-
-function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: Union{Source,Field}
-    qkey = :source
-    if haskey(gu,qkey)
-        gadjustsource!(gu[qkey],gq,q)
-    end
-end
-function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: NamedTuple 
-    for qkey in keys(gq)
-        if haskey(gu,qkey)
-            gadjustsource!(gu[qkey],gq[qkey],q[qkey])
-        end
-    end
-end
-
-
 wet(a::BoundaryCondition) = a.wet
 wet(a::Field) = a.γ.wet
 wet(a::Source) = a.γ.interior
 
-include("deprecated.jl")
+function _read3d(file,tracername)
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+
+    # eliminate Union{Missing} types
+    T = eltype(v[1,1,1])
+    c = convert(Array{T,3},v[:,:,:])
+    
+    # load an attribute
+    if "units" in keys(v.attrib)
+        units = v.attrib["units"]
+    else
+        error("TMI._read3d: units not found")
+    end
+
+    if "longname" in keys(v.attrib)
+        longname = v.attrib["longname"]
+    elseif "long_name" in keys(v.attrib)
+        longname = v.attrib["long_name"]
+    else
+        error("TMI._read3d: longname not found")
+    end
+        
+    close(ds)
+    return c, units, longname
+end
 
 end
