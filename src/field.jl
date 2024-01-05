@@ -67,11 +67,6 @@ function zeros(γ::Grid{T},name=:none,longname="unknown",units="unknown")::Field
     return Field(tracer,γ,name,longname,units)
 end
 
-# function planviewplot(c::Field, depth) 
-#     cplan = planview(c,depth)
-#     UnicodePlots.heatmap(transpose(cplan),zlabel=c.units,title=c.longname)
-# end
-
 function planview(c::Field{T},depth)::Matrix{T} where T <: Real
  
     isec = findall(==(depth),c.γ.depth)
@@ -81,13 +76,6 @@ function planview(c::Field{T},depth)::Matrix{T} where T <: Real
     cplan = dropdims(view(c.tracer,:,:,isec),dims=3)
     return cplan
 end
-
-# function sectionplot(c::Field,lon)
-#     csection = section(c,lon)
-#     #cmap_seismic = get_cmap("seismic")
-#     z = c.γ.depth/1000.0
-#     UnicodePlots.heatmap(transpose(csection),zlabel=c.units,title=c.longname,yflip=true)
-# end
 
 """
     function section
@@ -112,3 +100,69 @@ function section(c::Field{T},lon)::Array{T,2} where T <: Real
     csection= dropdims(view(c.tracer,isec,:,:),dims=1)
     return csection
 end
+
+function _read3d(file,tracername)
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+    # load all data
+    tracer = v[:,:,:]
+    # load an attribute
+    units = v.attrib["units"]
+    longname = v.attrib["longname"]
+    close(ds)
+    return tracer,units,longname
+end
+
+"""
+    function readfield(file,tracername,γ)
+    Read a tracer field from NetCDF but return it 
+    as a Field.
+
+    Use NCDatasets so that Unicode is correct
+
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+- `γ::Grid`, TMI grid specification
+# Output
+- `c`::Field
+
+---------------------------------------------------
+    MATLAB version
+    function readfield(matfile,mattracername,γ::Grid,Izyx) # for MATLAB
+
+    read MATLAB field and transfer zyx format to xyz
+"""
+function readfield(file,tracername,γ::Grid) 
+
+    # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
+    tracer, units, longname = _read3d(file,tracername)
+    checkgrid!(tracer,γ.wet)
+    c = Field(tracer,γ,Symbol(tracername),longname,units)
+    return c
+end
+function readfield(matfile,mattracername,γ::Grid,Izyx) 
+    # read MATLAB field and transfer zyx format to xyz
+    matobj = matopen(matfile)
+    varnames, xvarnames = matvarnames(matfile)
+
+    if mattracername in varnames
+        tvar = read(matobj,mattracername)
+    elseif mattracername in xvarnames
+        tvar = read(matobj,"x")[mattracername]
+    end
+
+    # put zyx vector into xyz 3D array
+    tracer = tracerinit(tvar, Izyx, γ.wet)
+    checkgrid!(tracer,γ.wet)
+
+    nctracername = mat2ncfield()[mattracername]
+    units = fieldsatts()[nctracername]["units"]
+    longname = fieldsatts()[nctracername]["longname"]
+
+    close(matobj)
+    return Field(tracer,γ,Symbol(nctracername),longname,units)
+end
+readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfield(file,mattracername,γ,Izyx)
+
+writefield(file,c::Field) = write(file,c) 

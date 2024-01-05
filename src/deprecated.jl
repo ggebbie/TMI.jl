@@ -387,3 +387,18 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol},γ::Grid)
     b = BoundaryCondition(mask,lon,lat,depth,3,1,γ.wet[:,:,1],Symbol(region),longname,units)
     return b
 end
+
+
+"""
+    function readtracer(file,tracername)
+    Read a tracer field from NetCDF.
+# Arguments
+- `file`: TMI NetCDF file name
+- `tracername`: name of tracer
+# Output
+- `c`: 3D tracer field
+"""
+function readtracer(file,tracername)
+    c = ncread(file,tracername)
+    return c
+end
