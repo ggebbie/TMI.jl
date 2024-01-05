@@ -684,6 +684,29 @@ fieldsatts() =
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/yr)/(kg gridcell)"))
 
+# help for reading foreign files, translate to TMI convention
+tracerdict() = 
+    Dict("Θ" => :Θ,
+        "CT" => :Θ,
+        "θ" => :θ,
+        "THETA" => :θ,
+        "theta" => :θ,
+        "σθ" => :σθ,
+        "S⋆" => Symbol("S⋆"),
+        "Sₚ" => :Sₚ,
+        "σSₚ" => :σSₚ,
+        "δ¹⁸Ow" => :δ¹⁸Ow,
+        "σδ¹⁸Ow" => :σδ¹⁸Ow,
+         "PO₄" => :PO₄,
+         "σPO₄" => :σPO₄,
+         "qPO₄" => :qPO₄,
+         "NO₃" => :NO₃,
+         "σNO₃" => :σNO₃,
+         "O₂" => :O₂,
+         "σO₂" => :σO₂,
+         "δ¹³C" => :δ¹³C,
+         "σδ¹³C" => :σδ¹³C,
+         "F₀" => :F₀)
 
 function watermassmatrix2nc(TMIversion,A)
 
@@ -699,9 +722,9 @@ function watermassmatrix2nc(TMIversion,A)
     println("write ",varname)
     ncwrite(m, filenetcdf,varname)
     
-     varname= "Arow"
-     destatts = Dict("longname" => "gridcell number of destination (row value)")
-     nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=destatts)
+    varname= "Arow"
+    destatts = Dict("longname" => "gridcell number of destination (row value)")
+    nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=destatts)
     println("write ",varname)
     ncwrite(i, filenetcdf,varname)
 
