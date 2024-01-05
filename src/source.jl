@@ -17,7 +17,7 @@ end
 
 function readsource(file,tracername,γ::Grid;logscale=false) 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    tracer, units, longname = readtracerplus(file,tracername)
+    tracer, units, longname = _read3d(file,tracername)
     checkgrid!(tracer,γ.interior)
     if logscale
         ct = log.(tracer)
@@ -25,21 +25,9 @@ function readsource(file,tracername,γ::Grid;logscale=false)
         ct = tracer
     end
 
-    #c = Field(tracer,γ,Symbol(tracername),longname,units)
     return Source(ct,γ,Symbol(tracername),longname,units,logscale)
 end
-
-# function readsource(file,tracername,γ::Grid;logscale=false)
-#     c = readfield(file,tracername,γ)
-#     if logscale
-#         ct = log.(c.tracer)
-#     else
-#         ct = c.tracer
-#     end
-#     q = Source(ct,c.γ,c.name,c.longname,c.units,logscale)
-#     return q
-# end
-function readsource(matfile,matsourcename,γ::Grid,Izyx) # for MATLAB
+function readsource(matfile,matsourcename,γ::Grid,Izyx)
     # read MATLAB field and transfer zyx format to xyz
 
     matobj = matopen(matfile)

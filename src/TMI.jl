@@ -98,6 +98,7 @@ include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
+include(pkgsrcdir("deprecated.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -1926,11 +1927,35 @@ function iswet(loc,γ)
     return Interpolations.InterpGetindex(wetwrap)[wis...] > wetness
 end
 
-
 wet(a::BoundaryCondition) = a.wet
 wet(a::Field) = a.γ.wet
 wet(a::Source) = a.γ.interior
 
-include("deprecated.jl")
+function _read3d(file,tracername)
+    ds = Dataset(file,"r")
+    v = ds[tracername]
+
+    # eliminate Union{Missing} types
+    T = eltype(v[1,1,1])
+    c = convert(Array{T,3},v[:,:,:])
+    
+    # load an attribute
+    if "units" in keys(v.attrib)
+        units = v.attrib["units"]
+    else
+        error("TMI._read3d: units not found")
+    end
+
+    if "longname" in keys(v.attrib)
+        longname = v.attrib["longname"]
+    elseif "long_name" in keys(v.attrib)
+        longname = v.attrib["long_name"]
+    else
+        error("TMI._read3d: longname not found")
+    end
+        
+    close(ds)
+    return c, units, longname
+end
 
 end

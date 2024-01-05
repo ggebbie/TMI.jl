@@ -101,18 +101,6 @@ function section(c::Field{T},lon)::Array{T,2} where T <: Real
     return csection
 end
 
-function _read3d(file,tracername)
-    ds = Dataset(file,"r")
-    v = ds[tracername]
-    # load all data
-    tracer = v[:,:,:]
-    # load an attribute
-    units = v.attrib["units"]
-    longname = v.attrib["longname"]
-    close(ds)
-    return tracer,units,longname
-end
-
 """
     function readfield(file,tracername,γ)
     Read a tracer field from NetCDF but return it 
