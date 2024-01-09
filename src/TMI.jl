@@ -1689,7 +1689,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
 
     J =  uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) - 
           2 * transpose(muk)*( Wⁱ * uvec+c-y) +
-          transpose(A * onesvec)* (A* onesvec)
+          transpose(A * onesvec)* (A* onesvec) + ufvec ⋅ ufvec
 
     # adjoint equations
     guvec = zeros(length(convec))
@@ -1702,7 +1702,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
-          guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii]+
+          guvec[ii]=2 * dAdf_terms[ii-ulength] + 2 * convec[ii]
         end
     end
 
@@ -1741,7 +1741,7 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
             if ii <= ulength
                guvec[ii] = 2 * uvec[ii]-(2 * transpose(muk) * Wⁱ)[ii]
             else
-               guvec[ii]=2 * dAdf_terms[ii-ulength]#2 * convec[ii] +
+               guvec[ii]=2 * dAdf_terms[ii-ulength] + 2 * convec[ii]
             end
         end
     end
@@ -1749,7 +1749,7 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     if J !=nothing
         return uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)-
                   2 * transpose(muk)*( Wⁱ * uvec+c-y)+
-               transpose(A * onesvec) * (A* onesvec)
+               transpose(A * onesvec) * (A* onesvec) + ufvec ⋅ ufvec
     end
 end
 

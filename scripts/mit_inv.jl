@@ -1,4 +1,5 @@
 #=%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %      Under development: the goal is to invert model output 
 %                  and get the transport matrix
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
@@ -30,8 +31,6 @@ println(TMIfile)
 
 ctrue = Float64.(vec(θtrue))
 
-#println(typeof(ctrue))
-
 
 surfind = surfaceindex(γ.I)
 
@@ -47,20 +46,51 @@ uvec = vec(u)
 q = zeros(size(uvec))
 q[surfind] = cvec[surfind]
 
+#test:set deep ocean to be constant temp
+#cvec = ones(size(uvec))*0.5
+#cvec[surfind] = q[surfind]
+
+
 #We need an error covariance matrix
 W⁻ = Diagonal(1 ./( ones(sum(γ.wet))).^2)#(1/sum(γ.wet))
 
 
 Qdiag = 1 ./ ones(sum(γ.wet))
-#Qdiag[surfind] .= 10^(-7)
 Q⁻ = Diagonal(Qdiag)
 
 ind_1 = load("ind_1.jld")["ind_1"]
 ind_2 = load("ind_2.jld")["ind_2"]
 
-A0 = sparse(ind_1, ind_2, ones(length(ind_1))*0.5)
+A0 = sparse(ind_1, ind_2, ones(length(ind_1))*0.1)
+
+
+#test: apply A0 a bunch of times
+#c_oneloc = zeros(length(cvec))
+#c_oneloc[4000] = 15
+#c_post = A0 * (A0 * (A0 * (A0 * (A0 * (A0 * (A0 * (A0 * c_oneloc)))))))
+#c1_3D = unvec(θguess,Float32.(c_oneloc))
+#c2_3D = unvec(θguess,Float32.(c_post))
+
+
+# plot the difference
+#level = 3 # your choice 1-33
+#depth = γ.depth[level]
+
+#cntrs = 0:0.5:15
+#label = "Initial θ"
+#planviewplot(c1_3D, depth, cntrs, titlelabel=label,cenlon=40)
+#readline()
+
+
+#cntrs = 0:0.5:15
+#label = "Final θ"
+#planviewplot(c2_3D, depth, cntrs, titlelabel=label,cenlon=40)
+#readline()
+
 
 non_zero_indices1, non_zero_indices2, non_zero_values = findnz(A0)
+
+
 
 non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 
@@ -77,20 +107,20 @@ J₀,gJ₀ = fg(convec)
 
 #### gradient check ###################
 # check with forward differences
-#ϵ = 1e-3
-#println(size(length(convec)))
-#ii = rand(1:length(convec))
-#println("Location for test =",ii)
-#δu = copy(convec); δu[ii] += ϵ
-#∇f_finite = (f(δu) - f(convec))/ϵ
-#println(∇f_finite)
+ϵ = 1e-3
+println(size(length(convec)))
+ii = rand(1:length(convec))
+println("Location for test =",ii)
+δu = copy(convec); δu[ii] += ϵ
+∇f_finite = (f(δu) - f(convec))/ϵ
+println(∇f_finite)
 
-#fg!(J₀,gJ₀,(convec+δu)./2) # J̃₀ is not overwritten
-#∇f = gJ₀[ii]
-#println(∇f)
+fg!(J₀,gJ₀,(convec+δu)./2) # J̃₀ is not overwritten
+∇f = gJ₀[ii]
+println(∇f)
 
 # error less than 10 percent?
-#println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
 #### end gradient check #################
 
 #print(length(convec))
@@ -111,6 +141,13 @@ c̃  = θguess+ũ
 Δc₀ = θguess - θtrue
 
 Anew = A0 + sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], out.minimizer[ulength+1:end])
+
+maxA = maximum(Anew)
+minA = minimum(Anew)
+
+println("Max A:$maxA")
+println("Min A:$minA")
+
 #onesvec = ones(size(q))
 
 #oldf = sum((non_zero_values).^2)
@@ -125,7 +162,7 @@ Anew = A0 + sparse(non_zero_indices[:, 1], non_zero_indices[:, 2], out.minimizer
 #println("old mass cons:$mass_cons1")
 #println("new mass cons:$mass_cons2")
 
-b = getsurfaceboundary(θtrue)
+#b = getsurfaceboundary(θtrue)
 
 #A0
 
@@ -134,7 +171,7 @@ b = getsurfaceboundary(θtrue)
 #Alu2 = lu(A0)
 
 
-final_θ = steadyinversion(Anew,b,γ)
+#final_θ = steadyinversion(Anew,b,γ)
 
 # plot the difference
 #level = 15 # your choice 1-33
