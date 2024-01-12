@@ -15,7 +15,10 @@ using Statistics
 using JLD
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
-TMIversion = "simple_mitgcm"
+BLAS.set_num_threads(8)
+
+
+TMIversion = "simple_MITgcm"
 
   
 pkgdir() = dirname(dirname(pathof(TMI)))
@@ -33,7 +36,7 @@ ctrue = Float64.(vec(θtrue))
 
 
 surfind = surfaceindex(γ.I)
-
+flush(stdout)
 # The first guess for the tracer concentration should be close to the actual tracer concentration
 # take first guess as θtrue
 cvec=(vec(θtrue))
@@ -98,6 +101,9 @@ non_zero_indices = hcat(non_zero_indices1, non_zero_indices2)
 convec = [uvec; non_zero_values]
 ulength=length(uvec)
 
+print(ulength)
+print(sum(γ.wet))
+
 # get sample J value
 F = costfunction_gridded_model(convec,non_zero_indices,u,A0,ctrue,cvec,q,W⁻,Q⁻,γ)
 fg!(F,G,x) = costfunction_gridded_model!(F,G,x,non_zero_indices,u,A0,ctrue,cvec,q,W⁻,Q⁻,γ)
@@ -110,7 +116,9 @@ J₀,gJ₀ = fg(convec)
 ϵ = 1e-3
 println(size(length(convec)))
 ii = rand(1:length(convec))
+ii=748529+10000
 println("Location for test =",ii)
+flush(stdout)
 δu = copy(convec); δu[ii] += ϵ
 ∇f_finite = (f(δu) - f(convec))/ϵ
 println(∇f_finite)
@@ -121,6 +129,7 @@ println(∇f)
 
 # error less than 10 percent?
 println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
+flush(stdout)
 #### end gradient check #################
 
 #print(length(convec))
@@ -148,19 +157,20 @@ minA = minimum(Anew)
 println("Max A:$maxA")
 println("Min A:$minA")
 
-#onesvec = ones(size(q))
+flush(stdout)
+onesvec = ones(size(q))
 
 #oldf = sum((non_zero_values).^2)
 #newf = sum((out.minimizer[ulength+1:end]).^2)
-#tracer_cons1 = sum((Q⁻*A0*cvec - q).^2)
-#tracer_cons2 = sum((Q⁻*Anew*(cvec+out.minimizer[begin:ulength]) - q).^2)
-#mass_cons1 = sum((A0*onesvec).^2)
-#mass_cons2 = sum((Anew*onesvec).^2)
+tracer_cons1 = sum((Q⁻*A0*cvec - q).^2)
+tracer_cons2 = sum((Q⁻*Anew*(cvec+out.minimizer[begin:ulength]) - q).^2)
+mass_cons1 = sum((A0*onesvec).^2)
+mass_cons2 = sum((Anew*onesvec).^2)
 
-#println("old tracer cons:$tracer_cons1")
-#println("new tracer cons:$tracer_cons2")
-#println("old mass cons:$mass_cons1")
-#println("new mass cons:$mass_cons2")
+println("old tracer cons:$tracer_cons1")
+println("new tracer cons:$tracer_cons2")
+println("old mass cons:$mass_cons1")
+println("new mass cons:$mass_cons2")
 
 #b = getsurfaceboundary(θtrue)
 
@@ -168,7 +178,7 @@ println("Min A:$minA")
 
 
 #Anew
-#Alu2 = lu(A0)
+#Alu2 = lu(Anew)
 
 
 #final_θ = steadyinversion(Anew,b,γ)
