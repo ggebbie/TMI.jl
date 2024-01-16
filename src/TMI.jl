@@ -1672,22 +1672,26 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
     #dummy,dummy,fguess  = findnz(A0)
     #dummy,dummy,fnow  = findnz(A) 
     onesvec = ones(size(uvec))
-    #csum = Wⁱ * uvec+c
+    csum = uvec+c
 
 
     # find lagrange multipliers
-    #muk = transpose(A) * Qⁱ * (A * c - q)
-    dAcdf = spzeros(length(ufvec),length(c))
-    dA1df = spzeros(length(ufvec),length(c))
+    muk = transpose(A) * Qⁱ * (A * csum - q)
+    dAcdf = spzeros(length(ufvec))#,length(c))
+    dA1df = spzeros(length(ufvec))#,length(c))
+    A1 = (A * onesvec)
+    Acq = Qⁱ*(A * csum - q)
     for ii in eachindex(ufvec)
-          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
-          dA1df[ii,non_zero_indices[ii, 1]] = 1
+          #dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
+          #dA1df[ii,non_zero_indices[ii, 1]] = 1
+	  dAcdf[ii] = sum(csum[non_zero_indices[ii, 2]].*Acq[non_zero_indices[ii, 1]])
+	  dA1df[ii] = sum(A1[non_zero_indices[ii, 1]])
     end
     
 
-    dAdf_terms = dA1df * (A * onesvec) + dAcdf * Qⁱ * (A * c - q)# + dA1df * (A * onesvec)
+    dAdf_terms = dA1df + dAcdf #* Qⁱ * (A * c - q)# + dA1df * (A * onesvec)
 
-    J =  10^3 * uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q) + 
+    J =  10 *uvec ⋅ uvec + transpose(A * csum - q) * Qⁱ * (A*csum - q) + 
     #2 * transpose(muk)*( Wⁱ * uvec+c-y)# + sum(ufvec)#sum(A*onesvec)
           transpose(A * onesvec)* (A* onesvec)# + 10 * ufvec ⋅ ufvec.^3
 
@@ -1698,7 +1702,7 @@ function costfunction_gridded_model(convec,non_zero_indices,u₀::Field{T},A0,y:
         if ii <= ulength 
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the tracer concentration
-          guvec[ii] =  2 *  10^3 * uvec[ii] #- (2 * transpose(muk) * Wⁱ)[ii]
+          guvec[ii] =  20 *  uvec[ii] + 2 * transpose(muk)[ii]
         else
           #this is the derivative of the cost function wrt the part of the control vector
           # associated with the transport vector
@@ -1723,23 +1727,27 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     #dummy,dummy,fguess  = findnz(A0)
     #dummy,dummy,fnow  = findnz(A)
     onesvec = ones(size(uvec))
-    #csum = Wⁱ * uvec+c
+    csum = uvec+c
 
     # find lagrange multipliers
-    #muk = transpose(A) * Qⁱ * (A * c - q)
-    dAcdf = spzeros(length(ufvec),length(c))
-    dA1df = spzeros(length(ufvec),length(c))
+    muk = transpose(A) * Qⁱ * (A * csum - q)
+    dAcdf = spzeros(length(ufvec))#,length(c))
+    dA1df = spzeros(length(ufvec))#,length(c))
+    A1 = (A * onesvec)
+    Acq = Qⁱ*(A * csum - q)
     for ii in eachindex(ufvec)
-          dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
-          dA1df[ii,non_zero_indices[ii, 1]] = 1
+          #dAcdf[ii,non_zero_indices[ii, 1]] = c[non_zero_indices[ii, 2]]
+          #dA1df[ii,non_zero_indices[ii, 1]] = 1
+	  dAcdf[ii] = sum(csum[non_zero_indices[ii, 2]].*Acq[non_zero_indices[ii, 1]])
+	  dA1df[ii] = sum(A1[non_zero_indices[ii, 1]])
     end
-    dAdf_terms = dA1df * (A * onesvec) + dAcdf * Qⁱ * (A * c - q)# + dA1df * (A * onesvec)
+    dAdf_terms = dA1df + dAcdf #* Qⁱ * (A * c - q)# + dA1df * (A * onesvec)
 
     if guvec != nothing
         tmp = guvec
         for (ii,vv) in enumerate(tmp)
             if ii <= ulength
-               guvec[ii] = 2 * 10^3 * uvec[ii]#-(2 * transpose(muk) * Wⁱ)[ii]
+               guvec[ii] = 20 * uvec[ii]+2 * muk[ii]
             else
                guvec[ii]= 2 * dAdf_terms[ii-ulength]# + 4 * 10 * convec[ii].^3
             end
@@ -1747,9 +1755,9 @@ function costfunction_gridded_model!(J,guvec,convec::Vector{T},non_zero_indices,
     end
     
     if J !=nothing
-        return 10^3 * uvec ⋅ uvec + transpose(A * c - q) * Qⁱ * (A*c - q)+
+        return 10 * uvec ⋅ uvec + transpose(A * csum - q) * Qⁱ * (A*csum - q)+
 	#2 * transpose(muk)*( Wⁱ * uvec+c-y)+ sum(ufvec)#sum(A*onesvec)
-               transpose(A * onesvec) * (A* onesvec)# + 10 * ufvec ⋅ ufvec.^3
+                transpose(A * onesvec) * (A* onesvec)# + 10 * ufvec ⋅ ufvec.^3
     end
 end
 
