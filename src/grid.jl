@@ -36,35 +36,35 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
 end
 
 """
-function Grid(foreign_file::String, tracername, lonname,latname, depthname, maskname)
+function Grid(foreign_file, maskname, lonname, latname, depthname)
 
     Construct the Grid from a non-TMI file given the names of relevant fields.
 
     Assumes that an ocean mask is available.
-    Assumes a NetCDF file.
+    Assumes an input NetCDF file.
     Assumes everything below the top layer is part of the interior. 
-    Assumes Float32 fields.
-    `tracername` not actually used right now.
+    Tested for Float32 fields (should work for other types).
 
 # Arguments
 - `foreign_file::String`
-- `tracername::String`
+- `maskname::String`
 - `lonname::String`
 - `latname::String`
 - `depthname::String`
-- `maskname::String`
 # Output
 - `γ::Grid`: TMI grid struct
 """
-function Grid(foreign_file::S, tracername::S, lonname::S, latname::S, depthname::S, maskname::S) where S <: String
+function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S) where S <: String
     
     # make ocean mask
     ds = Dataset(foreign_file)
     wet = Bool.(ds[maskname])::BitArray # very slow! (couple of secs), use `convert` instead?
 
-    lon = convert(Vector{Float32},ds[lonname]) 
-    lat = convert(Vector{Float32},ds[latname])
-    depth = - convert(Vector{Float32},ds[depthname]) # flip sign for actual "depth"
+    T = eltype(ds[lonname][1]) # not sure that this will always work
+    
+    lon = convert(Vector{T},ds[lonname]) 
+    lat = convert(Vector{T},ds[latname])
+    depth = - convert(Vector{T},ds[depthname]) # flip sign for actual "depth"
 
     # make interior mask: Assume no lateral or bottom boundaries (CAUTION)
     interior = deepcopy(wet)
