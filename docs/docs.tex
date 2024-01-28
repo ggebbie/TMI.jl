@@ -214,13 +214,14 @@ are penalized using an similar nonlinear function, ${\cal F}_m$.
 
 Equation~(1) in the main text is put into the form of a steady-state
 constraint by putting all terms on the left hand side:
-$f_{ik} = \sum^N_{j=1} m_{ij}~ c_{jk} + r_k q_i - c_{ik} = 0$,
-for all interior locations $i$ and tracers $k$, with $f_{ik} = c_{ik} - c_{bk}$
-at the surface.  Mass conservation is one of these constraints, here
-denoted to be the $k=K+1$ tracer: $f_{i,K+1} = \sum^N_{j=1} m_{ij} -
-1$, found by substituting $c_{j,K+1}=1$, $c_{i,K+1}=1$, and $r_{K+1} =
-0$ above.  Any steady-state tracer, $k$, must satisfy ${\cal F}_k = 0$
-which is defined by appending $f_{ik}$ at all $i$ locations.
+$f_{ik} = \sum^N_{j=1} m_{ij}~ c_{jk} + r_k q_i - c_{ik} = 0$, for all
+interior locations $i$ and tracers $k$, with
+$f_{ik} = c_{ik} - c_{bk}$ at the surface.  Mass conservation is one
+of these constraints, here denoted to be the $k=K+1$ tracer:
+$f_{i,K+1} = \sum^N_{j=1} m_{ij} - 1$, found by substituting
+$c_{j,K+1}=1$, $c_{i,K+1}=1$, and $r_{K+1} = 0$ above.  Any
+steady-state tracer, $k$, must satisfy ${\cal F}_k = 0$ which is
+defined by appending $f_{ik}$ at all $i$ locations.
 
 \subsection{Solution technique}
 \label{sec:solution}
@@ -256,17 +257,25 @@ the problem, the Lagrangian function is
 &+&\sum^{K+1}_{k=1}  \mu_k^T ~{\cal F}_k [{\bf c}_k,{\bf q},{\bf m}],
 \label{eq:lagrangian2}
 \end{eqnarray}
-where ${\bf W}$ is the observational weighting matrix and ${\bf W}_c$ is
-the weighting of the additional tracer constraints. ${\bf S}_k$, ${\bf
-  S}_q$ and ${\bf S}_m$ are scaling matrices that enforce bounds and
-smoothness on the expected deviation in each surface tracer, interior
-source, and pathways, respectively. 
-There is one Lagrange multiplier
-vector, $\mu_k$, for each of the $K+1$ steady-state equations, and
-note that the Lagrange multiplier terms do not alter the numerical
-value of the function.
+where ${\bf W}$ is the observational weighting matrix and ${\bf W}_c$
+is the weighting of the additional tracer constraints. ${\bf S}_k$,
+${\bf S}_q$ and ${\bf S}_m$ are scaling matrices that enforce bounds
+and smoothness on the expected deviation in each surface tracer,
+interior source, and pathways, respectively.  There is one Lagrange
+multiplier vector, $\mu_k$, for each of the $K+1$ steady-state
+equations, and note that the Lagrange multiplier terms do not alter
+the numerical value of the function.
 
-For tracer climatologies, ${\bf W}$ is diagonal with the inverse of published error estimates squared. For the sediment core data, the ${\bf W}$ matrix has the same form, and the additional constraint that there be no systematic misfit with depth is appended. Finding the model-data bias as a function of depth is a linear operation, ${\bf Z}{\bf n}$, an additional constraint can be added to the previous cost function term. The weighting matrix then becomes ${\bf W} + {\bf Z}^T {\bf W}_z {\bf Z}$, a nondiagonal matrix. ${\bf W}_z$ is chosen based on the expected vertical systematic error that arises from random noise.
+For tracer climatologies, ${\bf W}$ is diagonal with the inverse of
+published error estimates squared. For the sediment core data, the
+${\bf W}$ matrix has the same form, and the additional constraint that
+there be no systematic misfit with depth is appended. Finding the
+model-data bias as a function of depth is a linear operation,
+${\bf Z}{\bf n}$, an additional constraint can be added to the
+previous cost function term. The weighting matrix then becomes
+${\bf W} + {\bf Z}^T {\bf W}_z {\bf Z}$, a nondiagonal matrix.
+${\bf W}_z$ is chosen based on the expected vertical systematic error
+that arises from random noise.
 
 
 The minimum of ${\cal L}$ is found by seeking a stationary point of
@@ -279,209 +288,10 @@ subset the unknowns, ${\bf c}_{bk}$, ${\bf q}$, and ${\bf m}$, where
 these variables contain all information necessary to solve for the
 global tracer distributions.  A quasi-Newton gradient descent method
 uses this information to iteratively search for the minimum ${\cal L}$
-\citep{Nocedal-1980:Updating,Gilbert-Lemarechal-1989:some}. 
-All controls (independent unknowns) are preconditioned by the Cholesky
+\citep{Nocedal-1980:Updating,Gilbert-Lemarechal-1989:some}.  All
+controls (independent unknowns) are preconditioned by the Cholesky
 decomposition of the respective scaling matrix, ${\bf S}$, to improve
 performance.
-
-\section{Model-Data Misfits}
-
-The use of nondiagonal matrices, as described in the method above, puts emphasis on capturing the vertical structure of the observations. The model-data misfit as a function of depth is included in Auxiliary Figures 1-2. Additionally, we include a meridional section of the $\delta^{13}$C and $\delta^{13}$C$_{as}$ distributions with pointwise misfits denoted  (Auxiliary Figures 3-4). These figures indicate that the vertical structure of the observations is captured within the expected errors.   
-
-\begin{figure}
-\includegraphics[width=40pc]{suppfigures/mod_errprofile_14may2013.png}
-      \caption{Comparison of reconstructed error relative to expected
-        error as a function of depth: standard deviation of
-        model-observation misfit ({\it solid lines}) over a 1000 meter
-        running interval for $\delta^{13}$C$_{\mbox{\tiny{DIC}}}$ ({\it
-          left panel}), PO$_4$ ({\it middle panel}), and
-        $\delta^{18}$O$_w$ ({\it right panel}), and the expected standard
-        error from published sources or subjective choice as used in
-        the reconstruction method ({\it dashed lines}).}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=40pc]{suppfigures/lgm_errprofile_14may2013.png}
-\caption{Error statistics of the LGM solution for $\delta^{13}$C ({\it left panel}), Cd ({\it middle panel}), and $\delta^{18}$O ({\it right panel}) data from benthic foraminiferal calcite. The reconstructed standard error over 1000 meter running depth intervals ($\sigma$, {\it bold solid line}) is compared to the expected standard error ({\it bold dashed line}). The absolute value of the mean misfit or offset ($\mu$) is compared between the reconstruction ({\it thin solid line}) and the expected 95\% confidence interval ({\it thin dashed line}).}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=40pc]{suppfigures/nc13_lgm_watl_21aug2013.eps}
-     \caption{The glacial meridional sections collapse all data points onto a western or eastern section. To account for zonal variations in the core locations, we plot the model-data misfit at the actual locations of the data. The model-data misfit is included for LGM $\delta^{13}$C$_c$. Squares represent data locations in the western Atlantic (west of $35^{\circ}$W) and circles represent the eastern Atlantic.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/lgm_watl_nc13as_21aug2013.eps}
-     \caption{Same as the previous figure but for $\delta^{13}$C$_{as}$ inferred from core locations with both $\delta^{13}$C$_c$ and Cd measurements.}
-\end{figure}
-
-
-\section{Water-mass analysis}
-
-A phosphate-$\delta^{13}$C diagram puts the geographic Atlantic
-section into the context of water-mass endmember values and mixing
-lines.  At the core sites that contain measurements of both Cd and
-$\delta^{13}$C, we translate Cd to phosphate following
-\citet{Elderfield-Rickaby-2000:Oceanic} and plot $\delta^{13}$C-PO$_4$
-property combinations, where $\delta^{13}$C$_{as}$ isolines are
-straight in this property-property space
-(Auxiliary Figure~\ref{fig:watermasses}). Even though the $\delta^{13}$C$_{as}$
-map of this work appears to have a different vertical structure from
-the map of \citet{Marchitto-Broecker-2006:Deep}, the dominant linear
-relationship between $\delta^{13}$C and phosphate is captured at the
-core sites, including the modern-day slope of -0.6\permil/$\mu$mol/kg
-steepening to -1.3\permil/$\mu$mol/kg during the LGM. All modern-day
-$\delta^{13}$C$_{as}$ core values and all but three LGM
-$\delta^{13}$C$_{as}$ core values are within 0.5\permil~ of zero after
-accounting for observational noise, an indication that air-sea
-disequilbrium signatures are small in the deep ocean if the recent
-burning of fossil fuels is eliminated
-\citep[e.g.,][]{Olsen-Ninnemann-2010:Large} and that the water-mass
-signal in $\delta^{13}$C$_{as}$ is smaller than the signal of
-biological effects.
-
-
-\begin{figure}
-    \label{fig:watermasses}
-     \includegraphics[width=40pc]{figures/modvlgm_c13vspo4_21may2013.png}
-     \caption{Water mass diagrams in phosphate-$\delta^{13}$C space
-       for the modern ({\it left panel}) and LGM ({\it right panel}).
-       Reconstructed tracer-tracer values at the locations with Cd and $\delta^{13}$C observations ({\it black circles}) are
-       placed into the context of $\delta^{13}$C$_{as}$ ({\it
-         background contours}). The effective endmember values ({\it
-         open circles}) enclose
-       the data points, and are defined for the following surface
-       regions: Weddell Sea (WED), Atlantic Subantarctic (SUBANT),
-       Labrador and Irminger Seas (LAB), Greenland-Icelandic-Norwegian
-     Seas (GIN), Arctic (ARC), Mediterranean (MED), and
-     subtropics/tropics (TROP). The modern-day MED endmember is offscale
-     (0.2$\mu$mol/kg, 2.2\permil).}
-      \label{fig:watermasses} 
-\end{figure}
-
-
-The change in phosphate-$\delta^{13}$C slope is due to the
-``effective endmembers,'' defined to be the most representative
-properties in a given surface region
-\citep{Gebbie-Huybers-2011:How-is-the-ocean}.  Here we define seven
-surface regions in the Atlantic sector (see
-Figure~\ref{fig:watermasses} for definitions), where the endmembers
-are computed by weighting the surface tracer concentrations by the
-Atlantic interior volume filled by each location. The modern-LGM
-difference in slope is due to the change in $\delta^{13}$C$_{as}$ of
-the primary water-masses that make the general linear trend.
-%: Weddell
-%Sea Water and some combination of Labrador Sea and
-%Greenland-Iceland-Norwegian (GIN) Sea water. 
-In the modern-day, the Labrador and GIN Seas have relatively-high
-$\delta^{13}$C but low $\delta^{13}$C$_{as}$ (-0.4\permil). Weddell
-Sea Water has low $\delta^{13}$C but high $\delta^{13}$C$_{as}$
-(0.3\permil), with the net effect being a flattening of the overall
-slope. In the LGM, the pattern is reversed, with relatively-low
-$\delta^{13}$C and $\delta^{13}$C$_{as}$ being colocated in the
-Southern Ocean, and both quantities relatively high in the North
-Atlantic. The net result is a steepened slope in the LGM. 
-
-%Thus, the
-%$\delta^{13}$C$_{as}$ deviations that reconcile $\delta^{13}$C and
-%phosphate aren't very large, but they
-% systematically occur in the
-%extreme property values and thus can resolve the $\delta^{13}$C-Cd
-%discrepancy previously noted \citep{Boyle-Rosenthal-1996:Chemical}.
-
-% endmember estimates are -0.5\permil~ and -0.4\permil,
-% respectively, while the Weddell Sea is 0.3\permil.  The glacial
-% Weddell Sea Water, in contrast, has $\delta^{13}$C$_{as}$ of
-% -0.7\permil, with the northern endmembers centered closer to zero. 
-% %Furthermore, the change in slope is related to the vertical structure
-% %of the tracers, and 
-% In the South Atlantic, the LGM vertical Cd range of 0.1 nmol/kg to 0.7
-% nmol/kg at $30^\circ$S translates to a 1.6 $\mu$mol/kg range in
-% phosphate \citep{Elderfield-Rickaby-2000:Oceanic}. If remineralization
-% is the dominant process, the range of $\delta^{13}$C would be expected
-% to be 1.7\permil~ (1/0.95 times the phosphate range). Here a
-% $\delta^{13}$C gradient of 2.0\permil~ is modeled and $\delta^{13}$C
-% is lower than would be predicted from Cd and remineralization
-% \citep{Boyle-Rosenthal-1996:Chemical}.  If the Antarctic
-% $\delta^{13}$C$_{as}$ endmember can be as low as the -0.7\permil~
-% reconstructed here, then there is no conundrum in the Southern Ocean
-% $\delta^{13}$C-Cd relationship because the offset is only
-% 0.3\permil. 
-
-% I HAD TO KILL THIS PARAGRAPH DUE TO PALEO'S RESTRICTIONS.
- Even though the effective endmember values aren't strongly constrained
- by observations, there is general agreement between our study and
- previous studies. Glacial endmember estimates were previously
- estimated by extrapolation of mixing lines in a property-property
- diagram \citep[AABW: 0.6 to 0.8 nmol/kg, -0.5 to -1.0\permil~
- $\delta^{13}$C,][]{Marchitto-Broecker-2006:Deep}. Here, we refine
- their estimates (0.85 nmol/kg, -0.9\permil), but recognize that any
- additional Southern Ocean observations could alter them.  Glacial
- Antarctic Intermediate Water $\delta^{13}$C is reconstructed to be
- 0.2-0.3\permil, in accord with \citet{Curry-Oppo-2005:glacial}. We
- also find a large gradient between upper and lower North Atlantic
- Water properties, consistent with increased sea ice and unutilized
- nutrients in the Nordic Seas \citep{Mix-Fairbanks-1985:North}, that
- further complicates the finding of an interface between northern and
- southern source waters, as lower North Atlantic Water is more similar
- to Antarctic water.  Other endmember values will need to be refuted or
- refined with additional observations. For example, the Atlantic-wide
- range of Cd is 50\% greater during the LGM, which together with the
- conservation of global phosphate inventory, requires North Atlantic
- source waters to be even more depleted than they are today (<0.1
- nmol/kg).
-
-%\section{Western Atlantic Property Atlas}
-
-% Additional meridional sections that compare modern and LGM properties along the western Atlantic GEOSECS track are included here for the following properties: Cd$_w$ and $\delta^{18}$O$_c$. Similar figures for $\delta^{13}$C, $\delta^{13}$C$_{as}$, preformed $\delta^{13}$C, and North Atlantic Water concentration, ${\bf g}_{north}$, were included in the main text.
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_watl_cd_8jan2014.png}
-     \caption{{\bf Western Atlantic Property Atlas}: Additional meridional sections that compare modern and LGM properties along the western Atlantic GEOSECS track are included here for the following properties: Cd$_w$ (this figure) and $\delta^{18}$O$_c$ (next figure). Similar figures for $\delta^{13}$C, $\delta^{13}$C$_{as}$, preformed $\delta^{13}$C, and North Atlantic Water concentration, ${\bf g}_{north}$, are included in the main text.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_watl_o18c_8jan2014.png}
-     \caption{Same as previous figure but for $\delta^{18}$O$_c$.}
-\end{figure}
-
-%\section{Eastern Atlantic Property Atlas}
-
-% Eastern Atlantic meridional sections along the A16 WOCE transect are included here for the following properties:  $\delta^{13}$C, $\delta^{13}$C$_{as}$, Cd$_w$, $\delta^{18}$O$_c$, and North Atlantic Water concentration, ${\bf g}_{north}$. 
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_eatl_c13_8jan2014.png}
-     \caption{{\bf Eastern Atlantic Property Atlas}: Meridional sections along the A16 WOCE transect are included here for the following properties:  $\delta^{13}$C, $\delta^{13}$C$_{as}$, Cd$_w$, $\delta^{18}$O$_c$, and North Atlantic Water concentration, ${\bf g}_{north}$.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_eatl_c13as_8jan2014.png}
-     \caption{Same as Figure 8, but for $\delta^{13}$C$_{as}$.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_eatl_cd_8jan2014.png}
-     \caption{Same as Figure 8, but for seawater Cd.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_eatl_o18c_8jan2014.png}
-     \caption{Same as Figure 8, but for $\delta^{18}$O$_{c}$.}
-\end{figure}
-
-\begin{figure}
-     \includegraphics[width=40pc]{suppfigures/modvlgm_eatl_gnorth_8jan2014.png}
-     \caption{Same as Figure 8, but for North Atlantic Water concentration, ${\bf g}_{north}$.}
-\end{figure}
-
-%\section{Model-Data Misfits}
-
-% The glacial meridional sections collapse all data points onto a western or eastern section. To account for zonal variations in the core locations, we plot the model-data misfit at the actual locations of the data. The model-data misfit is included for LGM $\delta^{13}$C$_c$, inferred seawater Cd at the core locations, and $\delta^{18}$O$_c$.
-%% VERTICAL STRUCTURE OF ERRORS.  
-
-
-%\acknowledgment{We thank an anonymous reviewer for simplifying the
-%  derivation of the adjoint calculation for surface origins.} 
 
 \bibliographystyle{agu08}
 \bibliography{all}
