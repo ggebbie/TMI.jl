@@ -68,7 +68,7 @@ export config, config_from_mat, config_from_nc,
     zerowestboundary, zeronorthboundary,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
-    distancematrix, gaussiandistancematrix
+    distancematrix, gaussiandistancematrix, versionlist
 
 import Base: zeros, one, oneunit, ones,  (\)
 #import Base: maximum, minimum
@@ -98,6 +98,7 @@ include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
+include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 

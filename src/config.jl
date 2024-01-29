@@ -922,3 +922,15 @@ function sourceinit(vec,I,γ)
     end
     return source
 end
+
+versionlist() = ("modern_90x45x33_GH10_GH12",
+    "modern_180x90x33_GH11_GH12",
+    "modern_90x45x33_unpub12",
+    "modern_90x45x33_G14", 
+    "modern_90x45x33_G14_v2",				  
+    "LGM_90x45x33_G14",
+    "LGM_90x45x33_G14A",				  
+    "LGM_90x45x33_GPLS1",				  
+    "LGM_90x45x33_GPLS2",				  
+    "LGM_90x45x33_OG18",
+    "nordic_201x115x46_B23")
