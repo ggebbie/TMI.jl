@@ -148,6 +148,9 @@ function wetmask(TMIfile::String,nx,ny,nz)
     return wet
 end
 
+"""
+function interiormask(A,wet,nx,ny,nz)
+"""
 function interiormask(A,wet,nx,ny,nz)
     interior = falses(nx,ny,nz)
     I = cartesianindex(wet)

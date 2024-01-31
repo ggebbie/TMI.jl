@@ -15,4 +15,6 @@ end
     include("test_modern.jl")
 
     include("test_mitgcm.jl")
+
+    include("test_massfractions.jl")
 end
