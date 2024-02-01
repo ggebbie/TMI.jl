@@ -151,38 +151,36 @@ massfractions_up(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,1);
 massfractions_down(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,-1);
     wrap=(true, false, false), longname = "mass fraction from lower neighbor")
 
-function tracer_contribution(c::Field,m::MassFractions)
-
-    # loop over all locations with "m" values
-    Im = cartesianindex(m.γ.wet)
+function tracer_contribution(c::Field,m::Union{MassFractions,NamedTuple})
 
     # allocate masks
     ngrid = (length(c.γ.lon), length(c.γ.lat), length(c.γ.depth))
     # tracer contribution: units C*kg
-    mc = zeros(ngrid)
-    tracer_contribution!(mc,c,m)
+    mc = Field(zeros(ngrid),
+        c.γ,
+        :mc,
+        "tracer contribution",
+        c.units)
 
-    # make a field
-    return Field(mc, c.γ,:mc,"tracer contribution",c.units)
+    tracer_contribution!(mc,c,m)
+    return mc
 end
+
 function tracer_contribution!(mc::Field,c::Field,m::MassFractions)
 
     # loop over all locations with "m" values
     Im = cartesianindex(m.γ.wet)
     for I in Im
         #Istep = I + step
-        Istep, inbounds = step_cartesian(
+        Istep, _ = step_cartesian(
             I::CartesianIndex,
             m.position,
             c.γ)
         #; wrap=(true,false,false))
 
-        mc[I] = m.fraction[I]*
+        mc.tracer[I] += m.fraction[I]*
             (c.tracer[Istep] - c.tracer[I])
     end
-
-    # make a field
-    return Field(mc, c.γ,:mc,"tracer contribution",c.units)
 end
 function tracer_contribution!(mc::Field,c::Field, m::NamedTuple)
     for m1 in m
