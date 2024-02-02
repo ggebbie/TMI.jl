@@ -259,7 +259,7 @@ function local_solve!(m::NamedTuple,c::NamedTuple)
         #m_local = A\b : problem: some cells have only one neighbor
 
         #
-        α = 100_000 # inverse tapering parameter
+        α = 700_000 # inverse tapering parameter
         x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
         m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
 
