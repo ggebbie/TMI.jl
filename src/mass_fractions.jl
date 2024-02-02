@@ -249,14 +249,19 @@ function local_solve!(m::NamedTuple,c::NamedTuple)
     
     for I in Iint
 
-        A = local_watermass_matrix(c,m,I,ncol.tracer[I])
+        Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
 
         # Invert!
         # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
         # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
         # May require non-negative least-squares or quadratic programmin (JuMP)
         b = vcat(zeros(nrow-1),1.0)
-        m_local = A\b
+        #m_local = A\b : problem: some cells have only one neighbor
+
+        #
+        α = 100_000 # inverse tapering parameter
+        x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
+        m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
 
         # Save into proper mass fractions
         i = 0
@@ -319,6 +324,38 @@ function local_watermass_matrix(c::NamedTuple,
     return A
 end
 
+function watermassmatrix(m::NamedTuple, γ::Grid;
+    wrap=(true, false, false))
+
+    # for bounds checking
+    Rfull = CartesianIndices(γ.wet)
+    Ifirst, Ilast = first(Rfull), last(Rfull)
+
+    # loop over interior points (dirichlet bc at surface)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    # allocate water mass matrix
+    nfield = sum(γ.wet)
+    # Note, flipped sign of interior points
+    A = spdiagm(nfield,nfield,ones(nfield))
+
+    for I in Iint
+        for m1 in m
+        #for I in Iint
+            nrow = R[I]
+            if m1.γ.wet[I]
+                Istep, _ = step_cartesian(I,
+                    m1.position,
+                    γ;
+                    wrap=(true,false,false))
+
+                A[nrow,R[Istep]] = -m1.fraction[I]
+            end
+        end
+    end
+    return A
+end
 
 # """
 # function wetmask_massfractions(γ)
