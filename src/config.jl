@@ -595,20 +595,21 @@ gridatts() = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
     Rename MATLAB variables to NetCDF variables
 """
 mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-                     "Terr"=>"σθ",
-                     "Sstar"=>"S⋆",
-                   "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
-                   "Serr"=>"σSₚ",
-                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
-                   "O18err"=>"σδ¹⁸Ow",
-                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
-                   "Perr" => "σPO₄",
-                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
-                   "Nerr" => "σNO₃",
-                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
-                   "Oerr"=>"σO₂",
-                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
-                   "C13err" =>  "σδ¹³C")
+    "Terr"=>"σθ",
+    "Sstar"=>"S⋆",
+    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
+    "Sp" => "Sp", # help for some out-of-date input files
+    "Serr"=>"σSₚ",
+    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+    "O18err"=>"σδ¹⁸Ow",
+    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
+    "Perr" => "σPO₄",
+    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
+    "Nerr" => "σNO₃",
+    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
+    "Oerr"=>"σO₂",
+    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
+    "C13err" =>  "σδ¹³C")
 
 mat2ncsource() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
 

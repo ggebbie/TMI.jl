@@ -19,14 +19,7 @@ struct MassFractions{T <: Real}
     longname::String
     units::String
     position::CartesianIndex{3}
-    # north::Field{T}
-    # east::Field{T}
-    # south::Field{T}
-    # west::Field{T}
-    # up::Field{T}
-    # down::Field{T}
 end
-
 
 function MassFractions(A,
     γ::Grid,
@@ -63,7 +56,7 @@ function MassFractions(A,
     return MassFractions(m,
         Grid(γ.lon,γ.lat,γ.depth,
             wet,
-            BitArray{3}(undef,0,0,0)),
+            γ.interior),
         :m_north,
         longname,
         "unitless",
@@ -145,10 +138,10 @@ massfractions_south(A, γ) = MassFractions(A, γ, CartesianIndex(0,-1,0);
 massfractions_west(A, γ) = MassFractions(A, γ, CartesianIndex(-1,0,0);
     wrap=(true, false, false), longname = "mass fraction from western neighbor")
 
-massfractions_up(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,1);
+massfractions_up(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,-1);
     wrap=(true, false, false), longname = "mass fraction from upper neighbor")
     
-massfractions_down(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,-1);
+massfractions_down(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,1);
     wrap=(true, false, false), longname = "mass fraction from lower neighbor")
 
 function tracer_contribution(c::Field,m::Union{MassFractions,NamedTuple})
@@ -187,6 +180,145 @@ function tracer_contribution!(mc::Field,c::Field, m::NamedTuple)
         tracer_contribution!(mc,c,m1)
     end
 end
+
+function neighbors(m::NamedTuple,γ::Grid)
+
+    ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    n = zeros(Int64,ngrid)
+    for m1 in m
+        n += m1.γ.wet
+    end
+    
+    # make a field
+    return Field(n,
+        γ,
+        :n,
+        "neighbors",
+        "unitless")
+
+end
+
+function massfractions_isotropic(γ::Grid)
+
+    # get a sample with zeros
+    nfield = sum(γ.wet)
+    A = spzeros(nfield,nfield)
+
+    m = (north = TMI.massfractions_north(A,γ),
+        east   = TMI.massfractions_east(A,γ),
+        south  = TMI.massfractions_south(A,γ),
+        west   = TMI.massfractions_west(A,γ),
+        up     = TMI.massfractions_up(A,γ),
+        down   = TMI.massfractions_down(A,γ))
+
+    # get number of neighbors for each location
+    n = neighbors(m,γ)
+
+    for m1 in m
+        Im = cartesianindex(m1.γ.wet)
+        for I in Im
+            m1.fraction[I] = 1.0/n.tracer[I]
+        end
+    end
+    return m
+end
+
+function local_solve(c::NamedTuple) # assume: `Field`s inside
+    γ = first(c).γ # assumption: all grids match up
+    m̃ = TMI.massfractions_isotropic(γ) # good first guess
+    TMI.local_solve!(m̃,c)
+    return m̃
+end
+
+function local_solve!(m::NamedTuple,c::NamedTuple)
+
+    γ = first(c).γ
+    Rfull = CartesianIndices(γ.wet)
+    Ifirst, Ilast = first(Rfull), last(Rfull)
+
+    # loop over interior points (dirichlet bc at surface)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    # allocate masks
+    # #ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    # wet = falses(ngrid)
+    # m   = NaN*ones(ngrid)
+    ncol   = TMI.neighbors(m,γ)
+    nrow   = length(c) + 1 # add mass conservation
+    
+    for I in Iint
+
+        A = local_watermass_matrix(c,m,I,ncol.tracer[I])
+
+        # Invert!
+        # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
+        # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
+        # May require non-negative least-squares or quadratic programmin (JuMP)
+        b = vcat(zeros(nrow-1),1.0)
+        m_local = A\b
+
+        # Save into proper mass fractions
+        i = 0
+        for m1 in m
+            if m1.γ.wet[I]
+                i += 1
+                m1.fraction[I] = m_local[i]
+            end
+        end
+    end
+            
+    
+    # allocate masks
+    #ngrid = (length(c.γ.lon), length(c.γ.lat), length(c.γ.depth))
+    # tracer contribution: units C*kg
+    #mc = Field(zeros(ngrid),
+    #     c.γ,
+    #     :mc,
+    #     "tracer contribution",
+    #     c.units)
+
+    # tracer_contribution!(mc,c,m)
+    #return mc
+end
+
+function local_watermass_matrix(c::NamedTuple,
+    m::NamedTuple,
+    I::CartesianIndex,
+    nlocal)
+
+    #γ = first(c).γ
+    ncol   = nlocal # number of neighbors
+    nrow   = length(c) + 1 # add mass conservation
+
+    # allocate tracer matrix
+    A = ones(nrow,ncol) # then overwrite later
+    
+    # loop through all mass fractions
+    #for i1 in eachindex(m)
+    i = 0; j = 0
+    for m1 in m
+
+        if m1.γ.wet[I]
+            j += 1
+            i = 0
+            # grab the tracer values to fill a column
+            # is this the correct γ?
+            Istep, _ = step_cartesian(I,
+                m1.position,
+                m1.γ,
+                wrap=(true,false,false))
+
+            #if γ.wet[Istep]: should automagically be true
+            for c1 in c
+                i += 1
+                A[i,j] = c1.tracer[Istep] - c1.tracer[I]
+            end
+        end
+    end
+    return A
+end
+
 
 # """
 # function wetmask_massfractions(γ)

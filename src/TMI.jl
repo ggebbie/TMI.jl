@@ -208,9 +208,25 @@ function preformednutrient(tracer::Union{String,Symbol},TMIversion,Alu,γ)
     return steadyinversion(Alu,b,γ) 
 end
 
+"""
 preformedphosphate(TMIversion,Alu,γ) = preformednutrient("PO₄",TMIversion,Alu,γ)
+"""
+preformedphosphate(TMIversion,Alu,γ) = preformednutrient("PO₄",TMIversion,Alu,γ)
+
+"""
 preformednitrate(TMIversion,Alu,γ) = preformednutrient("NO₃",TMIversion,Alu,γ)
+"""
+preformednitrate(TMIversion,Alu,γ) = preformednutrient("NO₃",TMIversion,Alu,γ)
+
+"""
 preformedoxygen(TMIversion,Alu,γ) = preformednutrient("O₂",TMIversion,Alu,γ)
+"""
+preformedoxygen(TMIversion,Alu,γ) = preformednutrient("O₂",TMIversion,Alu,γ)
+
+"""
+preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Alu,γ)
+"""
+preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Alu,γ)
 
 """ 
     function meanage(TMIversion,Alu,γ)
