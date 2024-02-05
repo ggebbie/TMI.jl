@@ -75,6 +75,20 @@ planviewplot(c.θ, depth, cntrs, titlelabel=label2)
 label3 = "θ difference, depth = "*string(depth)*" m"
 planviewplot(c.θ-θ̃, depth, -.2:.01:.2, titlelabel=label3)
 
+#### water mass analysis
+list = TMI.regionlist()
+region = list[2] # sample region
+
+# do numerical analysis
+g = watermassdistribution(TMIversion,Ãlu,region,γ);
+
+# plot a section at 330 east longitude (i.e., 30 west)
+lon_section = 330 # only works if exact
+lims = 0:5:100
+tlabel = region * " water-mass fraction [%]"
+sectionplot(100g,lon_section,lims,titlelabel = tlabel) # a
+
+
 ###################################################
 #### EXTRA CODE SNIPPETS ##########################
 sum(m̃.down.γ.wet) +
