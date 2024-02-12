@@ -1,5 +1,5 @@
 #=
-% Example: Determine the total amount of remineralized phosphate   %
+% Example: Compute the spatial distribution of δ¹³C %
 =#
 
 using Revise
