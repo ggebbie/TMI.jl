@@ -1,5 +1,5 @@
 #=
-% Example: Determine the total amount of remineralized phosphate   %
+% Example: Compare average δ¹³C and PO₄ values for different ocean basins %
 =#
 
 using Revise
