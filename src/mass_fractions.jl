@@ -223,14 +223,50 @@ function massfractions_isotropic(γ::Grid)
     return m
 end
 
+"""
+function massfractions(c::NamedTuple; alg = :local)
+
+Create NamedTuple of mass fractions from observations `c`
+
+Doesn't produce a `MassFractions` struct and thus
+is named in lower case.
+
+# Arguments
+- `c::NamedTuple`: input observations
+- `alg=:local`: default algorithm is `:local`
+# Output
+- `m::NamedTuple`: collection of mass fractions
+"""
+function massfractions(c::NamedTuple; alg = :local) # assume: `Field`s inside
+    if alg == :local
+        return local_solve(c::NamedTuple)
+    else
+        println("TMI.massfractions: global solution for TMI water-mass matrix not implemented yet")
+    end
+end
+
+"""
+function local_solve(c::NamedTuple)
+
+Given tracers, solve for mass fractions using
+a repeated local algorithm.
+
+`local_solve!` is the workhorse for this algorithm and
+specifies a default inverse tapering parameter
+of `α=100_000`.
+
+# Arguments
+- `c::NamedTuple`: `Field` tracers (observations or model output)
+# Output
+- `m̃::NamedTuple`: `MassFractions` in a NamedTuple collection
+"""
 function local_solve(c::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
     TMI.local_solve!(m̃,c)
     return m̃
 end
-
-function local_solve!(m::NamedTuple,c::NamedTuple)
+function local_solve!(m::NamedTuple,c::NamedTuple; α = 100_000)
 
     γ = first(c).γ
     Rfull = CartesianIndices(γ.wet)
@@ -240,13 +276,9 @@ function local_solve!(m::NamedTuple,c::NamedTuple)
     R = copy(γ.R)
     Iint = cartesianindex(γ.interior)
 
-    # allocate masks
-    # #ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
-    # wet = falses(ngrid)
-    # m   = NaN*ones(ngrid)
     ncol   = TMI.neighbors(m,γ)
     nrow   = length(c) + 1 # add mass conservation
-    
+
     for I in Iint
 
         Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
@@ -258,8 +290,6 @@ function local_solve!(m::NamedTuple,c::NamedTuple)
         b = vcat(zeros(nrow-1),1.0)
         #m_local = A\b : problem: some cells have only one neighbor
 
-        #
-        α = 100_000 # inverse tapering parameter
         x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
         m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
 
@@ -272,19 +302,6 @@ function local_solve!(m::NamedTuple,c::NamedTuple)
             end
         end
     end
-            
-    
-    # allocate masks
-    #ngrid = (length(c.γ.lon), length(c.γ.lat), length(c.γ.depth))
-    # tracer contribution: units C*kg
-    #mc = Field(zeros(ngrid),
-    #     c.γ,
-    #     :mc,
-    #     "tracer contribution",
-    #     c.units)
-
-    # tracer_contribution!(mc,c,m)
-    #return mc
 end
 
 function local_watermass_matrix(c::NamedTuple,
@@ -324,6 +341,20 @@ function local_watermass_matrix(c::NamedTuple,
     return A
 end
 
+"""
+function watermassmatrix(m::NamedTuple, γ::Grid;
+    wrap=(true, false, false))
+
+Produce water-mass matrix from mass fractions and grid.
+
+# Arguments
+- `m::NamedTuple`: collection of `MassFraction`s
+- `γ::TMI.Grid`
+- `wrap::(true, false, false)`: does the particular dimension have a wraparound (periodic) domain?
+
+# Output
+- `A`: sparse water-mass matrix
+"""
 function watermassmatrix(m::NamedTuple, γ::Grid;
     wrap=(true, false, false))
 
@@ -356,136 +387,3 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
     end
     return A
 end
-
-# """
-# function wetmask_massfractions(γ)
-
-# get masks for "m" variables
-
-# # Input
-# - `γ::Grid`
-# # Output
-# - `wet_north`
-# - `wet_east`
-# - `wet_south`
-# - `wet_west`
-# - `wet_up`
-# - `wet_down`
-# """
-# function wetmask_massfractions(γ)
-#     # for bounds checking
-#     Rfull = CartesianIndices(γ.wet)
-#     Ifirst, Ilast = first(Rfull), last(Rfull)
-
-#     # loop over interior points (dirichlet bc for surface)
-#     R = cartesianindex(γ.interior)
-
-#     # assume 3D
-#     step_north = CartesianIndex(0,1,0)
-#     step_east  = CartesianIndex(1,0,0)
-#     step_up    = CartesianIndex(0,0,-1)
-
-#     # allocate masks
-#     nx = length(γ.lon)
-#     ny = length(γ.lat)
-#     nz = length(γ.depth)
-    
-#     wet_north = falses(nx, ny, nz)
-#     wet_east = falses(nx, ny, nz)
-#     wet_south = falses(nx, ny, nz)
-#     wet_west = falses(nx, ny, nz)
-#     wet_up = falses(nx, ny, nz)
-#     wet_down = falses(nx, ny, nz)
-    
-#     for I in R
-#         Inorth = I + step_north
-#         if Inorth[2] ≤ Ilast[2] # bounds check
-#             wet_north[I] = γ.wet[Inorth]
-#         end
-
-#         Ieast = I + step_east
-#         if Ieast[1] ≤ Ilast[1] # bounds check
-#             wet_east[I] = γ.wet[Ieast]
-#         elseif Ieast[1] > Ilast[1]
-#             wet_east[I] = γ.wet[Ieast - nx*step_east] # wraparound
-#         end
-
-#         Isouth = I - step_north
-#         if Isouth[2] ≥ Ifirst[2] # bounds check
-#             wet_south[I] = γ.wet[Isouth]
-#         end
-
-#         Iwest = I - step_east
-#         if Iwest[1] ≥ Ifirst[1] # bounds check
-#             wet_west[I] = γ.wet[Iwest]
-#         elseif Iwest[1] < Ifirst[1]
-#             wet_west[I] = γ.wet[Iwest + nx*step_east] # wraparound
-#         end
-
-#         Iup = I + step_up
-#         if Iup[3] ≥ Ifirst[3] # bounds check
-#             wet_up[I] = γ.wet[Iup]
-#         end
-
-#         Idown = I - step_up
-#         if Idown[3] ≤ Ilast[3] # bounds check
-#             wet_down[I] = γ.wet[Idown]
-#         end
-#     end
-#     return wet_north, wet_east, wet_south, wet_west, wet_up, wet_down
-# end
-
-# """
-# function massfractions_north(A,γ)
-
-# Arguments
-# - `A`::water-mass matrix
-# - `γ::Grid`
-
-# Output
-# - `m::Field`: mass fraction from northern neighbor
-# """
-# function massfractions_north(A,γ)
-
-#     # for bounds checking
-#     Rfull = CartesianIndices(γ.wet)
-#     Ifirst, Ilast = first(Rfull), last(Rfull)
-
-#     # loop over interior points (dirichlet bc for surface)
-#     R = copy(γ.R)
-#     Iint = cartesianindex(γ.interior)
-
-#     # assume 3D
-#     step_north = CartesianIndex(0,1,0)
-
-#     # allocate masks
-#     nx = length(γ.lon)
-#     ny = length(γ.lat)
-#     nz = length(γ.depth)
-    
-#     wet = falses(nx, ny, nz)
-#     m   = NaN*ones(nx, ny, nz)
-    
-#     for I in Iint
-#         Inorth = I + step_north
-#         if Inorth[2] ≤ Ilast[2] # bounds check
-#             if γ.wet[Inorth]
-#             println(I)
-#             println(R[I])
-#             println(Inorth)
-#             println(R[Inorth])
-#                 wet[I] = true
-#                 m[I] = A[R[I],R[Inorth]]
-#             end
-#         end
-#     end
-
-#     # make a field
-#     return m_north = Field(m,
-#         Grid(γ.lon,γ.lat,γ.depth,
-#             wet,
-#             BitArray{3}(undef,0,0,0)),
-#         :m_north,
-#         "mass fraction from northern neighbor",
-#         "unitless")
-# end

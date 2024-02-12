@@ -24,14 +24,14 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
 # get observations at surface
 # set them as surface boundary condition
-c = (θ =  readfield(TMIfile, "θ", γ),
+y = (θ =  readfield(TMIfile, "θ", γ),
     S = readfield(TMIfile, "Sp", γ),
     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
     P★ = preformedphosphate(TMIversion,Alu,γ),
     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
-@time m̃ = TMI.local_solve(c) 
+@time m̃ = TMI.local_solve(y) 
 
 Ã = watermassmatrix(m̃, γ);
 
@@ -60,33 +60,46 @@ Ãlu = lu(Ã)
 cntrs = -2:2:16
 
 # what model depth level?
-level = 15
+level = 27
 depth = γ.depth[level]
 
 # Help: needs work with continents and labels
 GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
 
 label1 = "θ reconstructed, depth = "*string(depth)*" m"
-planviewplot(θ̃, depth, cntrs, titlelabel=label1)
+planviewplot(θ̃, depth, cntrs, titlelabel=label1,fname = "T_reconstructed_"*string(depth)*".pdf")
 
 label2 = "θ original, depth = "*string(depth)*" m"
 planviewplot(c.θ, depth, cntrs, titlelabel=label2)
 
-label3 = "θ difference, depth = "*string(depth)*" m"
-planviewplot(c.θ-θ̃, depth, -.2:.01:.2, titlelabel=label3)
+colorlabels = [-.3, -.2, -.1, -0.05, -0.02, 0.02, 0.05, .1, .2, .3]
+label3 = "θ error [°C], depth = "*string(depth)*" m"
+planviewplot(c.θ-θ̃, depth, colorlabels, titlelabel=label3, fname = "dT_reconstructed_"*string(depth)*".pdf")
 
 #### water mass analysis
 list = TMI.regionlist()
-region = list[2] # sample region
+region = list[4] # sample region
 
 # do numerical analysis
-g = watermassdistribution(TMIversion,Ãlu,region,γ);
+g̃ = watermassdistribution(TMIversion,Ãlu,region,γ);
+colorlabels = 0:10:100
+glabel = "NATL percentage"
+planviewplot(100g̃, depth, colorlabels, titlelabel=label3, fname = "gNATL_"*string(depth)*".pdf")
+
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330 # only works if exact
-lims = 0:5:100
-tlabel = region * " water-mass fraction [%]"
-sectionplot(100g,lon_section,lims,titlelabel = tlabel) # a
+lims = vcat(0,5,10:10:60,100)
+tlabel = region * " water-mass [%], "*string(360-lon_section)*"°W"
+sectionplot(100g,lon_section,lims,titlelabel = tlabel,fname="gNATL_"*string(360-lon_section)*"W.pdf") # a
+
+lon_section = 330 # only works if exact
+colorlabels = vcat(-.3,-0.1,-0.05:0.01:0.05,0.1,.3)
+#tlabel = region * " water-mass fraction [%]"
+label3 = "θ error [°C], 30°W"
+sectionplot(θ̃-c.θ,lon_section,colorlabels,titlelabel = label3, fname = "T_error_30W.pdf") # a
+
+
 
 
 ###################################################
