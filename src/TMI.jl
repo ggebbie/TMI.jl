@@ -68,7 +68,8 @@ export config, config_from_mat, config_from_nc,
     zerowestboundary, zeronorthboundary,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
-    distancematrix, gaussiandistancematrix, versionlist
+    distancematrix, gaussiandistancematrix, versionlist,
+    massfractions
 
 import Base: zeros, one, oneunit, ones,  (\)
 #import Base: maximum, minimum

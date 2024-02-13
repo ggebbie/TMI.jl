@@ -31,8 +31,7 @@ y = (θ =  readfield(TMIfile, "θ", γ),
     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
-@time m̃ = TMI.local_solve(y) 
-
+@time m̃ = massfractions(y) 
 Ã = watermassmatrix(m̃, γ);
 
 # compare against the "truth" as solved by TMI
@@ -44,10 +43,14 @@ m_true = (north = TMI.massfractions_north(A,γ),
     down   = TMI.massfractions_down(A,γ))
 
 # compare m̃ and m_true (Δ̄ = 1e-14 in my case)
+for nn in keys(m_true)
+    Δ = m_true[nn].fraction - m̃[nn].fraction
+    println(maximum(Δ[m_true[nn].γ.wet]))
+end
 
 # a first guess: observed surface boundary conditions are perfect.
 # set surface boundary condition to the observations.
-bθ = getsurfaceboundary(c.θ)
+bθ = getsurfaceboundary(y.θ)
 
 ## reconstruct temperature
 Ãlu = lu(Ã)
@@ -70,11 +73,11 @@ label1 = "θ reconstructed, depth = "*string(depth)*" m"
 planviewplot(θ̃, depth, cntrs, titlelabel=label1,fname = "T_reconstructed_"*string(depth)*".pdf")
 
 label2 = "θ original, depth = "*string(depth)*" m"
-planviewplot(c.θ, depth, cntrs, titlelabel=label2)
+planviewplot(y.θ, depth, cntrs, titlelabel=label2)
 
 colorlabels = [-.3, -.2, -.1, -0.05, -0.02, 0.02, 0.05, .1, .2, .3]
 label3 = "θ error [°C], depth = "*string(depth)*" m"
-planviewplot(c.θ-θ̃, depth, colorlabels, titlelabel=label3, fname = "dT_reconstructed_"*string(depth)*".pdf")
+planviewplot(y.θ-θ̃, depth, colorlabels, titlelabel=label3, fname = "dT_error_"*string(depth)*".pdf")
 
 #### water mass analysis
 list = TMI.regionlist()
@@ -86,7 +89,6 @@ colorlabels = 0:10:100
 glabel = "NATL percentage"
 planviewplot(100g̃, depth, colorlabels, titlelabel=label3, fname = "gNATL_"*string(depth)*".pdf")
 
-
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330 # only works if exact
 lims = vcat(0,5,10:10:60,100)
@@ -97,9 +99,7 @@ lon_section = 330 # only works if exact
 colorlabels = vcat(-.3,-0.1,-0.05:0.01:0.05,0.1,.3)
 #tlabel = region * " water-mass fraction [%]"
 label3 = "θ error [°C], 30°W"
-sectionplot(θ̃-c.θ,lon_section,colorlabels,titlelabel = label3, fname = "T_error_30W.pdf") # a
-
-
+sectionplot(θ̃-y.θ,lon_section,colorlabels,titlelabel = label3, fname = "T_error_30W.pdf") # a
 
 
 ###################################################

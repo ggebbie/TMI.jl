@@ -288,11 +288,15 @@ function local_solve!(m::NamedTuple,c::NamedTuple; α = 100_000)
         # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
         # May require non-negative least-squares or quadratic programmin (JuMP)
         b = vcat(zeros(nrow-1),1.0)
-        #m_local = A\b : problem: some cells have only one neighbor
-
-        x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
-        m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
-
+        if ncol.tracer[I] > 1
+            m_local = Alocal\b 
+        elseif ncol.tracer[I] == 1 # problem: some cells have only one neighbor
+            x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
+            m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
+        else
+            println("no neighbors at all?")
+        end
+        
         # Save into proper mass fractions
         i = 0
         for m1 in m
@@ -358,6 +362,28 @@ Produce water-mass matrix from mass fractions and grid.
 function watermassmatrix(m::NamedTuple, γ::Grid;
     wrap=(true, false, false))
 
+    # get total size of mass fractions
+
+    #ksfc = 1 # surface could be at a different level
+    #nsfc = sum(γ.wet[:,:,ksfc]) # surface points
+
+    nfield = sum(γ.wet)
+    nm = 0
+    for m1 in m
+        nm += length(m1)
+    end
+
+    ilist = Array{Int64}(undef,nm+nfield)
+    jlist = Array{Int64}(undef,nm+nfield)
+    mlist = Array{Float64}(undef,nm+nfield)
+
+    # ones on diagonal
+    for ii in 1:nfield
+        ilist[ii] = ii
+        jlist[ii] = ii
+        mlist[ii] = 1.0
+    end
+    
     # for bounds checking
     Rfull = CartesianIndices(γ.wet)
     Ifirst, Ilast = first(Rfull), last(Rfull)
@@ -369,8 +395,9 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
     # allocate water mass matrix
     nfield = sum(γ.wet)
     # Note, flipped sign of interior points
-    A = spdiagm(nfield,nfield,ones(nfield))
+    #A = spdiagm(nfield,nfield,ones(nfield))
 
+    counter = nfield
     for I in Iint
         for m1 in m
         #for I in Iint
@@ -381,9 +408,17 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
                     γ;
                     wrap=(true,false,false))
 
-                A[nrow,R[Istep]] = -m1.fraction[I]
+                counter += 1
+                ilist[counter] = nrow
+                jlist[counter] = R[Istep]
+                mlist[counter] = -m1.fraction[I]
+                #A[nrow,R[Istep]] = -m1.fraction[I]
             end
         end
     end
-    return A
+    return sparse(ilist,jlist,mlist)
 end
+
+vec(m::MassFractions) = m.fraction[m.γ.wet]
+length(m::MassFractions) = sum(m.γ.wet)
+maximum(m::MassFractions) = Base.maximum(m.fraction[m.γ.wet])
