@@ -83,12 +83,3 @@ axs[3].plot(pred_δ¹³C .- true_δ¹³C, -depth)
 axs[3].set_title("pred_δ¹³C .- true_δ¹³C")
 
 println("Compared to: ", mean(filter(!isnan,x)))
-# fig = figure()
-# ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
-# ax.contourf(γ.lon,γ.lat,PO₄ᴿ[:, :, lvl]') # units: effective thickness in log10(meters)
-# ax.coastlines() #show coastlines
-# gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
-# gl.top_labels = false
-# gl.right_labels = false
-# ax.set_title("PO₄ᴿ")
-
