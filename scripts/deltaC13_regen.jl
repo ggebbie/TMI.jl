@@ -7,8 +7,6 @@ using TMI, PyPlot, PyCall, Statistics
 
 pygui(true) #needed for Atom, not sure what it will do in other places
 
-# A, Alu, γ, inputfile = config(url,inputdir)
-# ΔPO₄ = readtracer(inputfile,"qpo4")
 TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 δ¹³C = getVar(TMIversion,"δ¹³C")
