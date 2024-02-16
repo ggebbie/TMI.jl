@@ -5,7 +5,7 @@
 using Revise
 using TMI, PyPlot, PyCall, Statistics
 
-pygui(true) #needed for Atom, not sure what it will do in other places
+pygui(true) 
 
 TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
