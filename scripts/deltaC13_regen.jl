@@ -5,7 +5,7 @@
 using Revise
 using TMI, PyPlot, PyCall, Statistics
 
-pygui(true) 
+pygui(false) 
 
 TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
@@ -13,17 +13,14 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 PO₄ᴿ = getVar(TMIversion,"PO₄")
 depth = getVar(TMIversion, "depth")
 d_NATL = getRegion(TMIversion,"d_NATL")
-# plot a section at 330 east longitude (i.e., 30 west)
 
-# view the surface
-# cntrs = 1:0.25:6
-
-# PyPlot turned off for CI.
-# last index is the depth level? so the is complete and we can compute as 
-# planned
+# select the surface level (lvl = 1)
 lvl = 1
 
+#select a region
 d_NATL = getRegion(TMIversion,"d_NATL")
+
+#plot the distribution at the surface
 fig = figure()
 ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
 ax.contourf(γ.lon,γ.lat,δ¹³C[:, :,lvl]' .* d_NATL' ,
@@ -34,13 +31,13 @@ gl = ax.gridlines(draw_labels=true, dms=true, x_inline=false, y_inline=false)
 gl.top_labels = false
 gl.right_labels = false
 ax.set_title("δ¹³C d_NATL")
+fig.savefig(plotsdir("δ¹³C_d_NATL.png"))
+
 
 x = δ¹³C[:, :,lvl]' .* d_NATL'
 δ¹³C_NA = mean(filter(!isnan,x)) 
 println("δ¹³C_NA: ", δ¹³C_NA)
-#d_TROPPAC
-# d_SUBANT= getRegion(TMIversion,"d_SUBANT")
-d_SUBANTPAC = getRegion(TMIversion,"d_SUBANTPAC")
+
 fig = figure()
 ax = fig.add_subplot(projection = TMI.cartopy.crs.PlateCarree())
 ax.contourf(γ.lon,γ.lat,δ¹³C[:, :,lvl]' .* d_SUBANTPAC' ,
@@ -53,7 +50,7 @@ gl.right_labels = false
 ax.set_title("δ¹³C d_TROPPAC")
 x = δ¹³C[:, :,lvl]' .* d_SUBANTPAC'
 δ¹³C_P = mean(filter(!isnan,x))
-println("δ¹³C_P: ", δ¹³C_P)
+fig.savefig(plotsdir("δ¹³C_d_NATL.png"))
 
 δ¹³C_AS = δ¹³C_P - δ¹³C_NA
 
