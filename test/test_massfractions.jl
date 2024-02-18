@@ -40,5 +40,15 @@
         maxmisfit = 0.05
         @test Base.maximum(y.θ - θ̃) < maxmisfit
         @test Base.minimum(y.θ - θ̃) > -maxmisfit
+
+        #mc_test = TMI.tracer_contribution(y.θ,m_true.north) # a test
+        mc_true = TMI.tracer_contribution(y.θ,m_true)
+        @test maximum(mc_true) < 1e-5
+        @test minimum(mc_true) > -1e-5
+
+        mc_test = TMI.tracer_contribution(y.θ,m̃)
+        @test maximum(mc_test) < 1e-5
+        @test minimum(mc_test) > -1e-5
+
     end
 end
