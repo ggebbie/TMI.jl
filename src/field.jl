@@ -127,7 +127,7 @@ function readfield(file,tracername,γ::Grid)
     tracer, units, longname = _read3d(file,tracername)
     checkgrid!(tracer,γ.wet)
     # a kludge to fix out of date files
-    if tracername == "Sp"
+    if tracername == "Sp" || tracername == "SALT"
         tracername = "Sₚ"
     end
     c = Field(tracer,γ,tracerdict()[tracername],longname,units)
