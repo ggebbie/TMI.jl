@@ -181,6 +181,16 @@ function tracer_contribution!(mc::Field,c::Field, m::NamedTuple)
     end
 end
 
+"""
+function `neighbors(m::NamedTuple,γ::Grid)`
+
+How many neighbors does each grid cell have?
+# Arguments
+- `m::NamedTuple`: input mass fractions to obtain their stencil (opportunity to simplify)
+- `γ::TMI.Grid`
+# Output
+- `n::Field`: integer number of neighbors
+"""
 function neighbors(m::NamedTuple,γ::Grid)
 
     ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
@@ -195,7 +205,6 @@ function neighbors(m::NamedTuple,γ::Grid)
         :n,
         "neighbors",
         "unitless")
-
 end
 
 function massfractions_isotropic(γ::Grid)
@@ -266,7 +275,7 @@ function local_solve(c::NamedTuple) # assume: `Field`s inside
     TMI.local_solve!(m̃,c)
     return m̃
 end
-function local_solve!(m::NamedTuple,c::NamedTuple; α = 100_000)
+function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
 
     γ = first(c).γ
     Rfull = CartesianIndices(γ.wet)
@@ -276,25 +285,77 @@ function local_solve!(m::NamedTuple,c::NamedTuple; α = 100_000)
     R = copy(γ.R)
     Iint = cartesianindex(γ.interior)
 
-    ncol   = TMI.neighbors(m,γ)
+    neighbors   = TMI.neighbors(m,γ)
     nrow   = length(c) + 1 # add mass conservation
 
+    # allocate maximum needed
+    nmax = maximum(neighbors)
+    l = zeros(nmax)
+    u = ones(nmax)
+    b = vcat(zeros(nrow-1),1.0)
+    mlocal = zeros(nmax)
+    nlocal = zeros(nrow)
+    ϵ = 1e-8 # for checking tolerances
+    
     for I in Iint
 
-        Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
+        # well-mixed first guess
+        ncol = neighbors.tracer[I]
+        m0 = ones(ncol) ./ ncol
 
-        # Invert!
-        # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
-        # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
-        # May require non-negative least-squares or quadratic programmin (JuMP)
-        b = vcat(zeros(nrow-1),1.0)
-        if ncol.tracer[I] > 1
-            m_local = Alocal\b 
-        elseif ncol.tracer[I] == 1 # problem: some cells have only one neighbor
-            x0 = ones(ncol.tracer[I])./ ncol.tracer[I]
-            m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
+        # does it already fit the data?
+        #Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
+        Alocal, single_connection = local_watermass_matrix(c,m,I,neighbors)
+
+        n0 = b - Alocal*m0
+
+        if sum(abs.(n0[1:ncol])) < 1.0e-8 # something small
+            mlocal[1:ncol] = m0
         else
-            println("no neighbors at all?")
+    
+            # Invert! by maximizing mixing and fitting tracers/mass perfectly
+
+            # attempts to fit tracers and mass conservation perfectly
+            #m_local[1:nlocal] = x0 + Alocal'*((Alocal*Alocal')\noise)
+            mlocal[1:ncol] = m0 + Alocal\n0
+            nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+
+            # check fit and check non-negativity
+            if (sum(abs.(nlocal)) > 1.0e-8) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ) 
+                # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
+                # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
+                # May require non-negative least-squares or quadratic programmin (JuMP)
+
+                # quadratic programming
+                model = Model(HiGHS.Optimizer);
+                set_silent(model);
+                #nn = size(Alocal,2)
+                @variable(model, l[i] <= x[i = 1:ncol] <= u[i] ) 
+                #@constraint(model, sum(x) == 1.0)
+                @constraint(model, Alocal*x == b)
+                @objective(model, Min, sum((x.-m0).^2))
+                optimize!(model)
+                if termination_status(model) != OPTIMAL
+                    println("not optimal")
+                end
+                mlocal[1:ncol] = value.(x)
+            end
+        
+            # if !single_connection 
+            #     m_local = Alocal\b
+            #     if sum(abs.(m_local)) > 1.0000001
+            #         println("loc",I)
+            #         println(sum(abs.(m_local)))
+            #     end
+            # elseif single_connection # problem: some cells have only one neighbor
+            #     #elseif ncol.tracer[I] == 1
+            #     println(single_connection)
+            #     m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
+            
+            # else
+            #     println("no neighbors at all?")
+            # end
+
         end
         
         # Save into proper mass fractions
@@ -302,7 +363,8 @@ function local_solve!(m::NamedTuple,c::NamedTuple; α = 100_000)
         for m1 in m
             if m1.γ.wet[I]
                 i += 1
-                m1.fraction[I] = m_local[i]
+                # should not need to check bounds 
+                m1.fraction[I] = mlocal[i]
             end
         end
     end
@@ -311,7 +373,7 @@ end
 function local_watermass_matrix(c::NamedTuple,
     m::NamedTuple,
     I::CartesianIndex,
-    nlocal)
+    nlocal::Real)
 
     #γ = first(c).γ
     ncol   = nlocal # number of neighbors
@@ -343,6 +405,66 @@ function local_watermass_matrix(c::NamedTuple,
         end
     end
     return A
+end
+
+"""
+function `local_watermass_matrix(c::NamedTuple,
+    m::NamedTuple,
+    I::CartesianIndex,
+    neighbors::Field)`
+Find local water-mass matrix with singularity checker
+(`true` if one neighbor only has a single connection
+to the rest of the ocean)
+# Arguments
+- `c::NamedTuple`: input tracers
+- `m::NamedTuple`: mass fractions for grid stencil
+- `I::CartesianIndex`: local "location"
+- `neighbors::Field`: integer number of neighbors
+# Output
+- `A::Matrix`: local water-mass matrix
+- `single_connection::Bool`: true if flagged for singularity warning
+"""
+function local_watermass_matrix(c::NamedTuple,
+    m::NamedTuple,
+    I::CartesianIndex,
+    neighbors::Field)
+
+    #γ = first(c).γ
+    ncol   = neighbors.tracer[I] # number of neighbors
+    nrow   = length(c) + 1 # add mass conservation
+
+    single_connection = false # warning of singularity if one of the neighbors is singly connected
+    
+    # allocate tracer matrix
+    A = ones(nrow,ncol) # then overwrite later
+    
+    # loop through all mass fractions
+    #for i1 in eachindex(m)
+    i = 0; j = 0
+    for m1 in m
+
+        if m1.γ.wet[I]
+            j += 1
+            i = 0
+            # grab the tracer values to fill a column
+            # is this the correct γ?
+            Istep, _ = step_cartesian(I,
+                m1.position,
+                m1.γ,
+                wrap=(true,false,false))
+
+            if neighbors.tracer[Istep] == 1
+                single_connection = true
+            end
+            
+            #if γ.wet[Istep]: should automagically be true
+            for c1 in c
+                i += 1
+                A[i,j] = c1.tracer[Istep] - c1.tracer[I]
+            end
+        end
+    end
+    return A, single_connection
 end
 
 """
@@ -419,6 +541,7 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
     return sparse(ilist,jlist,mlist)
 end
 
-vec(m::MassFractions) = m.fraction[m.γ.wet]
-length(m::MassFractions) = sum(m.γ.wet)
-maximum(m::MassFractions) = Base.maximum(m.fraction[m.γ.wet])
+Base.vec(m::MassFractions) = m.fraction[m.γ.wet]
+Base.length(m::MassFractions) = sum(m.γ.wet)
+Base.maximum(m::MassFractions) = maximum(m.fraction[m.γ.wet])
+Base.minimum(m::MassFractions) = minimum(m.fraction[m.γ.wet])

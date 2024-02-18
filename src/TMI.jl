@@ -17,6 +17,7 @@ using NCDatasets
 using UnicodePlots
 using Statistics
 using OrderedCollections
+using JuMP, HiGHS
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
@@ -69,10 +70,10 @@ export config, config_from_mat, config_from_nc,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions
+    massfractions, neighbors
 
 import Base: zeros, one, oneunit, ones,  (\)
-#import Base: maximum, minimum
+import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
@@ -89,6 +90,9 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
+
+pkgplotsdir() = joinpath(pkgdir(),"plots")
+pkgplotsdir(args...) = joinpath(pkgplotsdir(), args...)
 
 pkgutilsdir() = joinpath(pkgdir(),"utils")
 pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)

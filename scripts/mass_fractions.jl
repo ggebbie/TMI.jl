@@ -31,8 +31,16 @@ y = (θ =  readfield(TMIfile, "θ", γ),
     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
-@time m̃ = massfractions(y) 
-Ã = watermassmatrix(m̃, γ);
+@time m̃ = massfractions(y);
+Ã = watermassmatrix(m̃, γ)
+
+# compare m̃ and m_true (Δ̄ = 1e-14 in my case)
+for nn in keys(m̃)
+    Δ = m̃[nn]
+    println(maximum(m̃[nn]))
+    println(minimum(m̃[nn]))
+    
+end
 
 # compare against the "truth" as solved by TMI
 m_true = (north = TMI.massfractions_north(A,γ),
@@ -44,8 +52,9 @@ m_true = (north = TMI.massfractions_north(A,γ),
 
 # compare m̃ and m_true (Δ̄ = 1e-14 in my case)
 for nn in keys(m_true)
-    Δ = m_true[nn].fraction - m̃[nn].fraction
-    println(maximum(Δ[m_true[nn].γ.wet]))
+   Δ = m_true[nn].fraction - m̃[nn].fraction
+   println(maximum(Δ[m_true[nn].γ.wet]))
+   println(minimum(Δ[m_true[nn].γ.wet]))
 end
 
 # a first guess: observed surface boundary conditions are perfect.
@@ -57,6 +66,8 @@ Ãlu = lu(Ã)
 θ̃ = steadyinversion(Ã,bθ,γ)
 
 # compare to c.θ
+Base.maximum(y.θ - θ̃)
+Base.minimum(y.θ - θ̃)
 
 ## Plot a plan view
 # view the surface
@@ -68,16 +79,22 @@ depth = γ.depth[level]
 
 # Help: needs work with continents and labels
 GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
+GeoPythonPlot.pygui() # to help plots appear on screen using Python GUI
 
+!isdir(TMI.pkgplotsdir()) && mkpath(TMI.pkgplotsdir())
 label1 = "θ reconstructed, depth = "*string(depth)*" m"
-planviewplot(θ̃, depth, cntrs, titlelabel=label1,fname = "T_reconstructed_"*string(depth)*".pdf")
+planviewplot(θ̃, depth, cntrs,
+    titlelabel=label1,
+    fname = TMI.pkgplotsdir("T_reconstructed_"*string(depth)*".pdf"))
 
 label2 = "θ original, depth = "*string(depth)*" m"
 planviewplot(y.θ, depth, cntrs, titlelabel=label2)
 
 colorlabels = [-.3, -.2, -.1, -0.05, -0.02, 0.02, 0.05, .1, .2, .3]
 label3 = "θ error [°C], depth = "*string(depth)*" m"
-planviewplot(y.θ-θ̃, depth, colorlabels, titlelabel=label3, fname = "dT_error_"*string(depth)*".pdf")
+planviewplot(y.θ-θ̃, depth, colorlabels,
+    titlelabel=label3,
+    fname = TMI.pkgplotsdir("T_error_"*string(depth)*".pdf"))
 
 #### water mass analysis
 list = TMI.regionlist()
@@ -87,13 +104,13 @@ region = list[4] # sample region
 g̃ = watermassdistribution(TMIversion,Ãlu,region,γ);
 colorlabels = 0:10:100
 glabel = "NATL percentage"
-planviewplot(100g̃, depth, colorlabels, titlelabel=label3, fname = "gNATL_"*string(depth)*".pdf")
+planviewplot(100g̃, depth, colorlabels, titlelabel=label3, fname = TMI.pkgplotsdir("gNATL_"*string(depth)*".pdf"))
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330 # only works if exact
 lims = vcat(0,5,10:10:60,100)
 tlabel = region * " water-mass [%], "*string(360-lon_section)*"°W"
-sectionplot(100g,lon_section,lims,titlelabel = tlabel,fname="gNATL_"*string(360-lon_section)*"W.pdf") # a
+sectionplot(100g̃,lon_section,lims,titlelabel = tlabel,fname=TMI.pkgplotsdir("gNATL_"*string(360-lon_section)*"W.pdf")) # a
 
 lon_section = 330 # only works if exact
 colorlabels = vcat(-.3,-0.1,-0.05:0.01:0.05,0.1,.3)
