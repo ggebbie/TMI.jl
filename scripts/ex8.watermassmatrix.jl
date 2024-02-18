@@ -44,7 +44,6 @@ Ãlu = lu(Ã)
 Base.maximum(y.θ - θ̃)
 Base.minimum(y.θ - θ̃)
 
-
 ## Plot a plan view
 # view the surface
 cntrs = -2:2:16

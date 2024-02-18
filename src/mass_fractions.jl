@@ -309,7 +309,7 @@ function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
 
         n0 = b - Alocal*m0
 
-        if sum(abs.(n0[1:ncol])) < 1.0e-8 # something small
+        if sum(abs.(n0[1:nrow])) < 1.0e-8 # something small
             mlocal[1:ncol] = m0
         else
     
@@ -321,7 +321,8 @@ function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
             nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
 
             # check fit and check non-negativity
-            if (sum(abs.(nlocal)) > 1.0e-8) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ) 
+            if single_connection ||
+                ((sum(abs.(nlocal)) > 1.0e-8) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
                 # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
                 # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
                 # May require non-negative least-squares or quadratic programmin (JuMP)
