@@ -41,6 +41,15 @@
         @test Base.maximum(y.θ - θ̃) < maxmisfit
         @test Base.minimum(y.θ - θ̃) > -maxmisfit
 
+
+        # compare against the "truth" as solved by TMI
+        m_true = (north = TMI.massfractions_north(A,γ),
+            east   = TMI.massfractions_east(A,γ),
+            south  = TMI.massfractions_south(A,γ),
+            west   = TMI.massfractions_west(A,γ),
+            up     = TMI.massfractions_up(A,γ),
+            down   = TMI.massfractions_down(A,γ))
+
         #mc_test = TMI.tracer_contribution(y.θ,m_true.north) # a test
         mc_true = TMI.tracer_contribution(y.θ,m_true)
         @test maximum(mc_true) < 1e-5

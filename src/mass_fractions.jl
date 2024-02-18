@@ -1,5 +1,5 @@
 """
-    struct MassFractions
+    struct MassFraction
 
 If 3D, then names known ahead of time and
 can use `struct` instead of NamedTuple
@@ -12,7 +12,7 @@ can use `struct` instead of NamedTuple
     `up::Field{T}`
     `down::Field{T}`
 """
-struct MassFractions{T <: Real}
+struct MassFraction{T <: Real}
     fraction::Array{T,3}
     γ::Grid
     name::Symbol
@@ -21,7 +21,7 @@ struct MassFractions{T <: Real}
     position::CartesianIndex{3}
 end
 
-function MassFractions(A,
+function MassFraction(A,
     γ::Grid,
     Δ::CartesianIndex;
     wrap=(true, false, false),
@@ -53,7 +53,7 @@ function MassFractions(A,
     end
 
     # make a field
-    return MassFractions(m,
+    return MassFraction(m,
         Grid(γ.lon,γ.lat,γ.depth,
             wet,
             γ.interior),
@@ -126,25 +126,25 @@ function step_cartesian(I::CartesianIndex,
     end
 end
 
-massfractions_north(A, γ) = MassFractions(A, γ, CartesianIndex(0,1,0);
+massfractions_north(A, γ) = MassFraction(A, γ, CartesianIndex(0,1,0);
     wrap=(true, false, false), longname = "mass fraction from northern neighbor")
 
-massfractions_east(A, γ) = MassFractions(A, γ, CartesianIndex(1,0,0);
+massfractions_east(A, γ) = MassFraction(A, γ, CartesianIndex(1,0,0);
     wrap=(true, false, false), longname = "mass fraction from eastern neighbor")
 
-massfractions_south(A, γ) = MassFractions(A, γ, CartesianIndex(0,-1,0);
+massfractions_south(A, γ) = MassFraction(A, γ, CartesianIndex(0,-1,0);
     wrap=(true, false, false), longname = "mass fraction from southern neighbor")
     
-massfractions_west(A, γ) = MassFractions(A, γ, CartesianIndex(-1,0,0);
+massfractions_west(A, γ) = MassFraction(A, γ, CartesianIndex(-1,0,0);
     wrap=(true, false, false), longname = "mass fraction from western neighbor")
 
-massfractions_up(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,-1);
+massfractions_up(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,-1);
     wrap=(true, false, false), longname = "mass fraction from upper neighbor")
     
-massfractions_down(A, γ) = MassFractions(A, γ, CartesianIndex(0,0,1);
+massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
     wrap=(true, false, false), longname = "mass fraction from lower neighbor")
 
-function tracer_contribution(c::Field,m::Union{MassFractions,NamedTuple})
+function tracer_contribution(c::Field,m::Union{MassFraction,NamedTuple})
 
     # allocate masks
     ngrid = (length(c.γ.lon), length(c.γ.lat), length(c.γ.depth))
@@ -159,7 +159,7 @@ function tracer_contribution(c::Field,m::Union{MassFractions,NamedTuple})
     return mc
 end
 
-function tracer_contribution!(mc::Field,c::Field,m::MassFractions)
+function tracer_contribution!(mc::Field,c::Field,m::MassFraction)
 
     # loop over all locations with "m" values
     Im = cartesianindex(m.γ.wet)
@@ -237,7 +237,7 @@ function massfractions(c::NamedTuple; alg = :local)
 
 Create NamedTuple of mass fractions from observations `c`
 
-Doesn't produce a `MassFractions` struct and thus
+Doesn't produce a `MassFraction` struct and thus
 is named in lower case.
 
 # Arguments
@@ -267,7 +267,7 @@ of `α=100_000`.
 # Arguments
 - `c::NamedTuple`: `Field` tracers (observations or model output)
 # Output
-- `m̃::NamedTuple`: `MassFractions` in a NamedTuple collection
+- `m̃::NamedTuple`: `MassFraction` in a NamedTuple collection
 """
 function local_solve(c::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
@@ -541,7 +541,7 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
     return sparse(ilist,jlist,mlist)
 end
 
-Base.vec(m::MassFractions) = m.fraction[m.γ.wet]
-Base.length(m::MassFractions) = sum(m.γ.wet)
-Base.maximum(m::MassFractions) = maximum(m.fraction[m.γ.wet])
-Base.minimum(m::MassFractions) = minimum(m.fraction[m.γ.wet])
+Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
+Base.length(m::MassFraction) = sum(m.γ.wet)
+Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
+Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
