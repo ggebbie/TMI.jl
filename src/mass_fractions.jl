@@ -1,16 +1,14 @@
 """
-    struct MassFraction
+struct MassFraction
 
-If 3D, then names known ahead of time and
-can use `struct` instead of NamedTuple
+store mass fractions in a Field-like array
 
-# Attributes
-    `north::Field{T}`
-    `east::Field{T}`
-    `south::Field{T}`
-    `west::Field{T}`
-    `up::Field{T}`
-    `down::Field{T}`
+- `fraction::Array{T,3}`
+- `γ::Grid`
+- `name::Symbol`
+- `longname::String`
+- `units::String`
+- `position::CartesianIndex{3}`
 """
 struct MassFraction{T <: Real}
     fraction::Array{T,3}
