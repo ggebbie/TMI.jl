@@ -49,7 +49,7 @@ Base.minimum(y.θ - θ̃)
 cntrs = -2:2:16
 
 # what model depth level?
-level = 27
+level = 15
 depth = γ.depth[level]
 
 # Set up the figure display
@@ -65,7 +65,10 @@ planviewplot(θ̃, depth, cntrs,
     fname = TMI.pkgplotsdir("T_reconstructed_"*string(depth)*".pdf"))
 
 label2 = "θ original, depth = "*string(depth)*" m"
-planviewplot(y.θ, depth, cntrs, titlelabel=label2)
+planviewplot(y.θ, depth, cntrs,
+    titlelabel=label2,
+    fname = TMI.pkgplotsdir("T_obs_"*string(depth)*".pdf"))
+
 
 colorlabels = [-.3, -.2, -.1, -0.05, -0.02, 0.02, 0.05, .1, .2, .3]
 label3 = "θ error [°C], depth = "*string(depth)*" m"
@@ -77,11 +80,32 @@ planviewplot(y.θ-θ̃, depth, colorlabels,
 list = TMI.regionlist()
 region = list[4] # sample region
 
+# what model depth level?
+level = 26
+depth = γ.depth[level]
+
 # do numerical analysis
 g̃ = watermassdistribution(TMIversion,Ãlu,region,γ);
+g = watermassdistribution(TMIversion,Alu,region,γ);
 colorlabels = 0:10:100
-glabel = "NATL percentage"
-planviewplot(100g̃, depth, colorlabels, titlelabel=label3, fname = TMI.pkgplotsdir("gNATL_"*string(depth)*".pdf"))
+glabel = "NATL percentage, depth = "*string(depth)*" m"
+
+planviewplot(100g̃, depth, colorlabels,
+    titlelabel=glabel,
+    fname = TMI.pkgplotsdir("gNATL_reconstructed_"*string(depth)*"m.pdf")
+)
+
+planviewplot(100g, depth, colorlabels,
+    titlelabel=glabel,
+    fname = TMI.pkgplotsdir("gNATL_obs_"*string(depth)*"m.pdf")
+)
+
+dcolorlabels = -10:10
+dglabel = "NATL difference %, depth = "*string(depth)*" m"
+planviewplot(100(g-g̃), depth, dcolorlabels,
+    titlelabel=glabel,
+    fname = TMI.pkgplotsdir("gNATL_difference_"*string(depth)*"m.pdf")
+)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 lon_section = 330 # only works if exact
@@ -93,7 +117,10 @@ lon_section = 330 # only works if matches grid exactly
 colorlabels = vcat(-.3,-0.1,-0.05:0.01:0.05,0.1,.3)
 #tlabel = region * " water-mass fraction [%]"
 label3 = "θ error [°C], 30°W"
-sectionplot(θ̃-y.θ,lon_section,colorlabels,titlelabel = label3, fname = "T_error_30W.pdf") # a
+sectionplot(θ̃-y.θ,lon_section,colorlabels,
+    titlelabel = label3,
+    fname = TMI.pkgplotsdir("T_error_"*string(360-lon_section)*"W.pdf")
+)
 
 # compare against the "truth" as solved by TMI
 m_true = (north = TMI.massfractions_north(A,γ),
@@ -103,7 +130,7 @@ m_true = (north = TMI.massfractions_north(A,γ),
     up     = TMI.massfractions_up(A,γ),
     down   = TMI.massfractions_down(A,γ))
 
-# compare m̃ and m_true (Δ̄ = 1e-14 in my case)
+# compare m̃ and m_true (some big values in locations that are nearly homogeneous)
 for nn in keys(m_true)
    Δ = m_true[nn].fraction - m̃[nn].fraction
    println(maximum(Δ[m_true[nn].γ.wet]))
