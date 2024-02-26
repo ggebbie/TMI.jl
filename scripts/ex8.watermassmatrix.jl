@@ -69,7 +69,6 @@ planviewplot(y.θ, depth, cntrs,
     titlelabel=label2,
     fname = TMI.pkgplotsdir("T_obs_"*string(depth)*".pdf"))
 
-
 colorlabels = [-.3, -.2, -.1, -0.05, -0.02, 0.02, 0.05, .1, .2, .3]
 label3 = "θ error [°C], depth = "*string(depth)*" m"
 planviewplot(y.θ-θ̃, depth, colorlabels,
@@ -136,5 +135,3 @@ for nn in keys(m_true)
    println(maximum(Δ[m_true[nn].γ.wet]))
    println(minimum(Δ[m_true[nn].γ.wet]))
 end
-
-
