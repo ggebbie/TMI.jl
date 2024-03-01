@@ -1,3 +1,4 @@
+using Base: FieldDescStorage
 """
 struct MassFraction
 
@@ -19,28 +20,22 @@ struct MassFraction{T <: Real}
     position::CartesianIndex{3}
 end
 
+
 function MassFraction(A,
     γ::Grid,
     Δ::CartesianIndex;
     wrap=(true, false, false),
     longname = "mass fraction from neighbor")
 
-    # for bounds checking
-    Rfull = CartesianIndices(γ.wet)
-    Ifirst, Ilast = first(Rfull), last(Rfull)
-
-    # loop over interior points (dirichlet bc at surface)
-    R = copy(γ.R)
-    Iint = cartesianindex(γ.interior)
-
     # allocate masks
     ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
     wet = falses(ngrid)
     m   = NaN*ones(ngrid)
-    
+    R   = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
     for I in Iint
         #Istep = I + step
-        Istep, inbounds = step_cartesian(I::CartesianIndex, Δ::CartesianIndex, γ::Grid; wrap=(true,false,false))
+        Istep, inbounds = step_cartesian(I::CartesianIndex, Δ::CartesianIndex, γ::Grid; wrap=wrap)
 
         if inbounds
             if γ.wet[Istep]
@@ -62,7 +57,7 @@ function MassFraction(A,
 end
 
 """
-function step_cartesian(I, Δ; wrap=(true,false,false))
+function `step_cartesian(I, Δ; wrap=(true,false,false))`
 
 # Arguments
 - `I::CartesianIndex`: starting point
@@ -89,7 +84,7 @@ function step_cartesian(I::CartesianIndex,
     # number of steps outside of bounds
     Ihi = max(Ilast,Istep)-Ilast
     Ilo = Ifirst - min(Ifirst,Istep)
-        inbounds = iszero(Ihi) && iszero(Ilo)
+    inbounds = iszero(Ihi) && iszero(Ilo)
 
     if iszero(Ihi) && iszero(Ilo)
         return Istep, true
@@ -103,13 +98,11 @@ function step_cartesian(I::CartesianIndex,
         for idim in eachindex(wrap)
             # check upper bound
             if Ihi[idim]>0 && wrap[idim]
-                #Istep[idim] .-= ngrid[idim] # wr
                 wrapstep[idim] = -ngrid[idim] # wr
             end
 
             # check lower bound
             if Ilo[idim]>0 && wrap[idim]
-                #Istep[idim] .+= ngrid[idim] # wr
                 wrapstep[idim] = ngrid[idim] # wr
             end
         end
@@ -121,6 +114,29 @@ function step_cartesian(I::CartesianIndex,
         Ilo = Ifirst - min(Ifirst,Istep)
         inbounds = iszero(Ihi) && iszero(Ilo)
         return Istep, inbounds
+    end
+end
+
+"""
+function `neighbor_indices(n::Integer)`
+
+Direction (step) of neighbors away from
+a central point. Choose n = 6 (default) or n=26. 
+# Argument
+- `n=6`: max number of neighbors
+# Output
+- `In::Vector{CartesianIndex}`: indices of neighbors
+"""
+function neighbor_indices(n=6)
+    if n == 6
+        return [CartesianIndex(0,1,0),
+            CartesianIndex(1,0,0),
+            CartesianIndex(0,-1,0),
+            CartesianIndex(-1,0,0),
+            CartesianIndex(0,0,-1),
+            CartesianIndex(0,0,1)]
+    elseif n == 26
+        return [CartesianIndex(i,j,k) for i=-1:1 for j = -1:1 for k=-1:1 if sum(abs(i)+abs(j)+abs(k)) > 0]
     end
 end
 
@@ -189,10 +205,16 @@ How many neighbors does each grid cell have?
 # Output
 - `n::Field`: integer number of neighbors
 """
-function neighbors(m::NamedTuple,γ::Grid)
+function neighbors(m::NamedTuple,γ::Grid{T}) where T
 
     ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
-    n = zeros(Int64,ngrid)
+    if T == Float32
+        n = zeros(Int32,ngrid)
+    elseif T == Float64
+        n = zeros(Int64,ngrid)
+    else
+        error("TMI.neighbors, type "*T*" not implemented")
+    end
     for m1 in m
         n += m1.γ.wet
     end
@@ -204,6 +226,54 @@ function neighbors(m::NamedTuple,γ::Grid)
         "neighbors",
         "unitless")
 end
+"""
+function `neighbors(γ::Grid;
+    Δ=neighbor_indices(6),
+    wrap=(true, false, false),
+    longname = "number of neighbors")`
+
+How many neighbors does each grid cell have?
+Conceptually, it only depends on the grid, but this
+algorithm is slower than the one that takes mass
+fractions as input.
+
+# Arguments
+- `γ::TMI.Grid`
+# Output
+- `n::Field`: integer number of neighbors
+"""
+function neighbors(γ::Grid{T};
+    Δ=neighbor_indices(6),
+    wrap=(true, false, false),
+    longname = "number of neighbors") where T
+
+    # allocate masks
+    ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    if T == Float32
+        n = zeros(Int32,ngrid)
+    elseif T == Float64
+        n = zeros(Int64,ngrid)
+    else
+        error("TMI.neighbors, type "*T*" not implemented")
+    end
+    
+    Iint = cartesianindex(γ.interior)
+    for d in Δ
+        for I in Iint
+            Istep, inbounds = step_cartesian(I::CartesianIndex,
+                d::CartesianIndex,
+                γ::Grid;
+                wrap=wrap)
+
+            if inbounds
+                n[I] += γ.wet[Istep]
+            end
+        end
+    end
+
+    return Field(n,γ,:n,longname,"unitless")
+end
+
 
 function massfractions_isotropic(γ::Grid)
 
@@ -211,12 +281,12 @@ function massfractions_isotropic(γ::Grid)
     nfield = sum(γ.wet)
     A = spzeros(nfield,nfield)
 
-    m = (north = TMI.massfractions_north(A,γ),
-        east   = TMI.massfractions_east(A,γ),
-        south  = TMI.massfractions_south(A,γ),
-        west   = TMI.massfractions_west(A,γ),
-        up     = TMI.massfractions_up(A,γ),
-        down   = TMI.massfractions_down(A,γ))
+    m = (north = massfractions_north(A,γ),
+        east   = massfractions_east(A,γ),
+        south  = massfractions_south(A,γ),
+        west   = massfractions_west(A,γ),
+        up     = massfractions_up(A,γ),
+        down   = massfractions_down(A,γ))
 
     # get number of neighbors for each location
     n = neighbors(m,γ)
