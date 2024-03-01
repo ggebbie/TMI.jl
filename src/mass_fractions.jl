@@ -334,10 +334,21 @@ function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
                 @constraint(model, Alocal*x == b)
                 @objective(model, Min, sum((x.-m0).^2))
                 optimize!(model)
-                if termination_status(model) != OPTIMAL
-                    println("not optimal")
+                if termination_status(model) != OPTIMAL 
+                    println("not feasible to fit tracer and mass conservation")
+                    println("relaxing tracer conservation")
+                    println(Alocal[1:end-1,:])
+                    println("location ",I)
+                    model2 = Model(HiGHS.Optimizer);
+                    set_silent(model2);
+                    @variable(model2, l[i] <= x[i = 1:ncol] <= u[i] ) 
+                    @constraint(model2, sum(x) == 1.0)
+                    @objective(model2, Min, sum((Alocal[1:end-1,:]*x).^2))
+                    optimize!(model2)
+                    println(termination_status(model2))
                 end
                 mlocal[1:ncol] = value.(x)
+                    
             end
         
             # if !single_connection 
