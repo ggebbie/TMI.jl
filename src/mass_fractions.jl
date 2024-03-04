@@ -349,14 +349,7 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
 
     γ = first(c).γ
     wlocal = [w1 for w1 in w] # unpack Named Tuple
-
-    #Rfull = CartesianIndices(γ.wet)
-    #Ifirst, Ilast = first(Rfull), last(Rfull)
-
-    # loop over interior points (dirichlet bc at surface)
-    #R = copy(γ.R)
     Iint = cartesianindex(γ.interior)
-
     n   = TMI.neighbors(m,γ)
     nrow   = length(c) + 1 # add mass conservation
 
@@ -364,7 +357,7 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
     nmax = maximum(n)
     mlocal = zeros(nmax)
     nlocal = zeros(nrow)
-    ϵ = 1e-4 # for checking tolerances
+    ϵ = 1e-3 # for checking tolerances
     
     for I in Iint
 
@@ -384,10 +377,6 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
     
             # Invert! by maximizing mixing and fitting tracers/mass perfectly
             # attempts to fit tracers and mass conservation perfectly
-            #m_local[1:nlocal] = x0 + Alocal'*((Alocal*Alocal')\noise)
-            #mlocal[1:ncol] = m0local + Alocal\n0
-            #nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
-
             Alocal2 = vcat(Alocal,ones(1,size(Alocal,2)))
             mlocal[1:ncol] = m0local + Alocal2\vcat(n0,0.0)
             nlocal[1:nrow] = vcat(Alocal*mlocal[1:ncol],
@@ -395,16 +384,11 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
 
             # check fit and check non-negativity
             if single_connection ||
-                ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+#                !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ )
+                 ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
 
-                # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
-                # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
-                # May require non-negative least-squares or quadratic programmin (JuMP)
-
-                #println("1st try not feasible ",I)
                 out = local_quadprog(Alocal,m0local[1:ncol])
 
-                #local_quadprog(Alocal,b,m0local)
                 if isnothing(out)
                     println("2nd try not feasible ",I)
 
@@ -413,13 +397,12 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
                         m0local[1:ncol],wlocal)
                 end
                 if isnothing(out)
-                    println("WARNING: NEVER FOUND A BETTER SOLUTION!")
-                    mlocal[1:ncol] = m0local[1:ncol]
-                else
-                    mlocal[1:ncol] .= out
-                end
-                
-            end
+                     println("WARNING: NEVER FOUND A BETTER SOLUTION!")
+                     mlocal[1:ncol] = m0local[1:ncol]
+                 else
+                     mlocal[1:ncol] .= out
+                 end
+             end
         end
         
         # Save into proper mass fractions
@@ -446,7 +429,6 @@ function local_quadprog(Alocal,m0local)
     @variable(model, 0.0 <= x[i = 1:ncol] <= 1.0 ) 
     @constraint(model, Alocal*x .== 0.0)
     @constraint(model, sum(x) == 1.0)
-    #@objective(model, Min, sum((x.-m0local).^2))
     @objective(model, Min,
         local_objective_mixing(x,m0local))
     optimize!(model)
