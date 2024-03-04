@@ -301,7 +301,7 @@ function massfractions_isotropic(γ::Grid)
 end
 
 """
-function massfractions(c::NamedTuple; alg = :local)
+function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)
 
 Create NamedTuple of mass fractions from observations `c`
 
@@ -310,20 +310,21 @@ is named in lower case.
 
 # Arguments
 - `c::NamedTuple`: input observations
+- `w::NamedTuple`: scale size of observations (used if obs not fit exactly)
 - `alg=:local`: default algorithm is `:local`
 # Output
 - `m::NamedTuple`: collection of mass fractions
 """
-function massfractions(c::NamedTuple; alg = :local) # assume: `Field`s inside
+function massfractions(c::NamedTuple, w::NamedTuple; alg = :local) # assume: `Field`s inside
     if alg == :local
-        return local_solve(c::NamedTuple)
+        return local_solve(c::NamedTuple, w::NamedTuple)
     else
         println("TMI.massfractions: global solution for TMI water-mass matrix not implemented yet")
     end
 end
 
 """
-function local_solve(c::NamedTuple)
+function local_solve(c::NamedTuple, w::NamedTuple)
 
 Given tracers, solve for mass fractions using
 a repeated local algorithm.
@@ -334,108 +335,91 @@ of `α=100_000`.
 
 # Arguments
 - `c::NamedTuple`: `Field` tracers (observations or model output)
+- `w::NamedTuple`: scale size of tracers (for weighting observational fits)
 # Output
 - `m̃::NamedTuple`: `MassFraction` in a NamedTuple collection
 """
-function local_solve(c::NamedTuple) # assume: `Field`s inside
+function local_solve(c::NamedTuple, w::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
-    TMI.local_solve!(m̃,c)
+    TMI.local_solve!(m̃,c,w)
     return m̃
 end
-function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
+function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadprog)
 
     γ = first(c).γ
-    Rfull = CartesianIndices(γ.wet)
-    Ifirst, Ilast = first(Rfull), last(Rfull)
+    wlocal = [w1 for w1 in w] # unpack Named Tuple
+
+    #Rfull = CartesianIndices(γ.wet)
+    #Ifirst, Ilast = first(Rfull), last(Rfull)
 
     # loop over interior points (dirichlet bc at surface)
-    R = copy(γ.R)
+    #R = copy(γ.R)
     Iint = cartesianindex(γ.interior)
 
-    neighbors   = TMI.neighbors(m,γ)
+    n   = TMI.neighbors(m,γ)
     nrow   = length(c) + 1 # add mass conservation
 
     # allocate maximum needed
-    nmax = maximum(neighbors)
-    l = zeros(nmax)
-    u = ones(nmax)
-    b = vcat(zeros(nrow-1),1.0)
+    nmax = maximum(n)
     mlocal = zeros(nmax)
     nlocal = zeros(nrow)
-    ϵ = 1e-8 # for checking tolerances
+    ϵ = 1e-4 # for checking tolerances
     
     for I in Iint
 
         # well-mixed first guess
-        ncol = neighbors.tracer[I]
-        m0 = ones(ncol) ./ ncol
+        ncol = n.tracer[I]
+        m0local = ones(ncol) ./ ncol
 
         # does it already fit the data?
         #Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
-        Alocal, single_connection = local_watermass_matrix(c,m,I,neighbors)
+        Alocal, single_connection = local_watermass_matrix(c,m,I,n)
 
-        n0 = b - Alocal*m0
+        n0 = Alocal*m0local # data misfit (mass excluded)
 
-        if sum(abs.(n0[1:nrow])) < 1.0e-8 # something small
-            mlocal[1:ncol] = m0
+        if sum(abs.(n0)) < 1.0e-8 # something small
+            mlocal[1:ncol] = m0local
         else
     
             # Invert! by maximizing mixing and fitting tracers/mass perfectly
-
             # attempts to fit tracers and mass conservation perfectly
             #m_local[1:nlocal] = x0 + Alocal'*((Alocal*Alocal')\noise)
-            mlocal[1:ncol] = m0 + Alocal\n0
-            nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+            #mlocal[1:ncol] = m0local + Alocal\n0
+            #nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+
+            Alocal2 = vcat(Alocal,ones(1,size(Alocal,2)))
+            mlocal[1:ncol] = m0local + Alocal2\vcat(n0,0.0)
+            nlocal[1:nrow] = vcat(Alocal*mlocal[1:ncol],
+                1-sum(mlocal[1:ncol]))
 
             # check fit and check non-negativity
             if single_connection ||
-                ((sum(abs.(nlocal)) > 1.0e-8) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+                ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+
                 # In less perfect cases, consider forcing m_f = sum_i=1^(f-1) m_i
                 # With fewer tracers, incorporate a first guess with horizontal (perhaps) motion
                 # May require non-negative least-squares or quadratic programmin (JuMP)
 
-                # quadratic programming
-                model = Model(HiGHS.Optimizer);
-                set_silent(model);
-                #nn = size(Alocal,2)
-                @variable(model, l[i] <= x[i = 1:ncol] <= u[i] ) 
-                #@constraint(model, sum(x) == 1.0)
-                @constraint(model, Alocal*x == b)
-                @objective(model, Min, sum((x.-m0).^2))
-                optimize!(model)
-                if termination_status(model) != OPTIMAL 
-                    println("not feasible to fit tracer and mass conservation")
-                    println("relaxing tracer conservation")
-                    println(Alocal[1:end-1,:])
-                    println("location ",I)
-                    model2 = Model(HiGHS.Optimizer);
-                    set_silent(model2);
-                    @variable(model2, l[i] <= x[i = 1:ncol] <= u[i] ) 
-                    @constraint(model2, sum(x) == 1.0)
-                    @objective(model2, Min, sum((Alocal[1:end-1,:]*x).^2))
-                    optimize!(model2)
-                    println(termination_status(model2))
-                end
-                mlocal[1:ncol] = value.(x)
-                    
-            end
-        
-            # if !single_connection 
-            #     m_local = Alocal\b
-            #     if sum(abs.(m_local)) > 1.0000001
-            #         println("loc",I)
-            #         println(sum(abs.(m_local)))
-            #     end
-            # elseif single_connection # problem: some cells have only one neighbor
-            #     #elseif ncol.tracer[I] == 1
-            #     println(single_connection)
-            #     m_local = (Alocal'*Alocal+LinearAlgebra.I./α)\(Alocal'*b + x0./α)
-            
-            # else
-            #     println("no neighbors at all?")
-            # end
+                #println("1st try not feasible ",I)
+                out = local_quadprog(Alocal,m0local[1:ncol])
 
+                #local_quadprog(Alocal,b,m0local)
+                if isnothing(out)
+                    println("2nd try not feasible ",I)
+
+                    # relax tracer assumption
+                    out = local_quadprog(Alocal,
+                        m0local[1:ncol],wlocal)
+                end
+                if isnothing(out)
+                    println("WARNING: NEVER FOUND A BETTER SOLUTION!")
+                    mlocal[1:ncol] = m0local[1:ncol]
+                else
+                    mlocal[1:ncol] .= out
+                end
+                
+            end
         end
         
         # Save into proper mass fractions
@@ -450,6 +434,58 @@ function local_solve!(m::NamedTuple,c::NamedTuple; alg = :quadprog)
     end
 end
 
+function local_quadprog(Alocal,m0local)
+    #model =
+    #     Model(optimizer_with_attributes(COSMO.Optimizer, "verbose" => false,
+    #         "eps_abs" => 1e-4, "eps_rel" = 1e-4))
+
+    #model = Model(COSMO.Optimizer);
+    model = Model(HiGHS.Optimizer);
+    set_silent(model);
+    ncol = length(m0local) 
+    @variable(model, 0.0 <= x[i = 1:ncol] <= 1.0 ) 
+    @constraint(model, Alocal*x .== 0.0)
+    @constraint(model, sum(x) == 1.0)
+    #@objective(model, Min, sum((x.-m0local).^2))
+    @objective(model, Min,
+        local_objective_mixing(x,m0local))
+    optimize!(model)
+    if termination_status(model) != OPTIMAL
+        return nothing
+    else
+        return value.(x)
+    end
+end
+
+local_objective_mixing(x,m0local) =
+    sum((x.-m0local).^2)
+    
+function local_quadprog(Alocal::Matrix,m0local::Vector,w::Vector)
+    #settings = COSMO.Settings(verbose = false, eps_abs = 1e-2, eps_rel = 1e-2)
+    model =
+         Model(optimizer_with_attributes(COSMO.Optimizer, "verbose" => false,
+             "eps_abs" => 1e-2, "eps_rel" => 1e-2))
+    #model = Model(COSMO.Optimizer);
+    #set_silent(model);
+    ncol = length(m0local) 
+    @variable(model, 0.0 <= x[i = 1:ncol] <= 1.0 ) 
+    @constraint(model, sum(x) == 1.0)
+    #@objective(model, Min,
+    #    sum(((Alocal[1:end-1,:]*x)./w).^2))
+    #    println(local_objective_obs(Alocal,x,w))
+    @objective(model, Min,
+        local_objective_obs(Alocal,x,w))
+    optimize!(model)
+    if termination_status(model) != OPTIMAL
+        return nothing
+    else
+        return value.(x)
+    end
+end
+
+local_objective_obs(Alocal,x,w) =
+    sum(((Alocal*x)./w).^2)
+
 function local_watermass_matrix(c::NamedTuple,
     m::NamedTuple,
     I::CartesianIndex,
@@ -457,10 +493,10 @@ function local_watermass_matrix(c::NamedTuple,
 
     #γ = first(c).γ
     ncol   = nlocal # number of neighbors
-    nrow   = length(c) + 1 # add mass conservation
+    nrow   = length(c) #+ 1 # add mass conservation
 
     # allocate tracer matrix
-    A = ones(nrow,ncol) # then overwrite later
+    A = zeros(nrow,ncol) # then overwrite later
     
     # loop through all mass fractions
     #for i1 in eachindex(m)
@@ -511,12 +547,12 @@ function local_watermass_matrix(c::NamedTuple,
 
     #γ = first(c).γ
     ncol   = neighbors.tracer[I] # number of neighbors
-    nrow   = length(c) + 1 # add mass conservation
+    nrow   = length(c) # + 1 # add mass conservation
 
     single_connection = false # warning of singularity if one of the neighbors is singly connected
     
     # allocate tracer matrix
-    A = ones(nrow,ncol) # then overwrite later
+    A = zeros(nrow,ncol) # then overwrite later
     
     # loop through all mass fractions
     #for i1 in eachindex(m)

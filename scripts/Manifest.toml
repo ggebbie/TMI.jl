@@ -1,8 +1,14 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0"
+julia_version = "1.10.2"
 manifest_format = "2.0"
 project_hash = "785ab0f55a629aeab2d164ac3ad12714ed9c7154"
+
+[[deps.AMD]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
+git-tree-sha1 = "45a1272e3f809d36431e57ab22703c6896b8908f"
+uuid = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
+version = "0.5.3"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -79,6 +85,18 @@ deps = ["Dates", "Printf"]
 git-tree-sha1 = "ed2e76c1c3c43fd9d0cb9248674620b29d71f2d1"
 uuid = "179af706-886a-5703-950a-314cd64e0468"
 version = "0.1.2"
+
+[[deps.COSMO]]
+deps = ["AMD", "COSMOAccelerators", "DataStructures", "IterTools", "LinearAlgebra", "MathOptInterface", "Pkg", "Printf", "QDLDL", "Random", "Reexport", "Requires", "SparseArrays", "Statistics", "SuiteSparse", "Test", "UnsafeArrays"]
+git-tree-sha1 = "a0531f33abb67c7bddcf0a50cfe88cbf15155d75"
+uuid = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
+version = "0.8.8"
+
+[[deps.COSMOAccelerators]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "Test"]
+git-tree-sha1 = "b1153b40dd95f856e379f25ae335755ecc24298e"
+uuid = "bbd8fffe-5ad0-4d78-a55e-85575421b4ac"
+version = "0.1.0"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "SentinelArrays", "SnoopPrecompile", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
@@ -161,7 +179,7 @@ version = "3.46.2"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.5+1"
+version = "1.1.0+0"
 
 [[deps.ConcurrentUtilities]]
 deps = ["Serialization", "Sockets"]
@@ -424,6 +442,11 @@ git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
 
+[[deps.IterTools]]
+git-tree-sha1 = "42d5f897009e7ff2cf88db414a389e5ed1bdd023"
+uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
+version = "1.10.0"
+
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
@@ -655,7 +678,7 @@ version = "1.12.9"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+2"
+version = "0.3.23+4"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -763,6 +786,12 @@ deps = ["Colors", "CondaPkg", "LaTeXStrings", "PythonCall", "Sockets", "Test", "
 git-tree-sha1 = "88b305afa25e1bc4379f182152273dfc55a814b4"
 uuid = "274fc56d-3b97-40fa-a1cd-1b4a50311bf9"
 version = "1.0.3"
+
+[[deps.QDLDL]]
+deps = ["AMD", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "5a3c14e534faf5b66c4633b5770a665ec1a87503"
+uuid = "bfc457fd-c171-5ab7-bd9e-d5dbfc242d63"
+version = "0.4.1"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
@@ -939,7 +968,7 @@ uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
 version = "7.2.1+1"
 
 [[deps.TMI]]
-deps = ["CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "HiGHS", "Interpolations", "JuMP", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
+deps = ["COSMO", "CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "HiGHS", "Interpolations", "JuMP", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
 path = ".."
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 version = "0.2.7"
@@ -1023,6 +1052,11 @@ version = "3.6.0"
     IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
     Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.UnsafeArrays]]
+git-tree-sha1 = "e7f1c67ba99ac6df440de191fa4d5cbfcbdddcd1"
+uuid = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
+version = "1.0.5"
 
 [[deps.UnsafePointers]]
 git-tree-sha1 = "c81331b3b2e60a982be57c046ec91f599ede674a"

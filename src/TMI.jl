@@ -17,7 +17,9 @@ using NCDatasets
 using UnicodePlots
 using Statistics
 using OrderedCollections
-using JuMP, HiGHS
+using JuMP
+using HiGHS
+using COSMO
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,

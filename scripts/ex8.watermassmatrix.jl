@@ -29,7 +29,14 @@ y = (θ =  readfield(TMIfile, "θ", γ),
     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
-@time m̃ = massfractions(y);
+w = (θ =  0.01,
+    S = 0.001,
+    δ¹⁸O = 0.05,
+    P★ = 0.05,
+    δ¹³C★ = 0.05
+)
+
+@time m̃ = massfractions(y,w);
 Ã = watermassmatrix(m̃, γ)
 
 # a first guess: observed surface boundary conditions are perfect.
