@@ -600,20 +600,21 @@ gridatts() = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
     Rename MATLAB variables to NetCDF variables
 """
 mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-                     "Terr"=>"σθ",
-                     "Sstar"=>"S⋆",
-                   "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
-                   "Serr"=>"σSₚ",
-                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
-                   "O18err"=>"σδ¹⁸Ow",
-                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
-                   "Perr" => "σPO₄",
-                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
-                   "Nerr" => "σNO₃",
-                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
-                   "Oerr"=>"σO₂",
-                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
-                   "C13err" =>  "σδ¹³C")
+    "Terr"=>"σθ",
+    "Sstar"=>"S⋆",
+    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
+    "Sp" => "Sp", # help for some out-of-date input files
+    "Serr"=>"σSₚ",
+    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+    "O18err"=>"σδ¹⁸Ow",
+    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
+    "Perr" => "σPO₄",
+    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
+    "Nerr" => "σNO₃",
+    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
+    "Oerr"=>"σO₂",
+    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
+    "C13err" =>  "σδ¹³C")
 
 mat2ncsource() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
 
@@ -664,7 +665,6 @@ function matsource2nc(TMIversion,γ)
     end
 end
 
-
 """
 All variable names and attributes.
 Useful for writing NetCDF files.
@@ -699,6 +699,8 @@ tracerdict() =
         "σθ" => :σθ,
         "S⋆" => Symbol("S⋆"),
         "Sₚ" => :Sₚ,
+        "Sp" => :Sₚ,
+        "SALT" => :Sₚ,
         "σSₚ" => :σSₚ,
         "δ¹⁸Ow" => :δ¹⁸Ow,
         "σδ¹⁸Ow" => :σδ¹⁸Ow,
@@ -927,3 +929,15 @@ function sourceinit(vec,I,γ)
     end
     return source
 end
+
+versionlist() = ("modern_90x45x33_GH10_GH12",
+    "modern_180x90x33_GH11_GH12",
+    "modern_90x45x33_unpub12",
+    "modern_90x45x33_G14", 
+    "modern_90x45x33_G14_v2",				  
+    "LGM_90x45x33_G14",
+    "LGM_90x45x33_G14A",				  
+    "LGM_90x45x33_GPLS1",				  
+    "LGM_90x45x33_GPLS2",				  
+    "LGM_90x45x33_OG18",
+    "nordic_201x115x46_B23")

@@ -1,0 +1,303 @@
+
+\documentclass[agums]{aguplus}  % use this variant for AGU manuscripts
+%\documentclass[agums]{aguplus_ams}  % use this variant for to get parentheses for 
+                                    % American Meteorlogical Society publications
+%\usepackage{psfig,times}
+\usepackage{wasysym}
+\usepackage{graphicx}
+\usepackage{pslatex}
+\usepackage{subfigure}
+% \usepackage{setspace}
+ \usepackage[dvips]{epsfig}
+ \setlength{\oddsidemargin}{0.1cm}
+ \setlength{\evensidemargin}{0.1cm}
+ \setlength{\textwidth}{16cm}
+ \setlength{\textheight}{22.1cm}
+ \setlength{\topmargin}{.0cm} 
+%\usepackage{amsmath}
+\usepackage[latin1]{inputenc}
+\def\degree{\hbox{$^\circ$}}
+\usepackage[T1]{fontenc}
+\def\scalefig#1{\epsfxsize #1\textwidth}
+
+\makeatletter
+%\def\@sluginfo{{\vspace{1in}in preparation, \today}}
+\renewcommand\revtex@pageid{}
+\makeatother
+
+
+%\renewcommand\NAT@open{(} \renewcommand\NAT@close{)}
+%\makeatother
+\sectionnumbers
+%\printfigures
+%\tighten  %uncomment this line for single-spaced text
+\lefthead{Gebbie}
+
+\righthead{Auxiliary Text}
+\received{}
+\revised{}
+\accepted{}
+\journalid{}{}
+\articleid{}{}
+\paperid{}
+\cpright{}{}
+\ccc{}
+%\printfigures
+
+
+\begin{document}
+
+% \title{Auxiliary Text and Figures: How is the ocean filled?}
+
+% \author{Geoffrey Gebbie$^{1,2,3}$ and Peter Huybers$^1$}
+
+\title{}
+% \affil{$^1$ Harvard University, Cambridge, MA, $^2$ Massachusetts Institute of Technology, Cambridge, MA, $^3$ Now at Woods Hole Oceanographic Institution, Woods Hole, MA} 
+       
+
+% %\author{In press, {\it Geophys. Geochem. Geosyst.}, \today}  % place holder for drafts
+% \authoraddr{Geoffrey Gebbie, Woods Hole Oceanographic Institution, MS \# 29, 266 Woods Hole Rd., Woods Hole, MA, 02543, USA.}
+
+% %% agu abstracts. GRL.
+% %   *  Set as a single paragraph
+% %    * Limit to 250 words for journals
+% %    * Do not include references in the abstract
+
+%\begin{abstract}
+
+% \end{abstract}
+
+% \begin{flushright}
+% \textbf{Auxiliary Information}
+% \end{flushright}
+
+
+% \vspace{1in}
+
+% \begin{center}
+% \large{\textbf{How is the ocean filled?}}\\
+% \vspace{.25in}
+
+% G. Gebbie \verb+(ggebbie@whoi.edu)+ and P. Huybers.
+
+% \end{center}
+
+
+% \vspace{.5in}
+
+% \begin{itemize}
+
+% \item Auxiliary Notes and Figures
+
+% \begin{itemize}
+
+% \item       The steady-state circulation
+
+% \item	Estimating tracer distributions
+
+% \item	Diagnosing water-mass pathways
+
+% \item Adjoint method for the surface origination map
+
+% \item The distribution of water masses and its sensitivity to spatial resolution
+
+% \end{itemize}
+
+% \item References
+
+% \item Figures
+
+% \end{itemize}
+
+%\Large{\textbf{Auxiliary Text and Figures}} \\
+
+%\normalsize
+
+\begin{itemize}
+ \item[] {\bf Auxiliary Material Submission for manuscript} \\
+  ``How much did Glacial North Atlantic Water shoal?'' \\ \\
+Geoffrey Gebbie \\
+Physical Oceanography Department, Woods
+Hole Oceanographic Institution \\ \\
+
+\item[]    Contents 
+
+\item[1.] Detailed inverse problem formulation
+
+\item[2.] Model-Data Misfits
+
+\item[3.] Water-mass analysis
+
+\item[4.] References
+
+\item[5.] Figures
+
+\item[5b.] Western Atlantic Property Atlas
+
+\item[5c.] Eastern Atlantic Property Atlas
+
+
+%\item[3.] Brazil Margin analysis
+
+
+%\item Gebbie, G., and P. Huybers, How is the ocean filled?, 2011. 
+
+ \end{itemize}
+
+% Introduction 
+
+
+% 1. 2010jd014771-txts01.doc: Text S1: 
+% (1) A summary of the infrared spectra for Figures 1 and 5 in the overall range that were measured, along with the theoretical ones in the 0-2500 cm-1 wavenumber range. 
+% (2) The final structures used in theoretical calculation in Cartesian coordinate format for all compound from Tables 3 and 5. Calculation were run in Gaussian03 with the B3LYP/6-31G** level of theory. X, Y and Z represent the coordinates in A (deg).
+
+\newpage
+
+\section{Detailed inverse problem formulation}
+\label{sec:proxy}
+
+The method is detailed through a set of constraints on the problem
+unknowns: the water-mass proportions, ${\bf m}$, all relevant tracer
+distributions on an underlying grid, ${\bf c}_k$, and any
+remineralization source for nonconservative tracers, ${\bf q}$.
+
+%\subsection{Constraints}
+
+Tracer observations are imposed without loss of generality as an
+equation: $\sum^K_{k=1} \{ {\cal E}_k[ {\bf c}_k] \} = {\bf y} + {\bf
+  n}$, where there are $K$ modeled tracers, ${\cal E}_k$ is a
+potentially nonlinear mapping of the gridded fields onto the observational
+location of observational type and performs the ``proxy'' step of
+relating the modeled tracers to observed quantities, ${\bf y}$ is the
+list of many disparate observations, and ${\bf n}$ is the noise in the
+observations. This form takes into account the fact that
+paleo-observations may depend upon multiple seawater tracers (e.g.,
+$\delta^{18}$O$_c$ requires temperature and seawater $\delta^{18}$O),
+and that this relationship may be nonlinear (e.g., $\delta^{18}$O$_c$
+requires in-situ rather than potential temperature, and Cd$_w$ is
+nonlinearly related to phosphate). If the tracer observations are
+restricted to those that are explicitly modeled (e.g.,
+$\delta^{18}$O$_w$) or to climatologies where a tracer value is
+available at all gridded locations (e.g., WOCE salinity and
+nutrients), the nonlinear function ${\cal E}_k$ is reduced to a
+matrix. % or even drops out of the problem entirely.
+
+The tracers are constrained by non-observational information, as well.
+These constraints include gravitational stability, non-negativity
+constraints expressed in terms of barrier functions, and
+$\delta^{13}$C$_{as}$ being within the range that has been found in
+modern-day observations and models ($\pm 1\permil$).  To keep
+the solution within reasonable bounds and also improve the efficiency
+of the solution method, the surface tracer deviation is defined
+relative to a first guess, $\Gamma {\bf c}_{bk} = {\bf c}_{0k} + {\bf
+  n}_{bk}$, where $\Gamma$ picks out the surface values from the
+global distribution, ${\bf c}_{bk}$ is the surface concentration,
+${\bf c}_{0k}$ is the first guess, and ${\bf n}_{bk}$ is surface
+deviation away from the first guess for tracer $k$. Equations for
+gravitational stability, non-negativity, and the range of
+$\delta^{13}$C$_{as}$ are symbolically lumped into one set of
+nonlinear equations for the derivation here: ${\cal F}_c[{\bf c}_k] =
+{\bf n}_c$, where ${\bf n}_c$ is the degree to which these equations
+are inexact.
+
+No direct observations of the interior tracer sources, ${\bf q}$, or
+the water-mass pathway vector, ${\bf m}$, are available, so these
+unknowns are simply kept within a reasonable range of a first-guess
+where, for example, ${\cal F}_q[{\bf q},{\bf q}_0]=\mbox{log}({\bf q})
+- \mbox{log}({\bf q}_0)={\bf n}_q$, is the deviation from the first
+guess local sources, ${\bf q}_0$. The difference of logarithms assumes
+and enforces the source to be positive, and for the order of magnitude
+of the deviation to be penalized. The pathway parameters, ${\bf m}$,
+are penalized using an similar nonlinear function, ${\cal F}_m$.
+
+\subsection{Steady state constraint}
+
+Equation~(1) in the main text is put into the form of a steady-state
+constraint by putting all terms on the left hand side:
+$f_{ik} = \sum^N_{j=1} m_{ij}~ c_{jk} + r_k q_i - c_{ik} = 0$, for all
+interior locations $i$ and tracers $k$, with
+$f_{ik} = c_{ik} - c_{bk}$ at the surface.  Mass conservation is one
+of these constraints, here denoted to be the $k=K+1$ tracer:
+$f_{i,K+1} = \sum^N_{j=1} m_{ij} - 1$, found by substituting
+$c_{j,K+1}=1$, $c_{i,K+1}=1$, and $r_{K+1} = 0$ above.  Any
+steady-state tracer, $k$, must satisfy ${\cal F}_k = 0$ which is
+defined by appending $f_{ik}$ at all $i$ locations.
+
+\subsection{Solution technique}
+\label{sec:solution}
+
+All constraints are enforced through the method of Lagrange
+multipliers.  For equations that contain noise, a weighted quadratic
+form, ${\bf n}^T {\bf W} {\bf n}$, is added to the Lagrangian function
+in order to minimize the sum of squared noise elements.  For the
+steady-state constraint that does not contain noise, a Lagrange
+multiplier term is appended to the function for strict
+enforcement. Solving for ${\bf n}$ in terms of the other unknowns of
+the problem, the Lagrangian function is
+\begin{eqnarray}
+\label{eq:lagrangian}
+   {\cal L} [{\bf c}_k,{\bf q},{\bf m}] &=&  (\sum^K_{k=1} \{ {\cal
+     E}_k [{\bf c}_k] \} - {\bf
+  y})^T ~{\bf W} ( \sum^K_{k=1} \{ {\cal E}_k [{\bf c}_k] \} - {\bf y}) \\
+%\sum^K_{k=1}[\alpha_k ({\bf E c}_k-{\bf c}_k^{obs})^T 
+%{\bf W}_k^{-1} ({\bf  E c}_k-{\bf c}_k^{obs})
+&+&  \sum^K_{k=1} \{ (\Gamma {\bf c}_k - {\bf c}_{0k})^T {\bf
+   S}_k   (\Gamma {\bf c}_k - {\bf c}_{0k}) \}\\
+% & +&  \alpha_g {\cal F}_g [{\bf c}]^T {\bf W}_g^{-1}  {\cal
+%    F}_g[ {\bf c}]    
+% +      \alpha_{nn} {\cal F}_{nn} [{\bf c}]^T {\bf W}_{nn}^{-1}  {\cal
+%    F}_{nn}[ {\bf c}]   
+% +      \alpha_{as} ({\bf F}_{as} {\bf c})^T {\bf W}_{as}^{-1} ({\bf
+%    F}_{as}{\bf c})    \\
+& +&  {\cal F}_c [{\bf c}_k]^T ~{\bf W}_c  {\cal
+   F}_c[ {\bf c}_k]  
+ +  {\cal F}_q[{\bf q}]^T ~{\bf S}_q  {\cal F}_q
+ [{\bf q}] +  {\cal F}_m [{\bf m}]^T ~{\bf S}_m {\cal
+   F}_m [{\bf m}] \\ 
+&+&\sum^{K+1}_{k=1}  \mu_k^T ~{\cal F}_k [{\bf c}_k,{\bf q},{\bf m}],
+\label{eq:lagrangian2}
+\end{eqnarray}
+where ${\bf W}$ is the observational weighting matrix and ${\bf W}_c$
+is the weighting of the additional tracer constraints. ${\bf S}_k$,
+${\bf S}_q$ and ${\bf S}_m$ are scaling matrices that enforce bounds
+and smoothness on the expected deviation in each surface tracer,
+interior source, and pathways, respectively.  There is one Lagrange
+multiplier vector, $\mu_k$, for each of the $K+1$ steady-state
+equations, and note that the Lagrange multiplier terms do not alter
+the numerical value of the function.
+
+For tracer climatologies, ${\bf W}$ is diagonal with the inverse of
+published error estimates squared. For the sediment core data, the
+${\bf W}$ matrix has the same form, and the additional constraint that
+there be no systematic misfit with depth is appended. Finding the
+model-data bias as a function of depth is a linear operation,
+${\bf Z}{\bf n}$, an additional constraint can be added to the
+previous cost function term. The weighting matrix then becomes
+${\bf W} + {\bf Z}^T {\bf W}_z {\bf Z}$, a nondiagonal matrix.
+${\bf W}_z$ is chosen based on the expected vertical systematic error
+that arises from random noise.
+
+
+The minimum of ${\cal L}$ is found by seeking a stationary point of
+the terms ~(\ref{eq:lagrangian})-(\ref{eq:lagrangian2}). The partial
+derivative with respect to each tracer gives a set of (adjoint)
+equations that is solved for the Lagrange multipliers by an LU
+decomposition.  The Lagrange multiplier vectors yield information
+about how the Lagrangian function will change given a change in a
+subset the unknowns, ${\bf c}_{bk}$, ${\bf q}$, and ${\bf m}$, where
+these variables contain all information necessary to solve for the
+global tracer distributions.  A quasi-Newton gradient descent method
+uses this information to iteratively search for the minimum ${\cal L}$
+\citep{Nocedal-1980:Updating,Gilbert-Lemarechal-1989:some}.  All
+controls (independent unknowns) are preconditioned by the Cholesky
+decomposition of the respective scaling matrix, ${\bf S}$, to improve
+performance.
+
+\bibliographystyle{agu08}
+\bibliography{all}
+
+\end{document}
+
+
+
+

@@ -16,6 +16,17 @@ using NCDatasets
 using UnicodePlots
 using Statistics
 using OrderedCollections
+
+using JuMP
+
+#= HiGHS vs. COSMO
+HiGHS is more accurate when fitting both tracers and mass.
+Computational time is the same.
+COSMO is more robust when fitting mass alone (imperfect fit of tracers).
+COSMO should be improved by warm starting and making tolerances more strict.
+=#
+#using HiGHS
+using COSMO
 using Downloads
 
 export config, config_from_mat, config_from_nc,
@@ -68,10 +79,11 @@ export config, config_from_mat, config_from_nc,
     zerowestboundary, zeronorthboundary,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
-    distancematrix, gaussiandistancematrix
+    distancematrix, gaussiandistancematrix, versionlist,
+    massfractions, neighbors
 
 import Base: zeros, one, oneunit, ones,  (\)
-#import Base: maximum, minimum
+import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
 import LinearAlgebra: dot
 
@@ -89,6 +101,9 @@ pkgdatadir(args...) = joinpath(pkgdatadir(), args...)
 pkgsrcdir() = joinpath(pkgdir(),"src")
 pkgsrcdir(args...) = joinpath(pkgsrcdir(), args...)
 
+pkgplotsdir() = joinpath(pkgdir(),"plots")
+pkgplotsdir(args...) = joinpath(pkgplotsdir(), args...)
+
 pkgutilsdir() = joinpath(pkgdir(),"utils")
 pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
 
@@ -98,6 +113,7 @@ include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
+include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -207,9 +223,25 @@ function preformednutrient(tracer::Union{String,Symbol},TMIversion,Alu,γ)
     return steadyinversion(Alu,b,γ) 
 end
 
+"""
 preformedphosphate(TMIversion,Alu,γ) = preformednutrient("PO₄",TMIversion,Alu,γ)
+"""
+preformedphosphate(TMIversion,Alu,γ) = preformednutrient("PO₄",TMIversion,Alu,γ)
+
+"""
 preformednitrate(TMIversion,Alu,γ) = preformednutrient("NO₃",TMIversion,Alu,γ)
+"""
+preformednitrate(TMIversion,Alu,γ) = preformednutrient("NO₃",TMIversion,Alu,γ)
+
+"""
 preformedoxygen(TMIversion,Alu,γ) = preformednutrient("O₂",TMIversion,Alu,γ)
+"""
+preformedoxygen(TMIversion,Alu,γ) = preformednutrient("O₂",TMIversion,Alu,γ)
+
+"""
+preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Alu,γ)
+"""
+preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Alu,γ)
 
 """ 
     function meanage(TMIversion,Alu,γ)
