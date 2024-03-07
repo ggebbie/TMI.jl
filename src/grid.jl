@@ -1,14 +1,16 @@
+using Base: index_ndims, methods_including_ambiguous
 """
     struct Grid
 
     TMI grid with accounting for wet/dry points
 """
-struct Grid{T <: Real}
-    lon::Vector{T}
-    lat::Vector{T}
-    depth::Vector{T}
-    wet::BitArray{3}
-    interior::BitArray{3}
+struct Grid{T,N}
+    # lon::Vector{T}
+    # lat::Vector{T}
+    # depth::Vector{T}
+    axes::NTuple{N,Vector{T}}
+    wet::BitArray{N}
+    interior::BitArray{N}
 end
 
 """
@@ -23,16 +25,23 @@ function Grid(TMIfile)
 - `γ::Grid`: TMI grid struct
 """
 function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
+
     # get properties of grid
-    lon,lat,depth = gridprops(TMIfile)
+    labels = axislabels(TMIfile)
+
+    ndims = length(labels)
+    #dimsize = Tuple{Int64}(undef,ndims)
+    dimsize = Tuple([length(labels[d]) for d in 1:ndims])
+    #end
     
     # make ocean mask
-    wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+    #wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+    wet = wetmask(TMIfile,dimsize)
 
     # make interior mask
-    interior = interiormask(A,wet,length(lon),length(lat),length(depth))
-
-    return Grid(lon,lat,depth,wet,interior)
+    #interior = interiormask(A,wet,length(lon),length(lat),length(depth))
+    interior = interiormask(A,wet,dimsize)
+    return Grid(labels,wet,interior)
 end
 
 """
@@ -70,7 +79,7 @@ function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S
     interior = deepcopy(wet)
     interior[:,:,1] .= false
 
-    return Grid(lon,lat,depth,wet,interior)
+    return Grid((lon,lat,depth),wet,interior)
 end
 
 """
@@ -79,12 +88,18 @@ end
     Do not store Cartesian and linear indices.
     Compute them on demand.
 """ 
-Base.propertynames(γ::Grid) = (:I,:R,fieldnames(typeof(γ))...)
+Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...)
 function Base.getproperty(γ::Grid, d::Symbol)
     if d === :I
         return cartesianindex(γ.wet)
     elseif d === :R
         return linearindex(γ.wet)
+    elseif d === :lon
+        return γ.axes[1]
+    elseif d === :lat
+        return γ.axes[2]
+    elseif d === :depth
+        return γ.axes[3]
     else
         return getfield(γ, d)
     end
@@ -137,12 +152,17 @@ function checkgrid!(tracer,wet)
     end
 end
 
-function wetmask(TMIfile::String,nx,ny,nz)
+function wetmask(TMIfile::String,dimsize::NTuple)
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
-    # make a mask
-    # first choice: smaller but inconsistent with input grid
-    #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
+    wet = falses(dimsize)
+    wet[I] .= 1
+    return wet
+end
+function wetmask(TMIfile::String,nx,ny,nz)
+    # older version that assumes N = 3
+    # read Cartesian Index from file.
+    I = cartesianindex(TMIfile)
     wet = falses(nx,ny,nz)
     wet[I] .= 1
     return wet
@@ -153,6 +173,13 @@ function interiormask(A,wet,nx,ny,nz)
 """
 function interiormask(A,wet,nx,ny,nz)
     interior = falses(nx,ny,nz)
+    I = cartesianindex(wet)
+    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+    interior[I[list]] .= true 
+    return interior
+end
+function interiormask(A,wet,dimsize::NTuple)
+    interior = falses(dimsize)
     I = cartesianindex(wet)
     list = findall(.!(isone.(sum(abs.(A),dims=2))))
     interior[I[list]] .= true 
