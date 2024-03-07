@@ -26,6 +26,3 @@ Ãlu = lu(Ã)
 # compare to c.θ
 Base.maximum(y.θ - θ̃)
 Base.minimum(y.θ - θ̃)
-
-
-#massfractions(y)
