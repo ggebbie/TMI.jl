@@ -194,7 +194,7 @@ function neighbors(m::NamedTuple,γ::Grid)
     ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
     n = zeros(Int64,ngrid)
     for m1 in m
-        n += m1.γ.wet
+        n += neighbors(m1.γ.wet)
     end
     
     # make a field
@@ -204,6 +204,24 @@ function neighbors(m::NamedTuple,γ::Grid)
         "neighbors",
         "unitless")
 end
+
+#function to compute number of wet neighbors 
+function neighbors(wet::BitArray) 
+    ngrid = size(wet) 
+    n = zeros(Int64, ngrid) 
+    wet_index =  findall(x->x == 1, wet) #list of CartesianIndices
+    #all possible 3d neighbors 
+    addme = [CartesianIndex(-1, 0, 0), CartesianIndex(1, 0, 0),
+             CartesianIndex(0, -1, 0), CartesianIndex(0, 1, 0),
+             CartesianIndex(0, 0, -1), CartesianIndex(0, 0, 1)] 
+    for wi ∈ wet_index #iterate through wet_indices
+        #add 1 if neighbor exists and is wet 
+        [n[wi] += 1 for a in addme if wi + a ∈ wet_index] 
+    end
+    return n
+    
+end
+
 
 function massfractions_isotropic(γ::Grid)
 
