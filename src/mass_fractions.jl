@@ -533,7 +533,7 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
 
         if J0 < Jlimit # hit target already?
             mlocal[1:ncol] = m0local
-            println("first guess good enough @ ",I)
+            #println("first guess good enough @ ",I)
         else
             mlocal[1:ncol] = m0local + Alocal\n0
             nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
@@ -552,7 +552,7 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
                     model2, x2 = local_quadprog(Alocal,
                         m0local, wlocal)
                     if termination_status(model2) != OPTIMAL
-                        println("WARNING: NEVER FOUND A BETTER SOLUTION! @ ",I)
+                        println("TMI.local solve: WARNING: NEVER FOUND A BETTER SOLUTION! @ ",I)
                         mlocal[1:ncol] = m0local
                     else
                         # println("satisfied only mass cons @ ",I)
