@@ -341,82 +341,9 @@ of `α=100_000`.
 function local_solve(c::NamedTuple, w::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
-    #TMI.local_solve!(m̃,c,w)
-    TMI.local_solve_old!(m̃, c, w)
+    TMI.local_solve!(m̃,c,w)
+    #TMI.local_solve_old!(m̃, c, w)
     return m̃
-end
-function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadprog)
-
-    γ = first(c).γ
-    wlocal = [w1 for w1 in w] # unpack Named Tuple
-    Iint = cartesianindex(γ.interior)
-    n   = TMI.neighbors(m,γ)
-    nrow   = length(c) + 1 # add mass conservation
-
-    # allocate maximum needed
-    nmax = maximum(n)
-    mlocal = zeros(nmax)
-    nlocal = zeros(nrow)
-    ϵ = 1e-8 # for checking tolerances
-    b = vcat(zeros(nrow-1),1.0)
-    
-    for I in Iint
-
-        # well-mixed first guess
-        ncol = n.tracer[I]
-        m0local = ones(ncol) ./ ncol
-        
-        # does it already fit the data?
-        #Alocal = local_watermass_matrix(c,m,I,ncol.tracer[I])
-        Alocal, single_connection = local_watermass_matrix(c,m,I,n)
-
-        n0 = Alocal*m0local # data misfit (mass excluded)
-
-        if sum(abs.(n0)) < ϵ # something small
-            mlocal[1:ncol] = m0local
-        else
-    
-            # Invert! by maximizing mixing and fitting tracers/mass perfectly
-            # attempts to fit tracers and mass conservation perfectly
-            Alocal2 = vcat(Alocal,ones(1,size(Alocal,2)))
-            mlocal[1:ncol] = m0local + Alocal2\vcat(n0,0.0)
-            nlocal[1:nrow] = vcat(Alocal*mlocal[1:ncol],
-                1-sum(mlocal[1:ncol]))
-
-            # check fit and check non-negativity
-            if single_connection ||
-                ((sum(abs.(nlocal)) > ϵ) ||
-                    !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
-
-                model, x = local_quadprog(Alocal2,m0local)
-
-                if termination_status(model) != OPTIMAL
-                    println("2nd try not feasible ",I)
-                    # relax tracer assumption
-                    model2, x2 = local_quadprog(Alocal,
-                        m0local[1:ncol],wlocal)
-                    if termination_status(model2) != OPTIMAL
-                        println("WARNING: NEVER FOUND A BETTER SOLUTION!")
-                        mlocal[1:ncol] = m0local
-                    else
-                        mlocal[1:ncol] = value.(x2)
-                    end
-                else
-                    mlocal[1:ncol] = value.(x)
-                end
-            end
-        end
-        
-        # Save into proper mass fractions
-        i = 0
-        for m1 in m
-            if m1.γ.wet[I]
-                i += 1
-                # should not need to check bounds 
-                m1.fraction[I] = mlocal[i]
-            end
-        end
-    end
 end
 
 function local_quadprog(m0local::Vector, Alocal::Matrix, b::Vector)
@@ -504,7 +431,7 @@ function local_watermass_matrix(c::NamedTuple,
     return A
 end
 
-function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
+function local_solve!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
 
     γ = first(c).γ
     #Rfull = CartesianIndices(γ.wet)
@@ -527,7 +454,7 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
         # well-mixed first guess
         ncol = n.tracer[I]
         m0local = ones(ncol) ./ ncol
-        Alocal, single_connection = local_watermass_matrix_old(c,m,I,n)
+        Alocal, single_connection = local_watermass_matrix(c,m,I,n)
         n0 = b - Alocal*m0local
         J0 = sum((n0./wlocal).^2)/nrow
 
@@ -577,7 +504,6 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
     end
 end
 
-
 """
 function `local_watermass_matrix(c::NamedTuple,
     m::NamedTuple,
@@ -596,48 +522,6 @@ to the rest of the ocean)
 - `single_connection::Bool`: true if flagged for singularity warning
 """
 function local_watermass_matrix(c::NamedTuple,
-    m::NamedTuple,
-    I::CartesianIndex,
-    neighbors::Field)
-
-    #γ = first(c).γ
-    ncol   = neighbors.tracer[I] # number of neighbors
-    nrow   = length(c) # + 1 # add mass conservation
-
-    single_connection = false # warning of singularity if one of the neighbors is singly connected
-    
-    # allocate tracer matrix
-    A = zeros(nrow,ncol) # then overwrite later
-    
-    # loop through all mass fractions
-    #for i1 in eachindex(m)
-    i = 0; j = 0
-    for m1 in m
-
-        if m1.γ.wet[I]
-            j += 1
-            i = 0
-            # grab the tracer values to fill a column
-            # is this the correct γ?
-            Istep, _ = step_cartesian(I,
-                m1.position,
-                m1.γ,
-                wrap=(true,false,false))
-
-            if neighbors.tracer[Istep] == 1
-                single_connection = true
-            end
-            
-            #if γ.wet[Istep]: should automagically be true
-            for c1 in c
-                i += 1
-                A[i,j] = c1.tracer[Istep] - c1.tracer[I]
-            end
-        end
-    end
-    return A, single_connection
-end
-function local_watermass_matrix_old(c::NamedTuple,
     m::NamedTuple,
     I::CartesianIndex,
     neighbors::Field)
