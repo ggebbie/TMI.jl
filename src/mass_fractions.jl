@@ -1,4 +1,3 @@
-using Base: FieldDescStorage
 """
 struct MassFraction
 
@@ -386,21 +385,10 @@ function local_solve!(m::NamedTuple,c::NamedTuple, w::NamedTuple; alg = :quadpro
 
             # check fit and check non-negativity
             if single_connection ||
-#                !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ )
                 ((sum(abs.(nlocal)) > ϵ) ||
                     !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
 
                 model, x = local_quadprog(Alocal2,m0local)
-                # model = Model(HiGHS.Optimizer);
-                # set_silent(model);
-                # #ncol = length(m0local) 
-                # @variable(model, 0.0 <= x[i = 1:ncol] <= 1.0 ) 
-                # #@constraint(model, Alocal*x .== 0.0)
-                # @constraint(model, Alocal2*x == b)
-                # #@constraint(model, sum(x) == 1.0)
-                # @objective(model, Min,
-                #     local_objective_mixing(x,m0local))
-                # optimize!(model)
 
                 if termination_status(model) != OPTIMAL
                     println("2nd try not feasible ",I)
@@ -438,6 +426,7 @@ function local_quadprog(m0local::Vector, Alocal::Matrix, b::Vector)
 
     #model = Model(COSMO.Optimizer);
     model = Model(HiGHS.Optimizer);
+    set_time_limit_sec(model, 0.1)
     set_silent(model);
     ncol = length(m0local)
     @variable(model, 0.0 <= x[i = 1:ncol] <= 1.0 ) 
@@ -445,10 +434,6 @@ function local_quadprog(m0local::Vector, Alocal::Matrix, b::Vector)
     #@constraint(model, sum(x) == 1.0)
     @objective(model, Min,
         local_objective_mixing(x,m0local))
-    println("********")
-    println(size(Alocal))
-    println(size(b))
-    println(m0local)
     optimize!(model)
     return model, x 
 end
@@ -461,6 +446,8 @@ function local_quadprog(Alocal::Matrix,m0local::Vector,w::Vector)
     model =
          Model(optimizer_with_attributes(COSMO.Optimizer, "verbose" => false,
              "eps_abs" => 1e-4, "eps_rel" => 1e-4))
+    set_time_limit_sec(model, 0.1)
+
     #model = Model(COSMO.Optimizer);
     #set_silent(model);
     ncol = length(m0local) 
@@ -470,7 +457,7 @@ function local_quadprog(Alocal::Matrix,m0local::Vector,w::Vector)
     #    sum(((Alocal[1:end-1,:]*x)./w).^2))
     #    println(local_objective_obs(Alocal,x,w))
     @objective(model, Min,
-        local_objective(Alocal[1:end-1,:],x,w))
+        local_objective_obs(Alocal[1:end-1,:],x,w))
     optimize!(model)
     return model, x
 end
@@ -531,19 +518,20 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
     mlocal = zeros(nmax)
     nlocal = zeros(nrow)
     ϵ = 1e-8 # for checking tolerances
-    
+
     for I in Iint
 
         # well-mixed first guess
         ncol = n.tracer[I]
-        m0 = ones(ncol) ./ ncol
+        m0local = ones(ncol) ./ ncol
         Alocal, single_connection = local_watermass_matrix_old(c,m,I,n)
-        n0 = b - Alocal*m0
+        n0 = b - Alocal*m0local
 
         if sum(abs.(n0[1:nrow])) < ϵ # something small
-            mlocal[1:ncol] = m0
+            mlocal[1:ncol] = m0local
+            println("first guess good enough @ ",I)
         else
-            mlocal[1:ncol] = m0 + Alocal\n0
+            mlocal[1:ncol] = m0local + Alocal\n0
             nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
 
             # check fit and check non-negativity
@@ -551,19 +539,21 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
                 ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
 
                 # quadratic programming
-                model, x = local_quadprog(m0, Alocal, b)
+                # println("run local quadprog @ ",I)
+                model, x = local_quadprog(m0local, Alocal, b)
 
                 if termination_status(model) != OPTIMAL
-                    println("not optimal")
                     model2, x2 = local_quadprog(Alocal,
-                        m0, wlocal)
+                        m0local, wlocal)
                     if termination_status(model2) != OPTIMAL
-                        println("WARNING: NEVER FOUND A BETTER SOLUTION!")
-                        mlocal[1:ncol] = m0
+                        println("WARNING: NEVER FOUND A BETTER SOLUTION! @ ",I)
+                        mlocal[1:ncol] = m0local
                     else
+                        # println("satisfied only mass cons @ ",I)
                         mlocal[1:ncol] = value.(x2)
                     end
                 else
+                    #println("solved for both perfect data and mass cons @ ",I)
                     mlocal[1:ncol] = value.(x)
                 end
             end
