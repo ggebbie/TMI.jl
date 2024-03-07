@@ -45,7 +45,7 @@ bθ = getsurfaceboundary(y.θ)
 
 ## reconstruct temperature
 Ãlu = lu(Ã)
-θ̃ = steadyinversion(Ã,bθ,γ)
+θ̃ = steadyinversion(Ãlu,bθ,γ)
 
 # compare to c.θ
 Base.maximum(y.θ - θ̃)

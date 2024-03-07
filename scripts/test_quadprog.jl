@@ -10,6 +10,9 @@ println(fname)
 y = (θ = readfield(fname,"THETA",γ),
     S = readfield(fname,"SALT",γ))
 
+w = (θ =  0.01,
+    S = 0.001)
+
 # m̃ = massfractions(y)
 
 # pull this function apart
@@ -32,28 +35,32 @@ nrow = length(c) + 1
 b = vcat(zeros(nrow-1),1.0)
 mlocal = zeros(nmax)
 nlocal = zeros(nrow)
-ϵ = 1e-8 # for checking tolerances
+ϵ = 1e-6 # for checking tolerances
+w0local = vcat([w1 for w1 in w],ϵ)
 
 I = CartesianIndex(12,8,2)
 I = CartesianIndex(13,8,2)
 I = CartesianIndex(11,10,2)
+I = CartesianIndex(9,7,21)
 
 ncol = n.tracer[I]
 m0local = ones(ncol) ./ ncol
 Alocal, single_connection = TMI.local_watermass_matrix_old(c,m0,I,n)
 n0 = b - Alocal*m0local
+J0 = sum((n0./w0local).^2)/nrow
+Jlimit = 1e-2 # cost function: how tight must the fit to tracers and data be? 
 
-
- if sum(abs.(n0[1:nrow])) < ϵ # something small
+if J0 < Jlimit # something small
      mlocal[1:ncol] = m0local
      #println("first guess good enough @ ",I)
  else
      mlocal[1:ncol] = m0local + Alocal\n0
      nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+     Jlocal = sum((nlocal./w0local).^2)/nrow
 
      # check fit and check non-negativity
      if single_connection ||
-         ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+         ((Jlocal > Jlimit) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
 
          # quadratic programming
          println("run local quadprog @ ",I)

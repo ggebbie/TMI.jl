@@ -424,8 +424,8 @@ function local_quadprog(m0local::Vector, Alocal::Matrix, b::Vector)
     #     Model(optimizer_with_attributes(COSMO.Optimizer, "verbose" => false,
     #         "eps_abs" => 1e-4, "eps_rel" = 1e-4))
 
-    #model = Model(COSMO.Optimizer);
-    model = Model(HiGHS.Optimizer);
+    model = Model(COSMO.Optimizer);
+    #model = Model(HiGHS.Optimizer);
     set_time_limit_sec(model, 0.1)
     set_silent(model);
     ncol = length(m0local)
@@ -456,8 +456,10 @@ function local_quadprog(Alocal::Matrix,m0local::Vector,w::Vector)
     #@objective(model, Min,
     #    sum(((Alocal[1:end-1,:]*x)./w).^2))
     #    println(local_objective_obs(Alocal,x,w))
+
+    # cut off mass conservation from this objective function
     @objective(model, Min,
-        local_objective_obs(Alocal[1:end-1,:],x,w))
+        local_objective_obs(Alocal[1:end-1,:],x,w[1:end-1]))
     optimize!(model)
     return model, x
 end
@@ -504,7 +506,6 @@ end
 
 function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
 
-    wlocal = [w1 for w1 in w]
     γ = first(c).γ
     #Rfull = CartesianIndices(γ.wet)
     Iint = cartesianindex(γ.interior)
@@ -517,7 +518,9 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
     b = vcat(zeros(nrow-1),1.0)
     mlocal = zeros(nmax)
     nlocal = zeros(nrow)
-    ϵ = 1e-8 # for checking tolerances
+    ϵ = 1e-6 # tolerance of mass conservation
+    Jlimit = 1e-4 # scaled cost function target
+    wlocal = vcat([w1 for w1 in w],ϵ)
 
     for I in Iint
 
@@ -526,17 +529,20 @@ function local_solve_old!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :q
         m0local = ones(ncol) ./ ncol
         Alocal, single_connection = local_watermass_matrix_old(c,m,I,n)
         n0 = b - Alocal*m0local
+        J0 = sum((n0./wlocal).^2)/nrow
 
-        if sum(abs.(n0[1:nrow])) < ϵ # something small
+        if J0 < Jlimit # hit target already?
             mlocal[1:ncol] = m0local
             println("first guess good enough @ ",I)
         else
             mlocal[1:ncol] = m0local + Alocal\n0
             nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+            Jlocal = sum((nlocal./wlocal).^2)/nrow
 
-            # check fit and check non-negativity
+            # check connection, fit, and non-negativity
             if single_connection ||
-                ((sum(abs.(nlocal)) > ϵ) || !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+                ((Jlocal > Jlimit) ||
+                    !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
 
                 # quadratic programming
                 # println("run local quadprog @ ",I)
