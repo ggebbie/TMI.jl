@@ -2,7 +2,7 @@
 
 julia_version = "1.10.2"
 manifest_format = "2.0"
-project_hash = "764512c872bc54cfbf5cb69fae1e96811e0d8e06"
+project_hash = "7a008ed79c52a95c32c9410d219c93d0f9b54c18"
 
 [[deps.AMD]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
@@ -394,18 +394,6 @@ deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapp
 git-tree-sha1 = "5eab648309e2e060198b45820af1a37182de3cce"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 version = "1.10.0"
-
-[[deps.HiGHS]]
-deps = ["HiGHS_jll", "MathOptInterface", "PrecompileTools", "SparseArrays"]
-git-tree-sha1 = "f869b0a17d1a4f13aac08af8d0a050bdb70bccfd"
-uuid = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
-version = "1.8.1"
-
-[[deps.HiGHS_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Zlib_jll"]
-git-tree-sha1 = "f596ee3668df8587158bcaef1ae47bf75bc0fe39"
-uuid = "8fd58aa0-07eb-5a78-9b36-339c94fd15ea"
-version = "1.6.0+1"
 
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]

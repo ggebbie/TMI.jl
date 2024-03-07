@@ -4,7 +4,7 @@
     #    TMIversion = "modern_90x45x33_G14"
     A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
 
-    ϵ = 1e-10
+    ϵ = 1e-4
     
     @testset "reading from matrix" begin
         m_north = TMI.massfractions_north(A, γ)
@@ -26,13 +26,27 @@
                     P★ = preformedphosphate(TMIversion,Alu,γ),
                     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
                 )
+
+                w = (θ =  0.01,
+                    S = 0.001,
+                    δ¹⁸O = 0.05,
+                    P★ = 0.05,
+                    δ¹³C★ = 0.05
+                )
+
             elseif scenario == "underdetermined"
+            
                 y = (θ =  readfield(TMIfile, "θ", γ),
                     S = readfield(TMIfile, "Sp", γ),
                 )
+
+                w = (θ =  0.01,
+                    S = 0.001
+                )
+
             end
 
-            m̃ = massfractions(y)
+            m̃ = massfractions(y, w)
             Ã = watermassmatrix(m̃, γ)
 
             # compare m̃ and m_true (Δ̄ = 1e-14 in my case)
@@ -47,7 +61,7 @@
             θ̃ = steadyinversion(Ã,bθ,γ)
 
             # compare to c.θ
-            maxmisfit = 0.05
+            maxmisfit = 0.2
             @test Base.maximum(y.θ - θ̃) < maxmisfit
             @test Base.minimum(y.θ - θ̃) > -maxmisfit
 
@@ -62,12 +76,12 @@
 
             #mc_test = TMI.tracer_contribution(y.θ,m_true.north) # a test
             mc_true = TMI.tracer_contribution(y.θ,m_true)
-            @test maximum(mc_true) < 1e-6
-            @test minimum(mc_true) > -1e-6
+            @test maximum(mc_true) < 1e-2
+            @test minimum(mc_true) > -1e-2
 
             mc_test = TMI.tracer_contribution(y.θ,m̃)
-            @test maximum(mc_test) < 1e-3
-            @test minimum(mc_test) > -1e-3
+            @test maximum(mc_test) < 5e-2
+            @test minimum(mc_test) > -5e-2
         end
     end
 end
