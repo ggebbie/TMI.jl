@@ -68,10 +68,12 @@ function download_ncfile(TMIversion::String)
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         elseif  TMIversion == "nordic_201x115x46_B23"
-            println("workaround for regional Nordic Seas file")
-            shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
-            run(`sh $shellscript`)
-            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+            println("use `Downloads.download` for regional Nordic Seas file")
+            #shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
+            #run(`sh $shellscript`)
+            #mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+            url = ncurl(TMIversion)
+            Downloads.download(TMI.ncurl(TMIversion),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
@@ -151,6 +153,7 @@ function download_matfile(TMIversion::String)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     elseif  TMIversion == "nordic_201x115x46_B23"
         println("workaround for regional Nordic Seas file")
+        # warning: may not work due to changing Google API
         shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
@@ -498,6 +501,8 @@ function ncurl(TMIname)
         url = "https://docs.google.com/uc?export=download&id=1cOCrty9kvA2s3NoD1QZjnNehlVbP0rHP"
     elseif TMIname == "LGM_90x45x33_OG18"
         url = "https://docs.google.com/uc?export=download&id=19zccG1BSdspD9rti2OttsF2Dm4P2OLjt"
+    elseif  TMIname == "nordic_201x115x46_B23"
+        url = "https://argo.whoi.edu/jake/TMI_nordic_201x115x46_B23.nc"
     else
         url = nothing
     end

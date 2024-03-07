@@ -13,10 +13,10 @@ using Interpolations
 using LineSearches
 using MAT
 using NCDatasets
-#using DataStructures
 using UnicodePlots
 using Statistics
 using OrderedCollections
+
 using JuMP
 
 #= HiGHS vs. COSMO
@@ -27,6 +27,7 @@ COSMO should be improved by warm starting and making tolerances more strict.
 =#
 #using HiGHS
 using COSMO
+using Downloads
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
