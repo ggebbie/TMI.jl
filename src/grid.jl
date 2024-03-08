@@ -7,11 +7,15 @@ TMI grid with accounting for wet/dry points
 - `axes::NTuple{N,Vector{A}}`: labels for axis such as lon, lat, depth with element type `A`
 - `wet::BitArray{N}`: mask for ocean points
 - `interior::BitArray{N}`: mask for interior ocean points
+- `wrap::NTuple{N,Bool}`: does the domain wraparound in each dim?
+- `Δ::Vector{CartesianIndex{N}}`: defines computational stencil relative to central cell
 """
 struct Grid{R,N}
     axes::NTuple{N,Vector{R}}
     wet::BitArray{N}
     interior::BitArray{N}
+    wrap::NTuple{N,Bool}
+    Δ::Vector{CartesianIndex{N}}
 end
 
 """
@@ -39,7 +43,11 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
 
     # make interior mask
     interior = interiormask(A,wet,ngrid)
-    return Grid(labels,wet,interior)
+
+    # always true for TMI? Not for regional -- need to fix.
+    wrap = (true, false, false)
+    Δ = neighbor_indices(6)
+    return Grid(labels,wet,interior,wrap,Δ)
 end
 
 """
@@ -77,7 +85,14 @@ function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S
     interior = deepcopy(wet)
     interior[:,:,1] .= false
 
-    return Grid((lon,lat,depth),wet,interior)
+    wrap = (true, false, false)
+    Δ = neighbor_indices(6)
+
+    return Grid((lon,lat,depth),
+        wet,
+        interior,
+        wrap,
+        Δ)
 end
 
 """
@@ -86,8 +101,8 @@ end
     Do not store Cartesian and linear indices.
     Compute them on demand.
 """ 
-Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...)
-function Base.getproperty(γ::Grid, d::Symbol)
+Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...) 
+function Base.getproperty(γ::Grid{R,N}, d::Symbol) where {R,N}
     if d === :I
         return cartesianindex(γ.wet)
     elseif d === :R
@@ -95,9 +110,9 @@ function Base.getproperty(γ::Grid, d::Symbol)
     elseif d === :lon
         return γ.axes[1]
     elseif d === :lat
-        return γ.axes[2]
+        return ((N > 1) ? γ.axes[2] : nothing)
     elseif d === :depth
-        return γ.axes[3]
+        return ((N > 2) ? γ.axes[3] : nothing)
     else
         return getfield(γ, d)
     end
@@ -112,7 +127,14 @@ end
 # Output
 - `I`: 3D Cartesian indices
 """
-cartesianindex(wet::BitArray{3}) = findall(wet)
+function cartesianindex(wet::BitArray{N}) where N
+    if N == 1
+        return CartesianIndex.(findall(wet))
+    elseif N > 1
+        return findall(wet)
+    end
+end
+
 
 """
     function linearindex(wet)
@@ -122,8 +144,8 @@ cartesianindex(wet::BitArray{3}) = findall(wet)
 # Output
 - `R`: array of linear indices, but not a LinearIndices type
 """
-function linearindex(wet)
-    R = Array{Int64,3}(undef,size(wet))
+function linearindex(wet::BitArray{N}) where N
+    R = Array{Int64,N}(undef,size(wet))
     fill!(R,0)
     R[wet]=1:sum(wet)
     return R

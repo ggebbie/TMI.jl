@@ -80,7 +80,7 @@ export config, config_from_mat, config_from_nc,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, neighbors
+    massfractions, massfractions_isotropic, neighbors
 
 import Base: zeros, one, oneunit, ones,  (\)
 import Base: maximum, minimum

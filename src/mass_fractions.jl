@@ -10,20 +10,18 @@ store mass fractions in a Field-like array
 - `units::String`
 - `position::CartesianIndex{3}`
 """
-struct MassFraction{T <: Real}
-    fraction::Array{T,3}
-    γ::Grid
+struct MassFraction{T <: Real,R <: Real,N,F <: AbstractArray{T,N}}
+    fraction::F
+    γ::Grid{R,N}
     name::Symbol
     longname::String
     units::String
-    position::CartesianIndex{3}
+    position::CartesianIndex{N}
 end
-
 
 function MassFraction(A,
     γ::Grid,
     Δ::CartesianIndex;
-    wrap=(true, false, false),
     longname = "mass fraction from neighbor")
 
     # allocate masks
@@ -40,7 +38,7 @@ function MassFraction(A,
     Iint = cartesianindex(γ.interior)
     for I in Iint
         #Istep = I + step
-        Istep, inbounds = step_cartesian(I::CartesianIndex, Δ::CartesianIndex, γ::Grid; wrap=wrap)
+        Istep, inbounds = step_cartesian(I::CartesianIndex, Δ::CartesianIndex, γ::Grid)
 
         if inbounds
             if γ.wet[Istep]
@@ -55,30 +53,30 @@ function MassFraction(A,
         #Grid(γ.lon,γ.lat,γ.depth,
         Grid(γ.axes,
             wet,
-            γ.interior),
-        :massfractions_north,
+            γ.interior,
+            γ.wrap,
+            γ.Δ),
+        :m_ij,
         longname,
         "unitless",
         Δ)
 end
 
 """
-function `step_cartesian(I, Δ; wrap=(true,false,false))`
+function `step_cartesian(I, Δ, γ)`
 
 # Arguments
 - `I::CartesianIndex`: starting point
 - `Δ::CartesianIndex`: step
 - `γ::Grid`: TMI-defined grid
-- `wrap::Tuple{Bool}`: does the dimension wrap around?
 
 # Output
 - `Istep::CartesianIndex`: new location
 - `inbounds::Bool`: inside the domain bounds?
 """
-function step_cartesian(I::CartesianIndex,
-    Δ::CartesianIndex,
-    γ::Grid;
-    wrap=(true,false,false))
+function step_cartesian(I::CartesianIndex{N},
+    Δ::CartesianIndex{N},
+    γ::Grid{R,N}) where {R,N}
 
     #R = copy(γ.R)
     Istep = I + Δ
@@ -96,19 +94,22 @@ function step_cartesian(I::CartesianIndex,
         return Istep, true
     else
         # allocate masks
-        ngrid = (length(γ.lon),
-            length(γ.lat),
-            length(γ.depth))
+        ngrid =
+            Tuple([length(γ.axes[d]) for d in 1:N])
 
-        wrapstep = zeros(Int,length(wrap))
-        for idim in eachindex(wrap)
+        #ngrid = (length(γ.lon),
+        #    length(γ.lat),
+        #    length(γ.depth))
+
+        wrapstep = zeros(Int,length(γ.wrap))
+        for idim in eachindex(γ.wrap)
             # check upper bound
-            if Ihi[idim]>0 && wrap[idim]
+            if Ihi[idim]>0 && γ.wrap[idim]
                 wrapstep[idim] = -ngrid[idim] # wr
             end
 
             # check lower bound
-            if Ilo[idim]>0 && wrap[idim]
+            if Ilo[idim]>0 && γ.wrap[idim]
                 wrapstep[idim] = ngrid[idim] # wr
             end
         end
@@ -147,22 +148,22 @@ function neighbor_indices(n=6)
 end
 
 massfractions_north(A, γ) = MassFraction(A, γ, CartesianIndex(0,1,0);
-    wrap=(true, false, false), longname = "mass fraction from northern neighbor")
+    longname = "mass fraction from northern neighbor")
 
 massfractions_east(A, γ) = MassFraction(A, γ, CartesianIndex(1,0,0);
-    wrap=(true, false, false), longname = "mass fraction from eastern neighbor")
+    longname = "mass fraction from eastern neighbor")
 
 massfractions_south(A, γ) = MassFraction(A, γ, CartesianIndex(0,-1,0);
-    wrap=(true, false, false), longname = "mass fraction from southern neighbor")
+    longname = "mass fraction from southern neighbor")
     
 massfractions_west(A, γ) = MassFraction(A, γ, CartesianIndex(-1,0,0);
-    wrap=(true, false, false), longname = "mass fraction from western neighbor")
+    longname = "mass fraction from western neighbor")
 
 massfractions_up(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,-1);
-    wrap=(true, false, false), longname = "mass fraction from upper neighbor")
+    longname = "mass fraction from upper neighbor")
     
 massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
-    wrap=(true, false, false), longname = "mass fraction from lower neighbor")
+    longname = "mass fraction from lower neighbor")
 
 function tracer_contribution(c::Field,m::Union{MassFraction,NamedTuple})
 
@@ -211,12 +212,15 @@ How many neighbors does each grid cell have?
 # Output
 - `n::Field`: integer number of neighbors
 """
-function neighbors(m::NamedTuple,γ::Grid{T}) where T
+function neighbors(m::Union{Vector,NamedTuple},
+    γ::Grid{R,N}) where {R,N}
 
-    ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
-    if T == Float32
+    ngrid =
+        Tuple([length(γ.axes[d]) for d in 1:N])
+    #ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    if R == Float32
         n = zeros(Int32,ngrid)
-    elseif T == Float64
+    elseif R == Float64
         n = zeros(Int64,ngrid)
     else
         error("TMI.neighbors, type "*T*" not implemented")
@@ -234,8 +238,6 @@ function neighbors(m::NamedTuple,γ::Grid{T}) where T
 end
 """
 function `neighbors(γ::Grid;
-    Δ=neighbor_indices(6),
-    wrap=(true, false, false),
     longname = "number of neighbors")`
 
 How many neighbors does each grid cell have?
@@ -248,29 +250,26 @@ fractions as input.
 # Output
 - `n::Field`: integer number of neighbors
 """
-function neighbors(γ::Grid{T};
-    Δ=neighbor_indices(6),
-    wrap=(true, false, false),
-    longname = "number of neighbors") where T
+function neighbors(γ::Grid{R,N};
+    longname = "number of neighbors") where {R,N}
 
     # allocate masks
-    ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
-    if T == Float32
+    #ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    ngrid =
+        Tuple([length(γ.axes[d]) for d in 1:N])
+
+    if R == Float32
         n = zeros(Int32,ngrid)
-    elseif T == Float64
+    elseif R == Float64
         n = zeros(Int64,ngrid)
     else
         error("TMI.neighbors, type "*T*" not implemented")
     end
     
     Iint = cartesianindex(γ.interior)
-    for d in Δ
+    for d in γ.Δ
         for I in Iint
-            Istep, inbounds = step_cartesian(I::CartesianIndex,
-                d::CartesianIndex,
-                γ::Grid;
-                wrap=wrap)
-
+            Istep, inbounds = step_cartesian(I,d,γ)
             if inbounds
                 n[I] += γ.wet[Istep]
             end
@@ -280,9 +279,8 @@ function neighbors(γ::Grid{T};
     return Field(n,γ,:n,longname,"unitless")
 end
 
-
-function massfractions_isotropic(γ::Grid)
-
+function massfractions_isotropic(γ::Grid{R,3}) where R
+    # only works for a 3D grid 
     # get a sample with zeros
     nfield = sum(γ.wet)
     A = spzeros(nfield,nfield)
@@ -293,6 +291,35 @@ function massfractions_isotropic(γ::Grid)
         west   = massfractions_west(A,γ),
         up     = massfractions_up(A,γ),
         down   = massfractions_down(A,γ))
+
+    # get number of neighbors for each location
+    n = neighbors(m,γ)
+
+    for m1 in m
+        Im = cartesianindex(m1.γ.wet)
+        for I in Im
+            m1.fraction[I] = 1.0/n.tracer[I]
+        end
+    end
+    return m
+end
+function massfractions_isotropic(γ::Grid{R,1}) where R
+    # only works for a 3D grid 
+    # get a sample with zeros
+    nfield = sum(γ.wet)
+    A = spzeros(nfield,nfield)
+
+    m = [TMI.MassFraction(A, γ, d,
+        longname = "mass fraction")
+        for d in γ.Δ]
+        #for i in eachindex(γ.Δ)]
+        
+    # m = (north = massfractions_north(A,γ),
+    #     east   = massfractions_east(A,γ),
+    #     south  = massfractions_south(A,γ),
+    #     west   = massfractions_west(A,γ),
+    #     up     = massfractions_up(A,γ),
+    #     down   = massfractions_down(A,γ))
 
     # get number of neighbors for each location
     n = neighbors(m,γ)
@@ -349,7 +376,6 @@ function local_solve(c::NamedTuple, w::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
     TMI.local_solve!(m̃,c,w)
-    #TMI.local_solve_old!(m̃, c, w)
     return m̃
 end
 
@@ -423,10 +449,7 @@ function local_watermass_matrix(c::NamedTuple,
             i = 0
             # grab the tracer values to fill a column
             # is this the correct γ?
-            Istep, _ = step_cartesian(I,
-                m1.position,
-                m1.γ,
-                wrap=(true,false,false))
+            Istep, _ = step_cartesian(I, m1.position, m1.γ)
 
             #if γ.wet[Istep]: should automagically be true
             for c1 in c
@@ -438,7 +461,7 @@ function local_watermass_matrix(c::NamedTuple,
     return A
 end
 
-function local_solve!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
+function local_solve!(m::Union{NamedTuple,Vector}, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
 
     γ = first(c).γ
     #Rfull = CartesianIndices(γ.wet)
@@ -529,7 +552,7 @@ to the rest of the ocean)
 - `single_connection::Bool`: true if flagged for singularity warning
 """
 function local_watermass_matrix(c::NamedTuple,
-    m::NamedTuple,
+    m::Union{NamedTuple,Vector},
     I::CartesianIndex,
     neighbors::Field)
 
@@ -549,11 +572,7 @@ function local_watermass_matrix(c::NamedTuple,
             i = 0
             # grab the tracer values to fill a column
             # is this the correct γ?
-            Istep, _ = step_cartesian(I,
-                m1.position,
-                m1.γ,
-                wrap=(true,false,false))
-
+            Istep, _ = step_cartesian(I,m1.position,m1.γ)
             if neighbors.tracer[Istep] == 1
                 single_connection = true
             end
@@ -569,21 +588,18 @@ function local_watermass_matrix(c::NamedTuple,
 end
 
 """
-function watermassmatrix(m::NamedTuple, γ::Grid;
-    wrap=(true, false, false))
+`function watermassmatrix(m::NamedTuple, γ::Grid)`
 
 Produce water-mass matrix from mass fractions and grid.
 
 # Arguments
 - `m::NamedTuple`: collection of `MassFraction`s
 - `γ::TMI.Grid`
-- `wrap::(true, false, false)`: does the particular dimension have a wraparound (periodic) domain?
 
 # Output
 - `A`: sparse water-mass matrix
 """
-function watermassmatrix(m::NamedTuple, γ::Grid;
-    wrap=(true, false, false))
+function watermassmatrix(m::NamedTuple, γ::Grid)
 
     # get total size of mass fractions
 
@@ -626,11 +642,7 @@ function watermassmatrix(m::NamedTuple, γ::Grid;
         #for I in Iint
             nrow = R[I]
             if m1.γ.wet[I]
-                Istep, _ = step_cartesian(I,
-                    m1.position,
-                    γ;
-                    wrap=(true,false,false))
-
+                Istep, _ = step_cartesian(I, m1.position, γ)
                 counter += 1
                 ilist[counter] = nrow
                 jlist[counter] = R[Istep]
