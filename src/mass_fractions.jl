@@ -10,20 +10,18 @@ store mass fractions in a Field-like array
 - `units::String`
 - `position::CartesianIndex{3}`
 """
-struct MassFraction{T <: Real}
-    fraction::Array{T,3}
-    γ::Grid
+struct MassFraction{T <: Real,R <: Real,N,F <: AbstractArray{T,N}}
+    fraction::F
+    γ::Grid{R,N}
     name::Symbol
     longname::String
     units::String
-    position::CartesianIndex{3}
+    position::CartesianIndex{N}
 end
-
 
 function MassFraction(A,
     γ::Grid,
     Δ::CartesianIndex;
-    wrap=(true, false, false),
     longname = "mass fraction from neighbor")
 
     # allocate masks
@@ -55,8 +53,10 @@ function MassFraction(A,
         #Grid(γ.lon,γ.lat,γ.depth,
         Grid(γ.axes,
             wet,
-            γ.interior),
-        :massfractions_north,
+            γ.interior,
+            γ.wrap,
+            γ.Δ),
+        :m_ij,
         longname,
         "unitless",
         Δ)
@@ -308,9 +308,9 @@ function massfractions_isotropic(γ::Grid{R,1}) where R
     nfield = sum(γ.wet)
     A = spzeros(nfield,nfield)
 
-    MassFraction(A, γ, γ.Δ[1],
-        γ.wrap,
+    m = [MassFraction(A, γ, γ.Δ[i],
         longname = "mass fraction")
+        for i in eachindex(Δ)]
         
     # m = (north = massfractions_north(A,γ),
     #     east   = massfractions_east(A,γ),
