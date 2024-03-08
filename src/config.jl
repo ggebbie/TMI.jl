@@ -211,14 +211,14 @@ function cartesianindex(file::String)
 end
 
 """
-    function gridprops(file)
+    function axislabels(file)
     Read and assemble the grid properties.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridprops(file)
+function axislabels(file)
     if file[end-1:end] == "nc"
         
         lon = convert(Vector{Float64},ncread(file,"lon"))
