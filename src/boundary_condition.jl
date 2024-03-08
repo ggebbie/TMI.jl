@@ -333,7 +333,7 @@ function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
     [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
 
     # 3,1 to identify surface
-    b = BoundaryCondition(patch,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:patch,"rectangular patch","none")
+    b = BoundaryCondition(patch,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:patch,"rectangular patch","none")
     
     return b
 end
