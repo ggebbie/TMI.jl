@@ -148,22 +148,22 @@ function neighbor_indices(n=6)
 end
 
 massfractions_north(A, γ) = MassFraction(A, γ, CartesianIndex(0,1,0);
-    wrap=(true, false, false), longname = "mass fraction from northern neighbor")
+    longname = "mass fraction from northern neighbor")
 
 massfractions_east(A, γ) = MassFraction(A, γ, CartesianIndex(1,0,0);
-    wrap=(true, false, false), longname = "mass fraction from eastern neighbor")
+    longname = "mass fraction from eastern neighbor")
 
 massfractions_south(A, γ) = MassFraction(A, γ, CartesianIndex(0,-1,0);
-    wrap=(true, false, false), longname = "mass fraction from southern neighbor")
+    longname = "mass fraction from southern neighbor")
     
 massfractions_west(A, γ) = MassFraction(A, γ, CartesianIndex(-1,0,0);
-    wrap=(true, false, false), longname = "mass fraction from western neighbor")
+    longname = "mass fraction from western neighbor")
 
 massfractions_up(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,-1);
-    wrap=(true, false, false), longname = "mass fraction from upper neighbor")
+    longname = "mass fraction from upper neighbor")
     
 massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
-    wrap=(true, false, false), longname = "mass fraction from lower neighbor")
+    longname = "mass fraction from lower neighbor")
 
 function tracer_contribution(c::Field,m::Union{MassFraction,NamedTuple})
 
@@ -588,21 +588,18 @@ function local_watermass_matrix(c::NamedTuple,
 end
 
 """
-function watermassmatrix(m::NamedTuple, γ::Grid;
-    wrap=(true, false, false))
+`function watermassmatrix(m::NamedTuple, γ::Grid)`
 
 Produce water-mass matrix from mass fractions and grid.
 
 # Arguments
 - `m::NamedTuple`: collection of `MassFraction`s
 - `γ::TMI.Grid`
-- `wrap::(true, false, false)`: does the particular dimension have a wraparound (periodic) domain?
 
 # Output
 - `A`: sparse water-mass matrix
 """
-function watermassmatrix(m::NamedTuple, γ::Grid;
-    wrap=(true, false, false))
+function watermassmatrix(m::NamedTuple, γ::Grid)
 
     # get total size of mass fractions
 
