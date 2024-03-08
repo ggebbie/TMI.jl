@@ -6,9 +6,9 @@
     1) non-negative
     2) have only interior mask
 """
-struct Source{T}
-    tracer::Array{T,3}
-    γ::Grid
+struct Source{T <: Real, A <: Real, N, F<:AbstractArray{T,N}}
+    tracer::F
+    γ::Grid{A,N}
     name::Symbol
     longname::String
     units::String

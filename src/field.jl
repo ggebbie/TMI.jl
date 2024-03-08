@@ -8,14 +8,14 @@
     This structure assumes the Tracer type to be 
     three-dimensional.
 
-    tracer::Array{T,3}
-    γ::Grid
+    tracer::AbstractArray{T,N}
+    γ::Grid{A,N}
     name::Symbol
     longname::String
     units::String
 """
-struct Field{T,A,N}
-    tracer::Array{T,N}
+struct Field{T <: Real ,A <: Real,N,F <: AbstractArray{T,N}}
+    tracer::F
     γ::Grid{A,N}
     name::Symbol
     longname::String
@@ -112,7 +112,7 @@ function readfield(file,tracername,γ::Grid{A,N}) where {A,N}
     tracer, units, longname = _read3d(file,tracername)
     T = eltype(tracer)
     checkgrid!(tracer,γ.wet)
-    c = Field{T,A,N}(tracer,γ,tracerdict()[tracername],longname,units)
+    c = Field(tracer,γ,tracerdict()[tracername],longname,units)
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) 
