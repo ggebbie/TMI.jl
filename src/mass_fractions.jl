@@ -212,7 +212,8 @@ How many neighbors does each grid cell have?
 # Output
 - `n::Field`: integer number of neighbors
 """
-function neighbors(m::NamedTuple,γ::Grid{R,N}) where {R,N}
+function neighbors(m::Union{Vector,NamedTuple},
+    γ::Grid{R,N}) where {R,N}
 
     ngrid =
         Tuple([length(γ.axes[d]) for d in 1:N])
@@ -308,9 +309,10 @@ function massfractions_isotropic(γ::Grid{R,1}) where R
     nfield = sum(γ.wet)
     A = spzeros(nfield,nfield)
 
-    m = [MassFraction(A, γ, γ.Δ[i],
+    m = [TMI.MassFraction(A, γ, d,
         longname = "mass fraction")
-        for i in eachindex(Δ)]
+        for d in γ.Δ]
+        #for i in eachindex(γ.Δ)]
         
     # m = (north = massfractions_north(A,γ),
     #     east   = massfractions_east(A,γ),
@@ -374,7 +376,6 @@ function local_solve(c::NamedTuple, w::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
     TMI.local_solve!(m̃,c,w)
-    #TMI.local_solve_old!(m̃, c, w)
     return m̃
 end
 
@@ -460,7 +461,7 @@ function local_watermass_matrix(c::NamedTuple,
     return A
 end
 
-function local_solve!(m::NamedTuple, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
+function local_solve!(m::Union{NamedTuple,Vector}, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
 
     γ = first(c).γ
     #Rfull = CartesianIndices(γ.wet)
@@ -551,7 +552,7 @@ to the rest of the ocean)
 - `single_connection::Bool`: true if flagged for singularity warning
 """
 function local_watermass_matrix(c::NamedTuple,
-    m::NamedTuple,
+    m::Union{NamedTuple,Vector},
     I::CartesianIndex,
     neighbors::Field)
 
