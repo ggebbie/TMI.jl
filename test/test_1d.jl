@@ -1,5 +1,5 @@
-using Revise
-using TMI
+#using Revise
+#using TMI
 ngrid = (50) # number of grid cells
 xmax = 1000.0 # domain size 
 lon = collect(range(0.0,1000.0,length=ngrid[1]))
