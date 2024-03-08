@@ -27,7 +27,13 @@ function MassFraction(A,
     longname = "mass fraction from neighbor")
 
     # allocate masks
-    ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+    #ngrid = (length(γ.lon), length(γ.lat), length(γ.depth))
+
+    axislabels = γ.axes
+    ndims = length(axislabels)
+    ngrid =
+        Tuple([length(axislabels[d]) for d in 1:ndims])
+
     wet = falses(ngrid)
     m   = NaN*ones(ngrid)
     R   = copy(γ.R)
@@ -46,10 +52,11 @@ function MassFraction(A,
 
     # make a field
     return MassFraction(m,
-        Grid(γ.lon,γ.lat,γ.depth,
+        #Grid(γ.lon,γ.lat,γ.depth,
+        Grid(γ.axes,
             wet,
             γ.interior),
-        :m_north,
+        :massfractions_north,
         longname,
         "unitless",
         Δ)

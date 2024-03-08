@@ -2,13 +2,14 @@ using Base: index_ndims, methods_including_ambiguous
 """
     struct Grid
 
-    TMI grid with accounting for wet/dry points
+TMI grid with accounting for wet/dry points
+# Fields
+- `axes::NTuple{N,Vector{A}}`: labels for axis such as lon, lat, depth with element type `A`
+- `wet::BitArray{N}`: mask for ocean points
+- `interior::BitArray{N}`: mask for interior ocean points
 """
-struct Grid{T,N}
-    # lon::Vector{T}
-    # lat::Vector{T}
-    # depth::Vector{T}
-    axes::NTuple{N,Vector{T}}
+struct Grid{A,N}
+    axes::NTuple{N,Vector{A}}
     wet::BitArray{N}
     interior::BitArray{N}
 end
@@ -30,17 +31,14 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
     labels = axislabels(TMIfile)
 
     ndims = length(labels)
-    #dimsize = Tuple{Int64}(undef,ndims)
-    dimsize = Tuple([length(labels[d]) for d in 1:ndims])
-    #end
+    ngrid =
+        Tuple([length(labels[d]) for d in 1:ndims])
     
     # make ocean mask
-    #wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
-    wet = wetmask(TMIfile,dimsize)
+    wet = wetmask(TMIfile,ngrid)
 
     # make interior mask
-    #interior = interiormask(A,wet,length(lon),length(lat),length(depth))
-    interior = interiormask(A,wet,dimsize)
+    interior = interiormask(A,wet,ngrid)
     return Grid(labels,wet,interior)
 end
 

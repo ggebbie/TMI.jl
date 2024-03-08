@@ -14,9 +14,9 @@
     longname::String
     units::String
 """
-struct Field{T,N}
+struct Field{T,A,N}
     tracer::Array{T,N}
-    γ::Grid{T,N}
+    γ::Grid{A,N}
     name::Symbol
     longname::String
     units::String
@@ -106,12 +106,13 @@ end
 
     read MATLAB field and transfer zyx format to xyz
 """
-function readfield(file,tracername,γ::Grid{T,N}) where {T,N} 
+function readfield(file,tracername,γ::Grid{A,N}) where {A,N} 
 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     tracer, units, longname = _read3d(file,tracername)
+    T = eltype(tracer)
     checkgrid!(tracer,γ.wet)
-    c = Field{T,N}(tracer,γ,tracerdict()[tracername],longname,units)
+    c = Field{T,A,N}(tracer,γ,tracerdict()[tracername],longname,units)
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) 
