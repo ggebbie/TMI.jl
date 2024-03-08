@@ -8,8 +8,8 @@ TMI grid with accounting for wet/dry points
 - `wet::BitArray{N}`: mask for ocean points
 - `interior::BitArray{N}`: mask for interior ocean points
 """
-struct Grid{A,N}
-    axes::NTuple{N,Vector{A}}
+struct Grid{R,N}
+    axes::NTuple{N,Vector{R}}
     wet::BitArray{N}
     interior::BitArray{N}
 end

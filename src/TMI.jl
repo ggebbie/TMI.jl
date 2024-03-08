@@ -322,7 +322,7 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
     end
              
     volume = log10.(volume)
-    ∂V∂b  = BoundaryCondition(volume,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
+    ∂V∂b  = BoundaryCondition(volume,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
     
     return  ∂V∂b 
 end
@@ -357,7 +357,7 @@ function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
     dvlocdd = log10.(dvlocdd[:,:,1])
     small_cutoff = -10 # 1e-10
     replace!(x -> x < small_cutoff ? small_cutoff : x,dvlocdd) 
-    origin = BoundaryCondition(dvlocdd,γ.lon,γ.lat,γ.depth[1],3,1,γ.wet[:,:,1],:origin,"surface origin","log₁₀(m³)")
+    origin = BoundaryCondition(dvlocdd,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:origin,"surface origin","log₁₀(m³)")
     
     return origin
 end
@@ -624,7 +624,7 @@ function cellarea(γ)
     dimval = 1 # surface
 
     # is it really a Boundary Condition? (sorta, but more of a 2D Field)
-    return BoundaryCondition(area,γ.lon,γ.lat,γ.depth[dimval],dim,dimval,γ.wet[:,:,dimval],
+    return BoundaryCondition(area,(γ.lon,γ.lat),γ.depth[dimval],dim,dimval,γ.wet[:,:,dimval],
              :area,"cell area","m²")
     #return area
 end

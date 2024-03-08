@@ -14,9 +14,9 @@
     longname::String
     units::String
 """
-struct Field{T <: Real ,A <: Real,N,F <: AbstractArray{T,N}}
+struct Field{T <: Real,R <: Real,N,F <: AbstractArray{T,N}}
     tracer::F
-    γ::Grid{A,N}
+    γ::Grid{R,N}
     name::Symbol
     longname::String
     units::String

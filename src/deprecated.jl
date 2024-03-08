@@ -219,3 +219,90 @@ function readtracer(file,tracername)
     c = ncread(file,tracername)
     return c
 end
+
+function boundaryconditionatts_old(dim::Integer,dimval::Integer,γ::Grid)
+
+    # dimsize = size(γ.wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = γ.wet[dimval,:,:]
+        i = γ.lat
+        j = γ.depth
+        k = γ.lon[dimval]
+    elseif dim == 2
+        wet2d = γ.wet[:,dimval,:]
+        i = γ.lon
+        j = γ.depth
+        k = γ.lat[dimval]
+    elseif dim == 3
+        wet2d = γ.wet[:,:,dimval]
+        i = γ.lon
+        j = γ.lat
+        k = γ.depth[dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    return i,j,k,wet2d
+    
+end
+
+function getboundarycondition_old(tracer3d::Field,dim::Integer,dimval::Integer,γ::Grid)::BoundaryCondition
+
+    dimsize = size(γ.wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = γ.wet[dimval,:,:]
+        tracer2d = tracer3d[dimval,:,:]
+        i = γ.lat
+        j = γ.depth
+        k = γ.lon[dimval]
+    elseif dim == 2
+        wet2d = γ.wet[:,dimval,:]
+        tracer2d = tracer3d[:,dimval,:]
+        i = γ.lon
+        j = γ.depth
+        k = γ.lat[dimval]
+    elseif dim == 3
+        wet2d = γ.wet[:,:,dimval]
+        tracer2d = tracer3d[:,:,dimval]
+        i = γ.lon
+        j = γ.lat
+        k = γ.depth[dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d)
+
+end
+
+function getboundarycondition_old(field::Field,dim,dimval)::BoundaryCondition
+
+    dimsize = size(field.γ.wet)
+    # dumb way to do it
+    if dim == 1
+        wet2d = field.γ.wet[dimval,:,:]
+        tracer2d = field.tracer[dimval,:,:]
+        i = field.γ.lat
+        j = field.γ.depth
+        k = field.γ.lon[dimval]
+    elseif dim == 2
+        wet2d = field.γ.wet[:,dimval,:]
+        tracer2d = field.tracer[:,dimval,:]
+        i = field.γ.lon
+        j = field.γ.depth
+        k = field.γ.lat[dimval]
+    elseif dim == 3
+        wet2d = field.γ.wet[:,:,dimval]
+        tracer2d = field.tracer[:,:,dimval]
+        i = field.γ.lon
+        j = field.γ.lat
+        k = field.γ.depth[dimval]
+    else
+        error("boundary condition not implemented in 4+ dimensions")
+    end
+    
+    b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d,
+                          field.name,field.longname,field.units)
+
+end
