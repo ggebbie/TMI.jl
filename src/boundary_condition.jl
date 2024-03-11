@@ -30,8 +30,7 @@ struct BoundaryCondition{T <: Real,
     units::String
 end
 
-Base.propertynames(b::BoundaryCondition) = (:i,:j,:k,fieldnames(typeof(γ))...)
-
+#Base.propertynames(b::BoundaryCondition) = (:i,:j,:k,fieldnames(typeof(γ))...)
 # function Base.getproperty(b::BoundaryCondition,
 #     d::Symbol)
 #     if d === :i 
@@ -240,7 +239,7 @@ function ones(dim::I,dimval::I,γ::Grid,name::Symbol,longname::String,units::Str
 end
 
 """
-   Get boundary condition by extracting from 3D tracer
+   Get boundary condition by extracting from N-dimensional tracer and returning (N-1)-dimensional array
 """
 function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,γ::Grid)::BoundaryCondition where {T<:Real,R<:Real,N}
 
@@ -250,17 +249,17 @@ function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,�
             ind = deleteat!(collect(1:N),n)
             # boundary axes
             baxes = γ.axes[ind]
-            wet2d = copy(selectdim(γ.wet,dim,dimval))
-            tracer2d = copy(selectdim(field.tracer,
+            wet_nminus1 = copy(selectdim(γ.wet,dim,dimval))
+            tracer_nminus1 = copy(selectdim(field.tracer,
                 dim,
                 dimval))
 
-            return BoundaryCondition(tracer2d,
+            return BoundaryCondition(tracer_nminus1,
                 baxes,
                 k,
                 dim,
                 dimval,
-                wet2d)
+                wet_nminus1)
         end
     end
 end
@@ -320,7 +319,7 @@ vec(u::BoundaryCondition) = u.tracer[u.wet]
 # Output
 - `d`: vector that describes surface patch
 """
-function surfacepatch(lonbox,latbox,γ::Grid)::BoundaryCondition
+function surfacepatch(lonbox,latbox,γ::Grid{R,3})::BoundaryCondition where R
 
     # ternary operator to handle longitudinal wraparound
     lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
