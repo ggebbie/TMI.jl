@@ -588,7 +588,7 @@ function local_watermass_matrix(c::NamedTuple,
 end
 
 """
-`function watermassmatrix(m::NamedTuple, γ::Grid)`
+`function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)`
 
 Produce water-mass matrix from mass fractions and grid.
 
@@ -599,7 +599,7 @@ Produce water-mass matrix from mass fractions and grid.
 # Output
 - `A`: sparse water-mass matrix
 """
-function watermassmatrix(m::NamedTuple, γ::Grid)
+function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
 
     # get total size of mass fractions
 
