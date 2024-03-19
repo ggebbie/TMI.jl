@@ -243,7 +243,7 @@ end
    Get boundary condition by extracting from 3D tracer
 """
 function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,γ::Grid)::BoundaryCondition where {T<:Real,R<:Real,N}
-
+    println("success") 
     for n in 1:N 
         if n == dim
             k = γ.axes[n][dimval]
@@ -254,7 +254,6 @@ function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,�
             tracer2d = copy(selectdim(field.tracer,
                 dim,
                 dimval))
-
             return BoundaryCondition(tracer2d,
                 baxes,
                 k,

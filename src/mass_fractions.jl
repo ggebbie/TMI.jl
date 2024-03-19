@@ -599,7 +599,7 @@ Produce water-mass matrix from mass fractions and grid.
 # Output
 - `A`: sparse water-mass matrix
 """
-function watermassmatrix(m::NamedTuple, γ::Grid)
+function watermassmatrix(m, γ::Grid)
 
     # get total size of mass fractions
 
