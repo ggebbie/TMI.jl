@@ -1,7 +1,7 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
-version = "0.2.13"
+version = "0.2.14"
 
 [deps]
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
@@ -32,17 +32,23 @@ GeoPythonPlot = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
 TMIGeoPythonPlotExt = "GeoPythonPlot"
 
 [compat]
-CSV = "0.9, 0.10"
+COSMO = "0.8"
+CSV = "0.10"
 Distances = "0.10"
 Distributions = "0.25"
 GibbsSeaWater = "0.1"
 GoogleDrive = "0.1.3"
-Interpolations = "0.14"
+Interpolations = "0.15"
 LineSearches = "7"
 MAT = "0.10"
-Optim = "1"
-StatsBase = "0.33"
-julia = "1.9,1.10"
+Optim = "1.8"
+OrderedCollections = "1"
+StatsBase = "0.34"
+UnicodePlots = "3"
+Downloads = "1.6"
+SparseArrays = "1"
+Statistics = "1"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
