@@ -1,6 +1,6 @@
 using Test
 using TMI
-
+using LinearAlgebra: lu
 function compare_controls(ubc,ubc2,testval)
     irand = rand(1:sum(ubc.wet))
     iloc = findall(ubc.wet)[irand]
@@ -15,4 +15,8 @@ end
     include("test_modern.jl")
 
     include("test_mitgcm.jl")
+
+    include("test_massfractions.jl")
+
+    include("test_1d.jl")
 end

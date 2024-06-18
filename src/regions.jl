@@ -30,7 +30,7 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
     close(ds)
     
     #b = BoundaryCondition(mask,lon,lat,depth,3,1,trues(parse(Int64,Nx),parse(Int64,Ny)),Symbol(region),longname,units)
-    b = BoundaryCondition(mask,lon,lat,depth,3,1,wet,Symbol(region),longname,units)
+    b = BoundaryCondition(mask,(lon,lat),depth,3,1,wet,Symbol(region),longname,units)
     return b
 end
 

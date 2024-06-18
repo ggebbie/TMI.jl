@@ -68,10 +68,12 @@ function download_ncfile(TMIversion::String)
             run(`sh $shellscript`)
             mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
         elseif  TMIversion == "nordic_201x115x46_B23"
-            println("workaround for regional Nordic Seas file")
-            shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
-            run(`sh $shellscript`)
-            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+            println("use `Downloads.download` for regional Nordic Seas file")
+            #shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
+            #run(`sh $shellscript`)
+            #mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+            url = ncurl(TMIversion)
+            Downloads.download(TMI.ncurl(TMIversion),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
@@ -151,6 +153,7 @@ function download_matfile(TMIversion::String)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     elseif  TMIversion == "nordic_201x115x46_B23"
         println("workaround for regional Nordic Seas file")
+        # warning: may not work due to changing Google API
         shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
@@ -208,14 +211,14 @@ function cartesianindex(file::String)
 end
 
 """
-    function gridprops(file)
+    function axislabels(file)
     Read and assemble the grid properties.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
 - `grid`: TMI grid coordinates
 """
-function gridprops(file)
+function axislabels(file)
     if file[end-1:end] == "nc"
         
         lon = convert(Vector{Float64},ncread(file,"lon"))
@@ -498,6 +501,8 @@ function ncurl(TMIname)
         url = "https://docs.google.com/uc?export=download&id=1cOCrty9kvA2s3NoD1QZjnNehlVbP0rHP"
     elseif TMIname == "LGM_90x45x33_OG18"
         url = "https://docs.google.com/uc?export=download&id=19zccG1BSdspD9rti2OttsF2Dm4P2OLjt"
+    elseif  TMIname == "nordic_201x115x46_B23"
+        url = "https://argo.whoi.edu/jake/TMI_nordic_201x115x46_B23.nc"
     else
         url = nothing
     end
@@ -595,20 +600,21 @@ gridatts() = Dict("lon" => Dict("longname" => "Longitude", "units" => "°E"),
     Rename MATLAB variables to NetCDF variables
 """
 mat2ncfield() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-                     "Terr"=>"σθ",
-                     "Sstar"=>"S⋆",
-                   "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
-                   "Serr"=>"σSₚ",
-                   "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
-                   "O18err"=>"σδ¹⁸Ow",
-                   "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
-                   "Perr" => "σPO₄",
-                   "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
-                   "Nerr" => "σNO₃",
-                   "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
-                   "Oerr"=>"σO₂",
-                   "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
-                   "C13err" =>  "σδ¹³C")
+    "Terr"=>"σθ",
+    "Sstar"=>"S⋆",
+    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
+    "Sp" => "Sp", # help for some out-of-date input files
+    "Serr"=>"σSₚ",
+    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+    "O18err"=>"σδ¹⁸Ow",
+    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
+    "Perr" => "σPO₄",
+    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
+    "Nerr" => "σNO₃",
+    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
+    "Oerr"=>"σO₂",
+    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
+    "C13err" =>  "σδ¹³C")
 
 mat2ncsource() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
 
@@ -659,7 +665,6 @@ function matsource2nc(TMIversion,γ)
     end
 end
 
-
 """
 All variable names and attributes.
 Useful for writing NetCDF files.
@@ -684,6 +689,31 @@ fieldsatts() =
          "σδ¹³C" => Dict("longname" => "1σ standard error fin carbon-13 to carbon-12 ratio in DIC", "units" => "‰ PDB"),
          "F₀" => Dict("longname" => "normalized mass flux out of gridcell", "units" => "(kg seawater/yr)/(kg gridcell)"))
 
+# help for reading foreign files, translate to TMI convention
+tracerdict() = 
+    Dict("Θ" => :Θ,
+        "CT" => :Θ,
+        "θ" => :θ,
+        "THETA" => :θ,
+        "theta" => :θ,
+        "σθ" => :σθ,
+        "S⋆" => Symbol("S⋆"),
+        "Sₚ" => :Sₚ,
+        "Sp" => :Sₚ,
+        "SALT" => :Sₚ,
+        "σSₚ" => :σSₚ,
+        "δ¹⁸Ow" => :δ¹⁸Ow,
+        "σδ¹⁸Ow" => :σδ¹⁸Ow,
+         "PO₄" => :PO₄,
+         "σPO₄" => :σPO₄,
+         "qPO₄" => :qPO₄,
+         "NO₃" => :NO₃,
+         "σNO₃" => :σNO₃,
+         "O₂" => :O₂,
+         "σO₂" => :σO₂,
+         "δ¹³C" => :δ¹³C,
+         "σδ¹³C" => :σδ¹³C,
+         "F₀" => :F₀)
 
 function watermassmatrix2nc(TMIversion,A)
 
@@ -699,9 +729,9 @@ function watermassmatrix2nc(TMIversion,A)
     println("write ",varname)
     ncwrite(m, filenetcdf,varname)
     
-     varname= "Arow"
-     destatts = Dict("longname" => "gridcell number of destination (row value)")
-     nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=destatts)
+    varname= "Arow"
+    destatts = Dict("longname" => "gridcell number of destination (row value)")
+    nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=destatts)
     println("write ",varname)
     ncwrite(i, filenetcdf,varname)
 
@@ -899,3 +929,15 @@ function sourceinit(vec,I,γ)
     end
     return source
 end
+
+versionlist() = ("modern_90x45x33_GH10_GH12",
+    "modern_180x90x33_GH11_GH12",
+    "modern_90x45x33_unpub12",
+    "modern_90x45x33_G14", 
+    "modern_90x45x33_G14_v2",				  
+    "LGM_90x45x33_G14",
+    "LGM_90x45x33_G14A",				  
+    "LGM_90x45x33_GPLS1",				  
+    "LGM_90x45x33_GPLS2",				  
+    "LGM_90x45x33_OG18",
+    "nordic_201x115x46_B23")

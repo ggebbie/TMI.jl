@@ -86,7 +86,7 @@ function sectionplot(field::Field{<:Real}, lon, lims;titlelabel="section plot",f
 
     Psection = section(field,lon)
 
-    GeoPythonPlot.sectionplot(Psection::Matrix, lon, field.γ.lat, field.γ.depth, lims;titlelabel="section plot",fname="figure.png",units=field.units) 
+    GeoPythonPlot.sectionplot(Psection::Matrix, lon, field.γ.lat, field.γ.depth, lims;titlelabel=titlelabel,fname=fname,units=field.units) 
 end
 
 end

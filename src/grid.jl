@@ -1,14 +1,21 @@
+using Base: index_ndims, methods_including_ambiguous
 """
     struct Grid
 
-    TMI grid with accounting for wet/dry points
+TMI grid with accounting for wet/dry points
+# Fields
+- `axes::NTuple{N,Vector{A}}`: labels for axis such as lon, lat, depth with element type `A`
+- `wet::BitArray{N}`: mask for ocean points
+- `interior::BitArray{N}`: mask for interior ocean points
+- `wrap::NTuple{N,Bool}`: does the domain wraparound in each dim?
+- `Δ::Vector{CartesianIndex{N}}`: defines computational stencil relative to central cell
 """
-struct Grid{T <: Real}
-    lon::Vector{T}
-    lat::Vector{T}
-    depth::Vector{T}
-    wet::BitArray{3}
-    interior::BitArray{3}
+struct Grid{R,N}
+    axes::NTuple{N,Vector{R}}
+    wet::BitArray{N}
+    interior::BitArray{N}
+    wrap::NTuple{N,Bool}
+    Δ::Vector{CartesianIndex{N}}
 end
 
 """
@@ -23,54 +30,69 @@ function Grid(TMIfile)
 - `γ::Grid`: TMI grid struct
 """
 function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
+
     # get properties of grid
-    lon,lat,depth = gridprops(TMIfile)
+    labels = axislabels(TMIfile)
+
+    ndims = length(labels)
+    ngrid =
+        Tuple([length(labels[d]) for d in 1:ndims])
     
     # make ocean mask
-    wet = wetmask(TMIfile,length(lon),length(lat),length(depth))
+    wet = wetmask(TMIfile,ngrid)
 
     # make interior mask
-    interior = interiormask(A,wet,length(lon),length(lat),length(depth))
+    interior = interiormask(A,wet,ngrid)
 
-    return Grid(lon,lat,depth,wet,interior)
+    # always true for TMI? Not for regional -- need to fix.
+    wrap = (true, false, false)
+    Δ = neighbor_indices(6)
+    return Grid(labels,wet,interior,wrap,Δ)
 end
 
 """
-function Grid(foreign_file::String, tracername, lonname,latname, depthname, maskname)
+function Grid(foreign_file, maskname, lonname, latname, depthname)
 
     Construct the Grid from a non-TMI file given the names of relevant fields.
 
     Assumes that an ocean mask is available.
-    Assumes a NetCDF file.
+    Assumes an input NetCDF file.
     Assumes everything below the top layer is part of the interior. 
-    Assumes Float32 fields.
-    `tracername` not actually used right now.
+    Tested for Float32 fields (should work for other types).
 
 # Arguments
 - `foreign_file::String`
-- `tracername::String`
+- `maskname::String`
 - `lonname::String`
 - `latname::String`
 - `depthname::String`
-- `maskname::String`
 # Output
 - `γ::Grid`: TMI grid struct
 """
-function Grid(foreign_file::S, tracername::S, lonname::S, latname::S, depthname::S, maskname::S) where S <: String
+function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S) where S <: String
     
     # make ocean mask
     ds = Dataset(foreign_file)
     wet = Bool.(ds[maskname])::BitArray # very slow! (couple of secs), use `convert` instead?
 
-    lon = convert(Vector{Float32},ds[lonname]) 
-    lat = convert(Vector{Float32},ds[latname])
-    depth = - convert(Vector{Float32},ds[depthname]) # flip sign for actual "depth"
+    T = eltype(ds[lonname][1]) # not sure that this will always work
+    
+    lon = convert(Vector{T},ds[lonname]) 
+    lat = convert(Vector{T},ds[latname])
+    depth = - convert(Vector{T},ds[depthname]) # flip sign for actual "depth"
 
     # make interior mask: Assume no lateral or bottom boundaries (CAUTION)
     interior = deepcopy(wet)
     interior[:,:,1] .= false
 
-    return Grid(lon,lat,depth,wet,interior)
+    wrap = (true, false, false)
+    Δ = neighbor_indices(6)
+
+    return Grid((lon,lat,depth),
+        wet,
+        interior,
+        wrap,
+        Δ)
 end
 
 """
@@ -79,12 +101,18 @@ end
     Do not store Cartesian and linear indices.
     Compute them on demand.
 """ 
-Base.propertynames(γ::Grid) = (:I,:R,fieldnames(typeof(γ))...)
-function Base.getproperty(γ::Grid, d::Symbol)
+Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...) 
+function Base.getproperty(γ::Grid{R,N}, d::Symbol) where {R,N}
     if d === :I
         return cartesianindex(γ.wet)
     elseif d === :R
         return linearindex(γ.wet)
+    elseif d === :lon
+        return γ.axes[1]
+    elseif d === :lat
+        return ((N > 1) ? γ.axes[2] : nothing)
+    elseif d === :depth
+        return ((N > 2) ? γ.axes[3] : nothing)
     else
         return getfield(γ, d)
     end
@@ -99,7 +127,14 @@ end
 # Output
 - `I`: 3D Cartesian indices
 """
-cartesianindex(wet::BitArray{3}) = findall(wet)
+function cartesianindex(wet::BitArray{N}) where N
+    if N == 1
+        return CartesianIndex.(findall(wet))
+    elseif N > 1
+        return findall(wet)
+    end
+end
+
 
 """
     function linearindex(wet)
@@ -109,8 +144,8 @@ cartesianindex(wet::BitArray{3}) = findall(wet)
 # Output
 - `R`: array of linear indices, but not a LinearIndices type
 """
-function linearindex(wet)
-    R = Array{Int64,3}(undef,size(wet))
+function linearindex(wet::BitArray{N}) where N
+    R = Array{Int64,N}(undef,size(wet))
     fill!(R,0)
     R[wet]=1:sum(wet)
     return R
@@ -137,19 +172,34 @@ function checkgrid!(tracer,wet)
     end
 end
 
-function wetmask(TMIfile::String,nx,ny,nz)
+function wetmask(TMIfile::String,dimsize::NTuple)
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
-    # make a mask
-    # first choice: smaller but inconsistent with input grid
-    #wet = falses(maximum(I)[1],maximum(I)[2],maximum(I)[3])
+    wet = falses(dimsize)
+    wet[I] .= 1
+    return wet
+end
+function wetmask(TMIfile::String,nx,ny,nz)
+    # older version that assumes N = 3
+    # read Cartesian Index from file.
+    I = cartesianindex(TMIfile)
     wet = falses(nx,ny,nz)
     wet[I] .= 1
     return wet
 end
 
+"""
+function interiormask(A,wet,nx,ny,nz)
+"""
 function interiormask(A,wet,nx,ny,nz)
     interior = falses(nx,ny,nz)
+    I = cartesianindex(wet)
+    list = findall(.!(isone.(sum(abs.(A),dims=2))))
+    interior[I[list]] .= true 
+    return interior
+end
+function interiormask(A,wet,dimsize::NTuple)
+    interior = falses(dimsize)
     I = cartesianindex(wet)
     list = findall(.!(isone.(sum(abs.(A),dims=2))))
     interior[I[list]] .= true 
