@@ -74,6 +74,13 @@ function download_ncfile(TMIversion::String)
             #mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
             url = ncurl(TMIversion)
             Downloads.download(TMI.ncurl(TMIversion),TMIfile)
+        elseif  TMIversion == "nordic_271x205x46_B23"
+            println("use `Downloads.download` for regional Nordic Seas file")
+            #shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
+            #run(`sh $shellscript`)
+            #mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
+            url = ncurl(TMIversion)
+            Downloads.download(TMI.ncurl(TMIversion),TMIfile)
         else
             println("read via GoogleDrive.jl")
             #- `url`: Google Drive URL for data
@@ -155,6 +162,11 @@ function download_matfile(TMIversion::String)
         println("workaround for regional Nordic Seas file")
         # warning: may not work due to changing Google API
         shellscript = pkgsrcdir("read_mat_nordic_201x115x46_B23.sh")
+        run(`sh $shellscript`)
+        mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
+    elseif  TMIversion == "nordic_271x205x46_B23"
+        println("workaround for regional Nordic Seas file")
+        shellscript = pkgsrcdir("read_mat_nordic_271x205x46_B23.sh")
         run(`sh $shellscript`)
         mv(joinpath(pwd(),"TMI_"*TMIversion*".mat.gz"),TMIfilegz,force=true)
     else
@@ -503,6 +515,8 @@ function ncurl(TMIname)
         url = "https://docs.google.com/uc?export=download&id=19zccG1BSdspD9rti2OttsF2Dm4P2OLjt"
     elseif  TMIname == "nordic_201x115x46_B23"
         url = "https://argo.whoi.edu/jake/TMI_nordic_201x115x46_B23.nc"
+    elseif TMIname == "nordic_271x205x46_B23"
+        url = "https://docs.google.com/uc?export=download&id=1H8t4Y5vzIroV3ktjWT5Koqc3VesR6Q8z"
     else
         url = nothing
     end
@@ -940,4 +954,5 @@ versionlist() = ("modern_90x45x33_GH10_GH12",
     "LGM_90x45x33_GPLS1",				  
     "LGM_90x45x33_GPLS2",				  
     "LGM_90x45x33_OG18",
-    "nordic_201x115x46_B23")
+    "nordic_201x115x46_B23", 
+    "nordic_271x205x46_B23")
