@@ -5,3 +5,5 @@
 /docs/build/
 *~
 *nc
+/scripts/.CondaPkg
+/scripts_compare_solutions/.CondaPkg
