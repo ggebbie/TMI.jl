@@ -1131,7 +1131,7 @@ version = "7.2.1+1"
 deps = ["COSMO", "CSV", "Distances", "Distributions", "Downloads", "GibbsSeaWater", "GoogleDrive", "Interpolations", "JuMP", "LineSearches", "LinearAlgebra", "MAT", "NCDatasets", "NetCDF", "Optim", "OrderedCollections", "SparseArrays", "Statistics", "StatsBase", "UnicodePlots"]
 path = ".."
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-version = "0.2.14"
+version = "0.2.15"
 weakdeps = ["GeoPythonPlot"]
 
     [deps.TMI.extensions]
