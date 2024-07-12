@@ -12,9 +12,9 @@
 % See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
 =#
 
-import Pkg; Pkg.activate(".")
-
-using Revise
+import Pkg; Pkg.activate("./scripts")
+Pkg.instantiate()
+# using Revise # this package is not included in scripts toml files not added in 
 using TMI
 using Test
 using GeoPythonPlot
@@ -24,7 +24,12 @@ A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
 
 volume = volumefilled(TMIversion,Alu,γ)
 
+lon = volume.axes[1]
+lat = volume.axes[2]
+z = 0 #we are looking at surface sources
 # view the surface
 cntrs = 1:0.25:6
 tlabel="Volume filled by surface patch [log₁₀(m)]"
-planviewplot(volume,cntrs,titlelabel=tlabel) 
+
+GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
+planviewplot(volume.tracer, lon, lat, z,cntrs,titlelabel=tlabel) 
