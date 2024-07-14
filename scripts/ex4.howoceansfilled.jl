@@ -27,4 +27,19 @@ volume = volumefilled(TMIversion,Alu,γ)
 # view the surface
 cntrs = 1:0.25:6
 tlabel="Volume filled by surface patch [log₁₀(m)]"
+GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
 planviewplot(volume,cntrs,titlelabel=tlabel) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+

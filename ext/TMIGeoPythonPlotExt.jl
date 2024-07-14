@@ -42,8 +42,8 @@ end
 """
 function planviewplot(b::BoundaryCondition, lims; titlelabel="boundary condition plot",fname="figure.png", cenlon= -160.0)
 
-    lon = b.i
-    lat = b.j
+    lon = b.axes[1]
+    lat = b.axes[2]
     depth = b.k
     
     # replace Field with Array
