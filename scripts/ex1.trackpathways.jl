@@ -32,7 +32,7 @@ c = trackpathways(Alu,latbox,lonbox,γ);
 plotbox(latbox, lonbox)
 
 # plot a section at 330 east longitude (i.e., 30 west)
-lon_section = 330; # only works if exact
+lon_section = 330; # only works if exactly matches a grid longitude (CAUTION!)
 lims = 0:5:100
 tlabel = "water-mass fraction [%]"
 sectionplot(100c,lon_section,lims,titlelabel = tlabel) # heat colormap would be better
