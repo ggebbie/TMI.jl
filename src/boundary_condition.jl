@@ -19,8 +19,6 @@ struct BoundaryCondition{T <: Real,
     B <: AbstractArray{T,N}}
     tracer::B
     axes::NTuple{N,Vector{R}}
-    #i::Vector{R}
-    #j::Vector{R}
     k::R
     dim::G
     dimval::G
@@ -29,20 +27,6 @@ struct BoundaryCondition{T <: Real,
     longname::String
     units::String
 end
-
-#Base.propertynames(b::BoundaryCondition) = (:i,:j,:k,fieldnames(typeof(γ))...)
-# function Base.getproperty(b::BoundaryCondition,
-#     d::Symbol)
-#     if d === :i 
-#         return b.axes[1]
-#     elseif d === :j 
-#         return b.axes[2]
-#     elseif d === :k 
-#         return b.axes[3]
-#     else
-#         return getfield(b, d)
-#     end
-# end
 
 # special show function if N = 2
 function Base.show(io::IO,
@@ -82,10 +66,7 @@ function BoundaryCondition(tracer::B,
     dimval::G,
     wet::BitArray{N}) where {T <: Real, R <: Real, N, G <: Integer, B <: AbstractArray{T,N}}
 
-    #function BoundaryCondition(tracer::AbstractMatrix{T},i::Vector{R},j::Vector{R},k::R,dim::N,dimval::N,wet::BitMatrix) where T <: Real where R <: Real where N <: Integer
-
     return BoundaryCondition(tracer,axes,k,dim,dimval,wet,:bc,"boundary condition","unknown") 
-#    return BoundaryCondition(tracer,i,j,k,dim,dimval,wet,:bc,"boundary condition","unknown") 
 end
 
 """
@@ -321,15 +302,26 @@ vec(u::BoundaryCondition) = u.tracer[u.wet]
 """
 function surfacepatch(lonbox,latbox,γ::Grid{R,3})::BoundaryCondition where R
 
-    # ternary operator to handle longitudinal wraparound
-    lonbox[1] ≤ 0 ? lonbox[1] += 360 : nothing
-    lonbox[2] ≤ 0 ? lonbox[2] += 360 : nothing
+    # input must be self consistent
+    ((lonbox[1] > lonbox[2]) || (latbox[1] > latbox[2])) && error("surfacepatch: upper bound less than lower bound")
 
+    # reference longitude to closest central longitude
+    lon_central = (lonbox[1] + lonbox[2])/2
+
+    println(lon_central)
+    
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+
+    println(maximum(lon_shifted))
+    println(minimum(lon_shifted))
+    
     # preallocate
     patch = zeros(γ.wet[:,:,1])
 
     # can you add a logical to a Float64? yes, it's 1.0
-    [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ γ.lon[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)] 
+    [patch[i,j] +=  latbox[1] ≤ γ.lat[j] ≤ latbox[2] && lonbox[1] ≤ lon_shifted[i] ≤ lonbox[2] for i in eachindex(γ.lon) for j in eachindex(γ.lat)]
 
     # 3,1 to identify surface
     b = BoundaryCondition(patch,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:patch,"rectangular patch","none")
