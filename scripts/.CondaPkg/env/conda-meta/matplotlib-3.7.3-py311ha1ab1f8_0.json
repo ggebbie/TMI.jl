@@ -1,0 +1,39 @@
+{
+    "arch": "arm64",
+    "build": "py311ha1ab1f8_0",
+    "build_number": 0,
+    "build_string": "py311ha1ab1f8_0",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "matplotlib-base >=3.7.3,<3.7.4.0a0",
+        "python >=3.11,<3.12.0a0",
+        "python_abi 3.11.* *_cp311",
+        "tornado >=5"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/matplotlib-3.7.3-py311ha1ab1f8_0",
+    "files": [],
+    "fn": "matplotlib-3.7.3-py311ha1ab1f8_0.conda",
+    "license": "LicenseRef-PSF-2.0 and CC0-1.0",
+    "license_family": "PSF",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/matplotlib-3.7.3-py311ha1ab1f8_0",
+        "type": 1
+    },
+    "md5": "92edc00a2624272c50183934d8ac0736",
+    "name": "matplotlib",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/matplotlib-3.7.3-py311ha1ab1f8_0.tar.bz2",
+    "paths_data": {
+        "paths": [],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "matplotlib==3.7.3",
+    "sha256": "94525413cc5c0b974376f94998eb7d051cbbfe49bf5d8f6dcd0abd20e7aa3b9e",
+    "size": 8627,
+    "subdir": "osx-arm64",
+    "timestamp": 1695077417392,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/matplotlib-3.7.3-py311ha1ab1f8_0.conda",
+    "version": "3.7.3"
+}
