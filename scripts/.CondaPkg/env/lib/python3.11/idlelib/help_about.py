@@ -11,12 +11,15 @@ from tkinter import SUNKEN, TOP, BOTTOM, LEFT, X, BOTH, W, EW, NSEW, E
 
 from idlelib import textview
 
-pyver = python_version()
+version = python_version()
 
-if sys.platform == 'darwin':
-    bits = '64' if sys.maxsize > 2**32 else '32'
-else:
-    bits = architecture()[0][:2]
+
+def build_bits():
+    "Return bits for platform."
+    if sys.platform == 'darwin':
+        return '64' if sys.maxsize > 2**32 else '32'
+    else:
+        return architecture()[0][:2]
 
 
 class AboutDialog(Toplevel):
@@ -42,7 +45,7 @@ class AboutDialog(Toplevel):
         self.create_widgets()
         self.resizable(height=False, width=False)
         self.title(title or
-                   f'About IDLE {pyver} ({bits} bit)')
+                   f'About IDLE {version} ({build_bits()} bit)')
         self.transient(parent)
         self.grab_set()
         self.protocol("WM_DELETE_WINDOW", self.ok)
@@ -73,8 +76,8 @@ class AboutDialog(Toplevel):
                        bg=self.bg, font=('courier', 24, 'bold'))
         header.grid(row=0, column=0, sticky=E, padx=10, pady=10)
 
-        tkpatch = self._root().getvar('tk_patchLevel')
-        ext = '.png' if tkpatch >= '8.6' else '.gif'
+        tk_patchlevel = self.info_patchlevel()
+        ext = '.png' if tk_patchlevel >= (8, 6) else '.gif'
         icon = os.path.join(os.path.abspath(os.path.dirname(__file__)),
                             'Icons', f'idle_48{ext}')
         self.icon_image = PhotoImage(master=self._root(), file=icon)
@@ -99,11 +102,13 @@ class AboutDialog(Toplevel):
               height=2, bg=self.bg).grid(row=8, column=0, sticky=EW,
                                          columnspan=3, padx=5, pady=5)
 
-        tclver = str(self.info_patchlevel())
-        tkver = ' and ' + tkpatch if tkpatch != tclver else ''
-        versions = f"Python {pyver} with tcl/tk {tclver}{tkver}"
-        vers = Label(frame_background, text=versions, fg=self.fg, bg=self.bg)
-        vers.grid(row=9, column=0, sticky=W, padx=10, pady=0)
+        pyver = Label(frame_background,
+                      text='Python version:  ' + version,
+                      fg=self.fg, bg=self.bg)
+        pyver.grid(row=9, column=0, sticky=W, padx=10, pady=0)
+        tkver = Label(frame_background, text=f'Tk version:  {tk_patchlevel}',
+                      fg=self.fg, bg=self.bg)
+        tkver.grid(row=9, column=1, sticky=W, padx=2, pady=0)
         py_buttons = Frame(frame_background, bg=self.bg)
         py_buttons.grid(row=10, column=0, columnspan=2, sticky=NSEW)
         self.py_license = Button(py_buttons, text='License', width=8,
@@ -123,17 +128,17 @@ class AboutDialog(Toplevel):
               height=2, bg=self.bg).grid(row=11, column=0, sticky=EW,
                                          columnspan=3, padx=5, pady=5)
 
-        idle = Label(frame_background,
-                        text='IDLE',
+        idlever = Label(frame_background,
+                        text='IDLE version:   ' + version,
                         fg=self.fg, bg=self.bg)
-        idle.grid(row=12, column=0, sticky=W, padx=10, pady=0)
+        idlever.grid(row=12, column=0, sticky=W, padx=10, pady=0)
         idle_buttons = Frame(frame_background, bg=self.bg)
         idle_buttons.grid(row=13, column=0, columnspan=3, sticky=NSEW)
-        self.readme = Button(idle_buttons, text='Readme', width=8,
+        self.readme = Button(idle_buttons, text='README', width=8,
                              highlightbackground=self.bg,
                              command=self.show_readme)
         self.readme.pack(side=LEFT, padx=10, pady=10)
-        self.idle_news = Button(idle_buttons, text='News', width=8,
+        self.idle_news = Button(idle_buttons, text='NEWS', width=8,
                                 highlightbackground=self.bg,
                                 command=self.show_idle_news)
         self.idle_news.pack(side=LEFT, padx=10, pady=10)
@@ -167,7 +172,7 @@ class AboutDialog(Toplevel):
 
     def show_idle_news(self):
         "Handle News button event."
-        self.display_file_text('About - News', 'News3.txt', 'utf-8')
+        self.display_file_text('About - NEWS', 'NEWS.txt', 'utf-8')
 
     def display_printer_text(self, title, printer):
         """Create textview for built-in constants.

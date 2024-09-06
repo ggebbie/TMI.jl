@@ -204,16 +204,14 @@ def _grep_dialog(parent):  # htest #
     frame.pack()
     text = Text(frame, height=5)
     text.pack()
-    text.insert('1.0', 'import grep')
 
     def show_grep_dialog():
-        text.tag_add(SEL, "1.0", '1.end')
+        text.tag_add(SEL, "1.0", END)
         grep(text, flist=flist)
-        text.tag_remove(SEL, "1.0", '1.end')
+        text.tag_remove(SEL, "1.0", END)
 
     button = Button(frame, text="Show GrepDialog", command=show_grep_dialog)
     button.pack()
-
 
 if __name__ == "__main__":
     from unittest import main

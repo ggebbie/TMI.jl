@@ -5,6 +5,7 @@ import getpass
 import urllib
 import warnings
 
+from test.support import run_unittest
 from test.support.warnings_helper import check_warnings
 
 from distutils.command import register as register_module
@@ -291,8 +292,6 @@ class RegisterTestCase(BasePyPIRCCommandTestCase):
         cmd = self._get_cmd()
         with check_warnings() as w:
             warnings.simplefilter("always")
-            warnings.filterwarnings("ignore", ".*OptionParser class will be replaced.*")
-            warnings.filterwarnings("ignore", ".*Option class will be removed.*")
             cmd.check_metadata()
             self.assertEqual(len(w.warnings), 1)
 
@@ -318,5 +317,8 @@ class RegisterTestCase(BasePyPIRCCommandTestCase):
         self.assertEqual(results[3], 75 * '-' + '\nxxx\n' + 75 * '-')
 
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(RegisterTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

@@ -182,11 +182,16 @@ class AutoCompleteWindow:
         self.userwantswindow = userWantsWin
         self.lasttypedstart = self.start
 
+        # Put widgets in place
         self.autocompletewindow = acw = Toplevel(self.widget)
-        acw.withdraw()
+        # Put it in a position so that it is not seen.
+        acw.wm_geometry("+10000+10000")
+        # Make it float
         acw.wm_overrideredirect(1)
         try:
-            # Prevent grabbing focus on macOS.
+            # This command is only needed and available on Tk >= 8.4.0 for OSX
+            # Without it, call tips intrude on the typing process by grabbing
+            # the focus.
             acw.tk.call("::tk::unsupported::MacWindowStyle", "style", acw._w,
                         "help", "noActivates")
         except TclError:
@@ -266,7 +271,6 @@ class AutoCompleteWindow:
                 # place acw above current line
                 new_y -= acw_height
             acw.wm_geometry("+%d+%d" % (new_x, new_y))
-            acw.deiconify()
             acw.update_idletasks()
         except TclError:
             pass

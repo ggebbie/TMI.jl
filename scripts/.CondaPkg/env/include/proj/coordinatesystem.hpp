@@ -60,11 +60,6 @@ class AxisDirection : public util::CodeList {
     valueOf(const std::string &nameIn) noexcept;
     //! @endcond
 
-    AxisDirection(const AxisDirection&) = delete;
-    AxisDirection& operator=(const AxisDirection&) = delete;
-    AxisDirection(AxisDirection&&) = delete;
-    AxisDirection& operator=(AxisDirection&&) = delete;
-
     PROJ_DLL static const AxisDirection NORTH;
     PROJ_DLL static const AxisDirection NORTH_NORTH_EAST;
     PROJ_DLL static const AxisDirection NORTH_EAST;
@@ -366,16 +361,13 @@ class PROJ_GCC_DLL SphericalCS final : public CoordinateSystem {
            const CoordinateSystemAxisNNPtr &axis1,
            const CoordinateSystemAxisNNPtr &axis2);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "spherical";
-
   protected:
     PROJ_INTERNAL explicit SphericalCS(
         const std::vector<CoordinateSystemAxisNNPtr> &axisIn);
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "spherical";
     }
 
   private:
@@ -430,9 +422,6 @@ class PROJ_GCC_DLL EllipsoidalCS final : public CoordinateSystem {
         const common::UnitOfMeasure &angularUnit,
         const common::UnitOfMeasure &linearUnit);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "ellipsoidal";
-
     //! @cond Doxygen_Suppress
 
     /** \brief Typical axis order. */
@@ -465,7 +454,7 @@ class PROJ_GCC_DLL EllipsoidalCS final : public CoordinateSystem {
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "ellipsoidal";
     }
 
   protected:
@@ -501,9 +490,6 @@ class PROJ_GCC_DLL VerticalCS final : public CoordinateSystem {
     PROJ_DLL static VerticalCSNNPtr
     createGravityRelatedHeight(const common::UnitOfMeasure &unit);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "vertical";
-
     PROJ_PRIVATE :
         //! @cond Doxygen_Suppress
         PROJ_INTERNAL VerticalCSNNPtr
@@ -516,7 +502,7 @@ class PROJ_GCC_DLL VerticalCS final : public CoordinateSystem {
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "vertical";
     }
 
   private:
@@ -574,10 +560,6 @@ class PROJ_GCC_DLL CartesianCS final : public CoordinateSystem {
     PROJ_DLL static CartesianCSNNPtr
     createGeocentric(const common::UnitOfMeasure &unit);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE =
-        "Cartesian"; // uppercase is intended
-
     PROJ_PRIVATE :
         //! @cond Doxygen_Suppress
         PROJ_INTERNAL CartesianCSNNPtr
@@ -591,7 +573,7 @@ class PROJ_GCC_DLL CartesianCS final : public CoordinateSystem {
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "Cartesian"; // uppercase is intended
     }
 
   private:
@@ -618,9 +600,6 @@ class PROJ_GCC_DLL AffineCS final : public CoordinateSystem {
     PROJ_DLL ~AffineCS() override;
     //! @endcond
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "affine";
-
     PROJ_DLL static AffineCSNNPtr
     create(const util::PropertyMap &properties,
            const CoordinateSystemAxisNNPtr &axis1,
@@ -644,7 +623,7 @@ class PROJ_GCC_DLL AffineCS final : public CoordinateSystem {
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "affine";
     }
 
   private:
@@ -676,16 +655,13 @@ class PROJ_GCC_DLL OrdinalCS final : public CoordinateSystem {
     create(const util::PropertyMap &properties,
            const std::vector<CoordinateSystemAxisNNPtr> &axisIn);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "ordinal";
-
   protected:
     PROJ_INTERNAL explicit OrdinalCS(
         const std::vector<CoordinateSystemAxisNNPtr> &axisIn);
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "ordinal";
     }
 
   private:
@@ -715,16 +691,13 @@ class PROJ_GCC_DLL ParametricCS final : public CoordinateSystem {
     create(const util::PropertyMap &properties,
            const CoordinateSystemAxisNNPtr &axisIn);
 
-    /** Value of getWKT2Type() */
-    static constexpr const char *WKT2_TYPE = "parametric";
-
   protected:
     PROJ_INTERNAL explicit ParametricCS(
         const std::vector<CoordinateSystemAxisNNPtr> &axisIn);
     INLINED_MAKE_SHARED
 
     PROJ_INTERNAL std::string getWKT2Type(bool) const override {
-        return WKT2_TYPE;
+        return "parametric";
     }
 
   private:
@@ -751,9 +724,6 @@ class PROJ_GCC_DLL TemporalCS : public CoordinateSystem {
     //! @cond Doxygen_Suppress
     PROJ_DLL ~TemporalCS() override;
     //! @endcond
-
-    /** WKT2:2015 type */
-    static constexpr const char *WKT2_2015_TYPE = "temporal";
 
   protected:
     PROJ_INTERNAL explicit TemporalCS(const CoordinateSystemAxisNNPtr &axis);
@@ -793,9 +763,6 @@ class PROJ_GCC_DLL DateTimeTemporalCS final : public TemporalCS {
     create(const util::PropertyMap &properties,
            const CoordinateSystemAxisNNPtr &axis);
 
-    /** WKT2:2019 type */
-    static constexpr const char *WKT2_2019_TYPE = "TemporalDateTime";
-
   protected:
     PROJ_INTERNAL explicit DateTimeTemporalCS(
         const CoordinateSystemAxisNNPtr &axis);
@@ -832,9 +799,6 @@ class PROJ_GCC_DLL TemporalCountCS final : public TemporalCS {
     create(const util::PropertyMap &properties,
            const CoordinateSystemAxisNNPtr &axis);
 
-    /** WKT2:2019 type */
-    static constexpr const char *WKT2_2019_TYPE = "TemporalCount";
-
   protected:
     PROJ_INTERNAL explicit TemporalCountCS(
         const CoordinateSystemAxisNNPtr &axis);
@@ -870,9 +834,6 @@ class PROJ_GCC_DLL TemporalMeasureCS final : public TemporalCS {
     PROJ_DLL static TemporalMeasureCSNNPtr
     create(const util::PropertyMap &properties,
            const CoordinateSystemAxisNNPtr &axis);
-
-    /** WKT2:2019 type */
-    static constexpr const char *WKT2_2019_TYPE = "TemporalMeasure";
 
   protected:
     PROJ_INTERNAL explicit TemporalMeasureCS(

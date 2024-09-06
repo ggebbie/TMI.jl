@@ -1,14 +1,11 @@
-.TH libssh2_channel_ignore_extended_data 3 "20 Feb 2010" "libssh2 1.2.4" "libssh2"
+.TH libssh2_channel_ignore_extended_data 3 "20 Feb 2010" "libssh2 1.2.4" "libssh2 manual"
 .SH NAME
 libssh2_channel_ignore_extended_data - convenience macro for \fIlibssh2_channel_handle_extended_data(3)\fP calls
 .SH SYNOPSIS
-.nf
 #include <libssh2.h>
 
-void
-libssh2_channel_ignore_extended_data(LIBSSH2_CHANNEL *channel,
-                                     int ignore_mode);
-.fi
+libssh2_channel_ignore_extended_data(arguments)
+
 .SH DESCRIPTION
 This function is deprecated. Use the
 \fIlibssh2_channel_handle_extended_data2(3)\fP function instead!

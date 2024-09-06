@@ -288,8 +288,7 @@ def walk(top, topdown=True, onerror=None, followlinks=False):
         dirpath, dirnames, filenames
 
     dirpath is a string, the path to the directory.  dirnames is a list of
-    the names of the subdirectories in dirpath (including symlinks to directories,
-    and excluding '.' and '..').
+    the names of the subdirectories in dirpath (excluding '.' and '..').
     filenames is a list of the names of the non-directory files in dirpath.
     Note that the names in the lists are just names, with no path components.
     To get a full path (which begins with top) to a file or directory in
@@ -467,7 +466,7 @@ if {open, stat} <= supports_dir_fd and {scandir, stat} <= supports_fd:
         # lstat()/open()/fstat() trick.
         if not follow_symlinks:
             orig_st = stat(top, follow_symlinks=False, dir_fd=dir_fd)
-        topfd = open(top, O_RDONLY | O_NONBLOCK, dir_fd=dir_fd)
+        topfd = open(top, O_RDONLY, dir_fd=dir_fd)
         try:
             if (follow_symlinks or (st.S_ISDIR(orig_st.st_mode) and
                                     path.samestat(orig_st, stat(topfd)))):
@@ -516,7 +515,7 @@ if {open, stat} <= supports_dir_fd and {scandir, stat} <= supports_fd:
                         assert entries is not None
                         name, entry = name
                         orig_st = entry.stat(follow_symlinks=False)
-                dirfd = open(name, O_RDONLY | O_NONBLOCK, dir_fd=topfd)
+                dirfd = open(name, O_RDONLY, dir_fd=topfd)
             except OSError as err:
                 if onerror is not None:
                     onerror(err)

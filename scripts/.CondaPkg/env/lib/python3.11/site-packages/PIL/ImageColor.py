@@ -16,16 +16,13 @@
 #
 # See the README file for information on usage and redistribution.
 #
-from __future__ import annotations
 
 import re
-from functools import lru_cache
 
 from . import Image
 
 
-@lru_cache
-def getrgb(color: str) -> tuple[int, int, int] | tuple[int, int, int, int]:
+def getrgb(color):
     """
      Convert a color string to an RGB or RGBA tuple. If the string cannot be
      parsed, this function raises a :py:exc:`ValueError` exception.
@@ -44,10 +41,8 @@ def getrgb(color: str) -> tuple[int, int, int] | tuple[int, int, int, int]:
     if rgb:
         if isinstance(rgb, tuple):
             return rgb
-        rgb_tuple = getrgb(rgb)
-        assert len(rgb_tuple) == 3
-        colormap[color] = rgb_tuple
-        return rgb_tuple
+        colormap[color] = rgb = getrgb(rgb)
+        return rgb
 
     # check for known string formats
     if re.match("#[a-f0-9]{3}$", color):
@@ -90,15 +85,15 @@ def getrgb(color: str) -> tuple[int, int, int] | tuple[int, int, int, int]:
     if m:
         from colorsys import hls_to_rgb
 
-        rgb_floats = hls_to_rgb(
+        rgb = hls_to_rgb(
             float(m.group(1)) / 360.0,
             float(m.group(3)) / 100.0,
             float(m.group(2)) / 100.0,
         )
         return (
-            int(rgb_floats[0] * 255 + 0.5),
-            int(rgb_floats[1] * 255 + 0.5),
-            int(rgb_floats[2] * 255 + 0.5),
+            int(rgb[0] * 255 + 0.5),
+            int(rgb[1] * 255 + 0.5),
+            int(rgb[2] * 255 + 0.5),
         )
 
     m = re.match(
@@ -107,15 +102,15 @@ def getrgb(color: str) -> tuple[int, int, int] | tuple[int, int, int, int]:
     if m:
         from colorsys import hsv_to_rgb
 
-        rgb_floats = hsv_to_rgb(
+        rgb = hsv_to_rgb(
             float(m.group(1)) / 360.0,
             float(m.group(2)) / 100.0,
             float(m.group(3)) / 100.0,
         )
         return (
-            int(rgb_floats[0] * 255 + 0.5),
-            int(rgb_floats[1] * 255 + 0.5),
-            int(rgb_floats[2] * 255 + 0.5),
+            int(rgb[0] * 255 + 0.5),
+            int(rgb[1] * 255 + 0.5),
+            int(rgb[2] * 255 + 0.5),
         )
 
     m = re.match(r"rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$", color)
@@ -125,12 +120,11 @@ def getrgb(color: str) -> tuple[int, int, int] | tuple[int, int, int, int]:
     raise ValueError(msg)
 
 
-@lru_cache
-def getcolor(color: str, mode: str) -> int | tuple[int, ...]:
+def getcolor(color, mode):
     """
     Same as :py:func:`~PIL.ImageColor.getrgb` for most modes. However, if
     ``mode`` is HSV, converts the RGB value to a HSV value, or if ``mode`` is
-    not color or a palette image, converts the RGB value to a grayscale value.
+    not color or a palette image, converts the RGB value to a greyscale value.
     If the string cannot be parsed, this function raises a :py:exc:`ValueError`
     exception.
 
@@ -138,34 +132,33 @@ def getcolor(color: str, mode: str) -> int | tuple[int, ...]:
 
     :param color: A color string
     :param mode: Convert result to this mode
-    :return: ``graylevel, (graylevel, alpha) or (red, green, blue[, alpha])``
+    :return: ``(graylevel[, alpha]) or (red, green, blue[, alpha])``
     """
     # same as getrgb, but converts the result to the given mode
-    rgb, alpha = getrgb(color), 255
-    if len(rgb) == 4:
-        alpha = rgb[3]
-        rgb = rgb[:3]
+    color, alpha = getrgb(color), 255
+    if len(color) == 4:
+        color, alpha = color[:3], color[3]
 
     if mode == "HSV":
         from colorsys import rgb_to_hsv
 
-        r, g, b = rgb
+        r, g, b = color
         h, s, v = rgb_to_hsv(r / 255, g / 255, b / 255)
         return int(h * 255), int(s * 255), int(v * 255)
     elif Image.getmodebase(mode) == "L":
-        r, g, b = rgb
+        r, g, b = color
         # ITU-R Recommendation 601-2 for nonlinear RGB
         # scaled to 24 bits to match the convert's implementation.
-        graylevel = (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16
+        color = (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16
         if mode[-1] == "A":
-            return graylevel, alpha
-        return graylevel
-    elif mode[-1] == "A":
-        return rgb + (alpha,)
-    return rgb
+            return color, alpha
+    else:
+        if mode[-1] == "A":
+            return color + (alpha,)
+    return color
 
 
-colormap: dict[str, str | tuple[int, int, int]] = {
+colormap = {
     # X11 colour table from https://drafts.csswg.org/css-color-4/, with
     # gray/grey spelling issues fixed.  This is a superset of HTML 4.0
     # colour names used in CSS 1.

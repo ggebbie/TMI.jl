@@ -748,14 +748,18 @@ def unwrap(func, *, stop=None):
    :exc:`ValueError` is raised if a cycle is encountered.
 
     """
+    if stop is None:
+        def _is_wrapper(f):
+            return hasattr(f, '__wrapped__')
+    else:
+        def _is_wrapper(f):
+            return hasattr(f, '__wrapped__') and not stop(f)
     f = func  # remember the original func for error reporting
     # Memoise by id to tolerate non-hashable objects, but store objects to
     # ensure they aren't destroyed, which would allow their IDs to be reused.
     memo = {id(f): f}
     recursion_limit = sys.getrecursionlimit()
-    while not isinstance(func, type) and hasattr(func, '__wrapped__'):
-        if stop is not None and stop(func):
-            break
+    while _is_wrapper(func):
         func = func.__wrapped__
         id_func = id(func)
         if (id_func in memo) or (len(memo) >= recursion_limit):
@@ -1171,6 +1175,7 @@ class BlockFinder:
         self.started = False
         self.passline = False
         self.indecorator = False
+        self.decoratorhasargs = False
         self.last = 1
         self.body_col0 = None
 
@@ -1185,6 +1190,13 @@ class BlockFinder:
                     self.islambda = True
                 self.started = True
             self.passline = True    # skip to the end of the line
+        elif token == "(":
+            if self.indecorator:
+                self.decoratorhasargs = True
+        elif token == ")":
+            if self.indecorator:
+                self.indecorator = False
+                self.decoratorhasargs = False
         elif type == tokenize.NEWLINE:
             self.passline = False   # stop skipping when a NEWLINE is seen
             self.last = srowcol[0]
@@ -1192,7 +1204,7 @@ class BlockFinder:
                 raise EndOfBlock
             # hitting a NEWLINE when in a decorator without args
             # ends the decorator
-            if self.indecorator:
+            if self.indecorator and not self.decoratorhasargs:
                 self.indecorator = False
         elif self.passline:
             pass
@@ -1436,10 +1448,7 @@ def getargvalues(frame):
 
 def formatannotation(annotation, base_module=None):
     if getattr(annotation, '__module__', None) == 'typing':
-        def repl(match):
-            text = match.group()
-            return text.removeprefix('typing.')
-        return re.sub(r'[\w\.]+', repl, repr(annotation))
+        return repr(annotation).replace('typing.', '')
     if isinstance(annotation, types.GenericAlias):
         return str(annotation)
     if isinstance(annotation, type):
@@ -1825,10 +1834,8 @@ def getattr_static(obj, attr, default=_sentinel):
     klass_result = _check_class(klass, attr)
 
     if instance_result is not _sentinel and klass_result is not _sentinel:
-        if _check_class(type(klass_result), "__get__") is not _sentinel and (
-            _check_class(type(klass_result), "__set__") is not _sentinel
-            or _check_class(type(klass_result), "__delete__") is not _sentinel
-        ):
+        if (_check_class(type(klass_result), '__get__') is not _sentinel and
+            _check_class(type(klass_result), '__set__') is not _sentinel):
             return klass_result
 
     if instance_result is not _sentinel:
@@ -1945,17 +1952,15 @@ def _signature_get_user_defined_method(cls, method_name):
     named ``method_name`` and returns it only if it is a
     pure python function.
     """
-    if method_name == '__new__':
-        meth = getattr(cls, method_name, None)
+    try:
+        meth = getattr(cls, method_name)
+    except AttributeError:
+        return
     else:
-        meth = getattr_static(cls, method_name, None)
-    if meth is None or isinstance(meth, _NonUserDefinedCallables):
-        # Once '__signature__' will be added to 'C'-level
-        # callables, this check won't be necessary
-        return None
-    if method_name != '__new__':
-        meth = _descriptor_get(meth, cls)
-    return meth
+        if not isinstance(meth, _NonUserDefinedCallables):
+            # Once '__signature__' will be added to 'C'-level
+            # callables, this check won't be necessary
+            return meth
 
 
 def _signature_get_partial(wrapped_sig, partial, extra_args=()):
@@ -2116,7 +2121,7 @@ def _signature_strip_non_python_syntax(signature):
     self_parameter = None
     last_positional_only = None
 
-    lines = [l.encode('ascii') for l in signature.split('\n') if l]
+    lines = [l.encode('ascii') for l in signature.split('\n')]
     generator = iter(lines).__next__
     token_stream = tokenize.tokenize(generator)
 
@@ -2192,6 +2197,7 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
 
     parameters = []
     empty = Parameter.empty
+    invalid = object()
 
     module = None
     module_dict = {}
@@ -2215,11 +2221,11 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
             try:
                 value = eval(s, sys_module_dict)
             except NameError:
-                raise ValueError
+                raise RuntimeError()
 
         if isinstance(value, (str, int, float, bytes, bool, type(None))):
             return ast.Constant(value)
-        raise ValueError
+        raise RuntimeError()
 
     class RewriteSymbolics(ast.NodeTransformer):
         def visit_Attribute(self, node):
@@ -2229,7 +2235,7 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
                 a.append(n.attr)
                 n = n.value
             if not isinstance(n, ast.Name):
-                raise ValueError
+                raise RuntimeError()
             a.append(n.id)
             value = ".".join(reversed(a))
             return wrap_value(value)
@@ -2239,29 +2245,19 @@ def _signature_fromstr(cls, obj, s, skip_bound_arg=True):
                 raise ValueError()
             return wrap_value(node.id)
 
-        def visit_BinOp(self, node):
-            # Support constant folding of a couple simple binary operations
-            # commonly used to define default values in text signatures
-            left = self.visit(node.left)
-            right = self.visit(node.right)
-            if not isinstance(left, ast.Constant) or not isinstance(right, ast.Constant):
-                raise ValueError
-            if isinstance(node.op, ast.Add):
-                return ast.Constant(left.value + right.value)
-            elif isinstance(node.op, ast.Sub):
-                return ast.Constant(left.value - right.value)
-            elif isinstance(node.op, ast.BitOr):
-                return ast.Constant(left.value | right.value)
-            raise ValueError
-
     def p(name_node, default_node, default=empty):
         name = parse_name(name_node)
+        if name is invalid:
+            return None
         if default_node and default_node is not _empty:
             try:
                 default_node = RewriteSymbolics().visit(default_node)
-                default = ast.literal_eval(default_node)
+                o = ast.literal_eval(default_node)
             except ValueError:
-                raise ValueError("{!r} builtin has invalid signature".format(obj)) from None
+                o = invalid
+            if o is invalid:
+                return None
+            default = o if o is not invalid else default
         parameters.append(Parameter(name, kind, default=default, annotation=empty))
 
     # non-keyword-only parameters
@@ -2423,15 +2419,6 @@ def _signature_from_function(cls, func, skip_bound_arg=True,
                __validate_parameters__=is_duck_function)
 
 
-def _descriptor_get(descriptor, obj):
-    if isclass(descriptor):
-        return descriptor
-    get = getattr(type(descriptor), '__get__', _sentinel)
-    if get is _sentinel:
-        return descriptor
-    return get(descriptor, obj, type(obj))
-
-
 def _signature_from_callable(obj, *,
                              follow_wrapper_chains=True,
                              skip_bound_arg=True,
@@ -2467,10 +2454,7 @@ def _signature_from_callable(obj, *,
 
     # Was this function wrapped by a decorator?
     if follow_wrapper_chains:
-        # Unwrap until we find an explicit signature or a MethodType (which will be
-        # handled explicitly below).
-        obj = unwrap(obj, stop=(lambda f: hasattr(f, "__signature__")
-                                or isinstance(f, types.MethodType)))
+        obj = unwrap(obj, stop=(lambda f: hasattr(f, "__signature__")))
         if isinstance(obj, types.MethodType):
             # If the unwrapped object is a *method*, we might want to
             # skip its first parameter (self).
@@ -2532,6 +2516,7 @@ def _signature_from_callable(obj, *,
         wrapped_sig = _get_signature_of(obj.func)
         return _signature_get_partial(wrapped_sig, obj)
 
+    sig = None
     if isinstance(obj, type):
         # obj is a class or a metaclass
 
@@ -2539,65 +2524,87 @@ def _signature_from_callable(obj, *,
         # in its metaclass
         call = _signature_get_user_defined_method(type(obj), '__call__')
         if call is not None:
-            return _get_signature_of(call)
-
-        new = _signature_get_user_defined_method(obj, '__new__')
-        init = _signature_get_user_defined_method(obj, '__init__')
-
-        # Go through the MRO and see if any class has user-defined
-        # pure Python __new__ or __init__ method
-        for base in obj.__mro__:
+            sig = _get_signature_of(call)
+        else:
+            factory_method = None
+            new = _signature_get_user_defined_method(obj, '__new__')
+            init = _signature_get_user_defined_method(obj, '__init__')
             # Now we check if the 'obj' class has an own '__new__' method
-            if new is not None and '__new__' in base.__dict__:
-                sig = _get_signature_of(new)
-                if skip_bound_arg:
-                    sig = _signature_bound_method(sig)
-                return sig
+            if '__new__' in obj.__dict__:
+                factory_method = new
             # or an own '__init__' method
-            elif init is not None and '__init__' in base.__dict__:
-                return _get_signature_of(init)
+            elif '__init__' in obj.__dict__:
+                factory_method = init
+            # If not, we take inherited '__new__' or '__init__', if present
+            elif new is not None:
+                factory_method = new
+            elif init is not None:
+                factory_method = init
 
-        # At this point we know, that `obj` is a class, with no user-
-        # defined '__init__', '__new__', or class-level '__call__'
+            if factory_method is not None:
+                sig = _get_signature_of(factory_method)
 
-        for base in obj.__mro__[:-1]:
-            # Since '__text_signature__' is implemented as a
-            # descriptor that extracts text signature from the
-            # class docstring, if 'obj' is derived from a builtin
-            # class, its own '__text_signature__' may be 'None'.
-            # Therefore, we go through the MRO (except the last
-            # class in there, which is 'object') to find the first
-            # class with non-empty text signature.
-            try:
-                text_sig = base.__text_signature__
-            except AttributeError:
-                pass
-            else:
-                if text_sig:
-                    # If 'base' class has a __text_signature__ attribute:
-                    # return a signature based on it
-                    return _signature_fromstr(sigcls, base, text_sig)
+        if sig is None:
+            # At this point we know, that `obj` is a class, with no user-
+            # defined '__init__', '__new__', or class-level '__call__'
 
-        # No '__text_signature__' was found for the 'obj' class.
-        # Last option is to check if its '__init__' is
-        # object.__init__ or type.__init__.
-        if type not in obj.__mro__:
-            # We have a class (not metaclass), but no user-defined
-            # __init__ or __new__ for it
-            if (obj.__init__ is object.__init__ and
-                obj.__new__ is object.__new__):
-                # Return a signature of 'object' builtin.
-                return sigcls.from_callable(object)
-            else:
-                raise ValueError(
-                    'no signature found for builtin type {!r}'.format(obj))
+            for base in obj.__mro__[:-1]:
+                # Since '__text_signature__' is implemented as a
+                # descriptor that extracts text signature from the
+                # class docstring, if 'obj' is derived from a builtin
+                # class, its own '__text_signature__' may be 'None'.
+                # Therefore, we go through the MRO (except the last
+                # class in there, which is 'object') to find the first
+                # class with non-empty text signature.
+                try:
+                    text_sig = base.__text_signature__
+                except AttributeError:
+                    pass
+                else:
+                    if text_sig:
+                        # If 'base' class has a __text_signature__ attribute:
+                        # return a signature based on it
+                        return _signature_fromstr(sigcls, base, text_sig)
 
-    else:
+            # No '__text_signature__' was found for the 'obj' class.
+            # Last option is to check if its '__init__' is
+            # object.__init__ or type.__init__.
+            if type not in obj.__mro__:
+                # We have a class (not metaclass), but no user-defined
+                # __init__ or __new__ for it
+                if (obj.__init__ is object.__init__ and
+                    obj.__new__ is object.__new__):
+                    # Return a signature of 'object' builtin.
+                    return sigcls.from_callable(object)
+                else:
+                    raise ValueError(
+                        'no signature found for builtin type {!r}'.format(obj))
+
+    elif not isinstance(obj, _NonUserDefinedCallables):
         # An object with __call__
-        call = getattr_static(type(obj), '__call__', None)
+        # We also check that the 'obj' is not an instance of
+        # types.WrapperDescriptorType or types.MethodWrapperType to avoid
+        # infinite recursion (and even potential segfault)
+        call = _signature_get_user_defined_method(type(obj), '__call__')
         if call is not None:
-            call = _descriptor_get(call, obj)
-            return _get_signature_of(call)
+            try:
+                sig = _get_signature_of(call)
+            except ValueError as ex:
+                msg = 'no signature found for {!r}'.format(obj)
+                raise ValueError(msg) from ex
+
+    if sig is not None:
+        # For classes and objects we skip the first parameter of their
+        # __call__, __new__, or __init__ methods
+        if skip_bound_arg:
+            return _signature_bound_method(sig)
+        else:
+            return sig
+
+    if isinstance(obj, types.BuiltinFunctionType):
+        # Raise a nicer error message for builtins
+        msg = 'no signature found for builtin function {!r}'.format(obj)
+        raise ValueError(msg)
 
     raise ValueError('callable {!r} is not supported by signature'.format(obj))
 
@@ -2964,7 +2971,7 @@ class Signature:
             if __validate_parameters__:
                 params = OrderedDict()
                 top_kind = _POSITIONAL_ONLY
-                seen_default = False
+                kind_defaults = False
 
                 for param in parameters:
                     kind = param.kind
@@ -2979,19 +2986,21 @@ class Signature:
                                          kind.description)
                         raise ValueError(msg)
                     elif kind > top_kind:
+                        kind_defaults = False
                         top_kind = kind
 
                     if kind in (_POSITIONAL_ONLY, _POSITIONAL_OR_KEYWORD):
                         if param.default is _empty:
-                            if seen_default:
+                            if kind_defaults:
                                 # No default for this parameter, but the
-                                # previous parameter of had a default
+                                # previous parameter of the same kind had
+                                # a default
                                 msg = 'non-default argument follows default ' \
                                       'argument'
                                 raise ValueError(msg)
                         else:
                             # There is a default for this parameter.
-                            seen_default = True
+                            kind_defaults = True
 
                     if name in params:
                         msg = 'duplicate parameter name: {!r}'.format(name)

@@ -10,21 +10,7 @@ from . import tasks
 
 
 class TaskGroup:
-    """Asynchronous context manager for managing groups of tasks.
 
-    Example use:
-
-        async with asyncio.TaskGroup() as group:
-            task1 = group.create_task(some_coroutine(...))
-            task2 = group.create_task(other_coroutine(...))
-        print("Both tasks have completed now.")
-
-    All tasks are awaited when the context manager exits.
-
-    Any exceptions other than `asyncio.CancelledError` raised within
-    a task will cancel all remaining tasks and wait for them to exit.
-    The exceptions are then combined and raised as an `ExceptionGroup`.
-    """
     def __init__(self):
         self._entered = False
         self._exiting = False
@@ -54,14 +40,16 @@ class TaskGroup:
     async def __aenter__(self):
         if self._entered:
             raise RuntimeError(
-                f"TaskGroup {self!r} has already been entered")
+                f"TaskGroup {self!r} has been already entered")
+        self._entered = True
+
         if self._loop is None:
             self._loop = events.get_running_loop()
+
         self._parent_task = tasks.current_task(self._loop)
         if self._parent_task is None:
             raise RuntimeError(
                 f'TaskGroup {self!r} cannot determine the parent task')
-        self._entered = True
 
         return self
 
@@ -140,17 +128,13 @@ class TaskGroup:
             # Exceptions are heavy objects that can have object
             # cycles (bad for GC); let's not keep a reference to
             # a bunch of them.
-            try:
-                me = BaseExceptionGroup('unhandled errors in a TaskGroup', self._errors)
-                raise me from None
-            finally:
-                self._errors = None
+            errors = self._errors
+            self._errors = None
+
+            me = BaseExceptionGroup('unhandled errors in a TaskGroup', errors)
+            raise me from None
 
     def create_task(self, coro, *, name=None, context=None):
-        """Create a new task in this group and return it.
-
-        Similar to `asyncio.create_task`.
-        """
         if not self._entered:
             raise RuntimeError(f"TaskGroup {self!r} has not been entered")
         if self._exiting and not self._tasks:

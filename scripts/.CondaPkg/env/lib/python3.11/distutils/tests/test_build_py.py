@@ -9,7 +9,7 @@ from distutils.core import Distribution
 from distutils.errors import DistutilsFileError
 
 from distutils.tests import support
-from test.support import requires_subprocess
+from test.support import run_unittest, requires_subprocess
 
 
 class BuildPyTestCase(support.TempdirManager,
@@ -174,5 +174,8 @@ class BuildPyTestCase(support.TempdirManager,
                       self.logs[0][1] % self.logs[0][2])
 
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(BuildPyTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

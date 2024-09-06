@@ -13,19 +13,18 @@
 #
 # See the README file for information on usage and redistribution.
 #
-from __future__ import annotations
+
 
 import io
-from typing import IO, AnyStr, Generic, Literal
 
 
-class ContainerIO(Generic[AnyStr]):
+class ContainerIO:
     """
     A file object that provides read access to a part of an existing
     file (for example a TAR file).
     """
 
-    def __init__(self, file: IO[AnyStr], offset: int, length: int) -> None:
+    def __init__(self, file, offset, length):
         """
         Create file object.
 
@@ -33,7 +32,7 @@ class ContainerIO(Generic[AnyStr]):
         :param offset: Start of region, in bytes.
         :param length: Size of region, in bytes.
         """
-        self.fh: IO[AnyStr] = file
+        self.fh = file
         self.pos = 0
         self.offset = offset
         self.length = length
@@ -42,10 +41,10 @@ class ContainerIO(Generic[AnyStr]):
     ##
     # Always false.
 
-    def isatty(self) -> bool:
+    def isatty(self):
         return False
 
-    def seek(self, offset: int, mode: Literal[0, 1, 2] = io.SEEK_SET) -> None:
+    def seek(self, offset, mode=io.SEEK_SET):
         """
         Move file pointer.
 
@@ -64,7 +63,7 @@ class ContainerIO(Generic[AnyStr]):
         self.pos = max(0, min(self.pos, self.length))
         self.fh.seek(self.offset + self.pos)
 
-    def tell(self) -> int:
+    def tell(self):
         """
         Get current file pointer.
 
@@ -72,7 +71,7 @@ class ContainerIO(Generic[AnyStr]):
         """
         return self.pos
 
-    def read(self, n: int = 0) -> AnyStr:
+    def read(self, n=0):
         """
         Read data.
 
@@ -85,17 +84,17 @@ class ContainerIO(Generic[AnyStr]):
         else:
             n = self.length - self.pos
         if not n:  # EOF
-            return b"" if "b" in self.fh.mode else ""  # type: ignore[return-value]
+            return b"" if "b" in self.fh.mode else ""
         self.pos = self.pos + n
         return self.fh.read(n)
 
-    def readline(self) -> AnyStr:
+    def readline(self):
         """
         Read a line of text.
 
         :returns: An 8-bit string.
         """
-        s: AnyStr = b"" if "b" in self.fh.mode else ""  # type: ignore[assignment]
+        s = b"" if "b" in self.fh.mode else ""
         newline_character = b"\n" if "b" in self.fh.mode else "\n"
         while True:
             c = self.read(1)
@@ -106,7 +105,7 @@ class ContainerIO(Generic[AnyStr]):
                 break
         return s
 
-    def readlines(self) -> list[AnyStr]:
+    def readlines(self):
         """
         Read multiple lines of text.
 

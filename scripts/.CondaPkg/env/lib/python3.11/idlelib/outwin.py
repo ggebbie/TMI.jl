@@ -42,7 +42,7 @@ def file_line_helper(line):
         if match:
             filename, lineno = match.group(1, 2)
             try:
-                f = open(filename)
+                f = open(filename, "r")
                 f.close()
                 break
             except OSError:
@@ -112,7 +112,7 @@ class OutputWindow(EditorWindow):
         assert isinstance(s, str)
         self.text.insert(mark, s, tags)
         self.text.see(mark)
-        self.text.update_idletasks()
+        self.text.update()
         return len(s)
 
     def writelines(self, lines):
@@ -181,7 +181,6 @@ class OnDemandOutputWindow:
                 text.tag_configure(tag, **cnf)
         text.tag_raise('sel')
         self.write = self.owin.write
-
 
 if __name__ == '__main__':
     from unittest import main

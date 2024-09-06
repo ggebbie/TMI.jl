@@ -8,22 +8,22 @@ set(CMAKE_IMPORT_FILE_VERSION 1)
 # Import target "libjpeg-turbo::jpeg" for configuration "Release"
 set_property(TARGET libjpeg-turbo::jpeg APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(libjpeg-turbo::jpeg PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libjpeg.8.3.2.dylib"
+  IMPORTED_LOCATION_RELEASE "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libjpeg.8.2.2.dylib"
   IMPORTED_SONAME_RELEASE "@rpath/libjpeg.8.dylib"
   )
 
 list(APPEND _cmake_import_check_targets libjpeg-turbo::jpeg )
-list(APPEND _cmake_import_check_files_for_libjpeg-turbo::jpeg "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libjpeg.8.3.2.dylib" )
+list(APPEND _cmake_import_check_files_for_libjpeg-turbo::jpeg "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libjpeg.8.2.2.dylib" )
 
 # Import target "libjpeg-turbo::turbojpeg" for configuration "Release"
 set_property(TARGET libjpeg-turbo::turbojpeg APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)
 set_target_properties(libjpeg-turbo::turbojpeg PROPERTIES
-  IMPORTED_LOCATION_RELEASE "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libturbojpeg.0.3.0.dylib"
+  IMPORTED_LOCATION_RELEASE "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libturbojpeg.0.2.0.dylib"
   IMPORTED_SONAME_RELEASE "@rpath/libturbojpeg.0.dylib"
   )
 
 list(APPEND _cmake_import_check_targets libjpeg-turbo::turbojpeg )
-list(APPEND _cmake_import_check_files_for_libjpeg-turbo::turbojpeg "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libturbojpeg.0.3.0.dylib" )
+list(APPEND _cmake_import_check_files_for_libjpeg-turbo::turbojpeg "/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/lib/libturbojpeg.0.2.0.dylib" )
 
 # Import target "libjpeg-turbo::turbojpeg-static" for configuration "Release"
 set_property(TARGET libjpeg-turbo::turbojpeg-static APPEND PROPERTY IMPORTED_CONFIGURATIONS RELEASE)

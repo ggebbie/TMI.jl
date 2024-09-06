@@ -145,11 +145,14 @@ def format_exception_only(exc, /, value=_sentinel):
 
     The return value is a list of strings, each ending in a newline.
 
-    The list contains the exception's message, which is
-    normally a single string; however, for :exc:`SyntaxError` exceptions, it
-    contains several lines that (when printed) display detailed information
-    about where the syntax error occurred. Following the message, the list
-    contains the exception's ``__notes__``.
+    Normally, the list contains a single string; however, for
+    SyntaxError exceptions, it contains several lines that (when
+    printed) display detailed information about where the syntax
+    error occurred.
+
+    The message indicating which exception occurred is always the last
+    string in the list.
+
     """
     if value is _sentinel:
         value = exc
@@ -465,49 +468,39 @@ class StackSummary(list):
             stripped_line = frame_summary.line.strip()
             row.append('    {}\n'.format(stripped_line))
 
-            line = frame_summary._original_line
-            orig_line_len = len(line)
+            orig_line_len = len(frame_summary._original_line)
             frame_line_len = len(frame_summary.line.lstrip())
             stripped_characters = orig_line_len - frame_line_len
             if (
                 frame_summary.colno is not None
                 and frame_summary.end_colno is not None
             ):
-                start_offset = _byte_offset_to_character_offset(
-                    line, frame_summary.colno)
-                end_offset = _byte_offset_to_character_offset(
-                    line, frame_summary.end_colno)
-                code_segment = line[start_offset:end_offset]
+                colno = _byte_offset_to_character_offset(
+                    frame_summary._original_line, frame_summary.colno)
+                end_colno = _byte_offset_to_character_offset(
+                    frame_summary._original_line, frame_summary.end_colno)
 
                 anchors = None
                 if frame_summary.lineno == frame_summary.end_lineno:
                     with suppress(Exception):
-                        anchors = _extract_caret_anchors_from_line_segment(code_segment)
+                        anchors = _extract_caret_anchors_from_line_segment(
+                            frame_summary._original_line[colno - 1:end_colno - 1]
+                        )
                 else:
-                    # Don't count the newline since the anchors only need to
-                    # go up until the last character of the line.
-                    end_offset = len(line.rstrip())
+                    end_colno = stripped_characters + len(stripped_line)
 
                 # show indicators if primary char doesn't span the frame line
-                if end_offset - start_offset < len(stripped_line) or (
+                if end_colno - colno < len(stripped_line) or (
                         anchors and anchors.right_start_offset - anchors.left_end_offset > 0):
-                    # When showing this on a terminal, some of the non-ASCII characters
-                    # might be rendered as double-width characters, so we need to take
-                    # that into account when calculating the length of the line.
-                    dp_start_offset = _display_width(line, start_offset) + 1
-                    dp_end_offset = _display_width(line, end_offset) + 1
-
                     row.append('    ')
-                    row.append(' ' * (dp_start_offset - stripped_characters))
+                    row.append(' ' * (colno - stripped_characters))
 
                     if anchors:
-                        dp_left_end_offset = _display_width(code_segment, anchors.left_end_offset)
-                        dp_right_start_offset = _display_width(code_segment, anchors.right_start_offset)
-                        row.append(anchors.primary_char * dp_left_end_offset)
-                        row.append(anchors.secondary_char * (dp_right_start_offset - dp_left_end_offset))
-                        row.append(anchors.primary_char * (dp_end_offset - dp_start_offset - dp_right_start_offset))
+                        row.append(anchors.primary_char * (anchors.left_end_offset))
+                        row.append(anchors.secondary_char * (anchors.right_start_offset - anchors.left_end_offset))
+                        row.append(anchors.primary_char * (end_colno - colno - anchors.right_start_offset))
                     else:
-                        row.append('^' * (dp_end_offset - dp_start_offset))
+                        row.append('^' * (end_colno - colno))
 
                     row.append('\n')
 
@@ -567,7 +560,10 @@ class StackSummary(list):
 
 def _byte_offset_to_character_offset(str, offset):
     as_utf8 = str.encode('utf-8')
-    return len(as_utf8[:offset].decode("utf-8", errors="replace"))
+    if offset > len(as_utf8):
+        offset = len(as_utf8)
+
+    return len(as_utf8[:offset + 1].decode("utf-8"))
 
 
 _Anchors = collections.namedtuple(
@@ -592,15 +588,12 @@ def _extract_caret_anchors_from_line_segment(segment):
     if len(tree.body) != 1:
         return None
 
-    normalize = lambda offset: _byte_offset_to_character_offset(segment, offset)
     statement = tree.body[0]
     match statement:
         case ast.Expr(expr):
             match expr:
                 case ast.BinOp():
-                    operator_start = normalize(expr.left.end_col_offset)
-                    operator_end = normalize(expr.right.col_offset)
-                    operator_str = segment[operator_start:operator_end]
+                    operator_str = segment[expr.left.end_col_offset:expr.right.col_offset]
                     operator_offset = len(operator_str) - len(operator_str.lstrip())
 
                     left_anchor = expr.left.end_col_offset + operator_offset
@@ -610,42 +603,11 @@ def _extract_caret_anchors_from_line_segment(segment):
                         and not operator_str[operator_offset + 1].isspace()
                     ):
                         right_anchor += 1
-
-                    while left_anchor < len(segment) and ((ch := segment[left_anchor]).isspace() or ch in ")#"):
-                        left_anchor += 1
-                        right_anchor += 1
-                    return _Anchors(normalize(left_anchor), normalize(right_anchor))
-                case ast.Subscript():
-                    left_anchor = normalize(expr.value.end_col_offset)
-                    right_anchor = normalize(expr.slice.end_col_offset + 1)
-                    while left_anchor < len(segment) and ((ch := segment[left_anchor]).isspace() or ch != "["):
-                        left_anchor += 1
-                    while right_anchor < len(segment) and ((ch := segment[right_anchor]).isspace() or ch != "]"):
-                        right_anchor += 1
-                    if right_anchor < len(segment):
-                        right_anchor += 1
                     return _Anchors(left_anchor, right_anchor)
+                case ast.Subscript():
+                    return _Anchors(expr.value.end_col_offset, expr.slice.end_col_offset + 1)
 
     return None
-
-_WIDE_CHAR_SPECIFIERS = "WF"
-
-def _display_width(line, offset):
-    """Calculate the extra amount of width space the given source
-    code segment might take if it were to be displayed on a fixed
-    width output device. Supports wide unicode characters and emojis."""
-
-    # Fast track for ASCII-only strings
-    if line.isascii():
-        return offset
-
-    import unicodedata
-
-    return sum(
-        2 if unicodedata.east_asian_width(char) in _WIDE_CHAR_SPECIFIERS else 1
-        for char in line[:offset]
-    )
-
 
 
 class _ExceptionPrintContext:
@@ -689,8 +651,6 @@ class TracebackException:
 
     - :attr:`__cause__` A TracebackException of the original *__cause__*.
     - :attr:`__context__` A TracebackException of the original *__context__*.
-    - :attr:`exceptions` For exception groups - a list of TracebackException
-      instances for the nested *exceptions*.  ``None`` for other exceptions.
     - :attr:`__suppress_context__` The *__suppress_context__* value from the
       original exception.
     - :attr:`stack` A `StackSummary` representing the traceback.
@@ -705,8 +665,8 @@ class TracebackException:
       occurred.
     - :attr:`offset` For syntax errors - the offset into the text where the
       error occurred.
-    - :attr:`end_offset` For syntax errors - the end offset into the text where
-      the error occurred. Can be `None` if not present.
+    - :attr:`end_offset` For syntax errors - the offset into the text where the
+      error occurred. Can be `None` if not present.
     - :attr:`msg` For syntax errors - the compiler error message.
     """
 
@@ -733,11 +693,7 @@ class TracebackException:
         # Capture now to permit freeing resources: only complication is in the
         # unofficial API _format_final_exc_line
         self._str = _safe_string(exc_value, 'exception')
-        try:
-            self.__notes__ = getattr(exc_value, '__notes__', None)
-        except Exception as e:
-            self.__notes__ = [
-                f'Ignored error getting __notes__: {_safe_string(e, "__notes__", repr)}']
+        self.__notes__ = getattr(exc_value, '__notes__', None)
 
         if exc_type and issubclass(exc_type, SyntaxError):
             # Handle SyntaxError's specially
@@ -847,13 +803,13 @@ class TracebackException:
 
         The return value is a generator of strings, each ending in a newline.
 
-        Generator yields the exception message.
-        For :exc:`SyntaxError` exceptions, it
-        also yields (before the exception message)
-        several lines that (when printed)
-        display detailed information about where the syntax error occurred.
-        Following the message, generator also yields
-        all the exception's ``__notes__``.
+        Normally, the generator emits a single string; however, for
+        SyntaxError exceptions, it emits several lines that (when
+        printed) display detailed information about where the syntax
+        error occurred.
+
+        The message indicating which exception occurred is always the last
+        string in the output.
         """
         if self.exc_type is None:
             yield _format_final_exc_line(None, self._str)

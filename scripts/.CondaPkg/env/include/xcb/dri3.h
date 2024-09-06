@@ -20,7 +20,7 @@ extern "C" {
 #endif
 
 #define XCB_DRI3_MAJOR_VERSION 1
-#define XCB_DRI3_MINOR_VERSION 3
+#define XCB_DRI3_MINOR_VERSION 2
 
 extern xcb_extension_t xcb_dri3_id;
 
@@ -296,21 +296,6 @@ typedef struct xcb_dri3_buffers_from_pixmap_reply_t {
     uint8_t  bpp;
     uint8_t  pad1[6];
 } xcb_dri3_buffers_from_pixmap_reply_t;
-
-/** Opcode for xcb_dri3_set_drm_device_in_use. */
-#define XCB_DRI3_SET_DRM_DEVICE_IN_USE 9
-
-/**
- * @brief xcb_dri3_set_drm_device_in_use_request_t
- **/
-typedef struct xcb_dri3_set_drm_device_in_use_request_t {
-    uint8_t      major_opcode;
-    uint8_t      minor_opcode;
-    uint16_t     length;
-    xcb_window_t window;
-    uint32_t     drmMajor;
-    uint32_t     drmMinor;
-} xcb_dri3_set_drm_device_in_use_request_t;
 
 /**
  *
@@ -840,37 +825,6 @@ xcb_dri3_buffers_from_pixmap_reply (xcb_connection_t                       *c,
 int *
 xcb_dri3_buffers_from_pixmap_reply_fds (xcb_connection_t                      *c  /**< */,
                                         xcb_dri3_buffers_from_pixmap_reply_t  *reply);
-
-/**
- *
- * @param c The connection
- * @return A cookie
- *
- * Delivers a request to the X server.
- *
- * This form can be used only if the request will not cause
- * a reply to be generated. Any returned error will be
- * saved for handling by xcb_request_check().
- */
-xcb_void_cookie_t
-xcb_dri3_set_drm_device_in_use_checked (xcb_connection_t *c,
-                                        xcb_window_t      window,
-                                        uint32_t          drmMajor,
-                                        uint32_t          drmMinor);
-
-/**
- *
- * @param c The connection
- * @return A cookie
- *
- * Delivers a request to the X server.
- *
- */
-xcb_void_cookie_t
-xcb_dri3_set_drm_device_in_use (xcb_connection_t *c,
-                                xcb_window_t      window,
-                                uint32_t          drmMajor,
-                                uint32_t          drmMinor);
 
 
 #ifdef __cplusplus

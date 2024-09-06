@@ -1,14 +1,13 @@
-.TH libssh2_keepalive_config 3 "12 Apr 2011" "libssh2" "libssh2"
+.TH libssh2_keepalive_config 3 "12 Apr 2011" "libssh2 1.2.5" "libssh2 manual"
 .SH NAME
 libssh2_keepalive_config - short function description
 .SH SYNOPSIS
-.nf
 #include <libssh2.h>
+.nf
 
-void
-libssh2_keepalive_config(LIBSSH2_SESSION *session,
-                         int want_reply,
-                         unsigned interval);
+void libssh2_keepalive_config(LIBSSH2_SESSION *session,
+                              int want_reply,
+                              unsigned interval);
 .fi
 .SH DESCRIPTION
 Set how often keepalive messages should be sent. \fBwant_reply\fP indicates
@@ -25,3 +24,4 @@ Nothing
 Added in libssh2 1.2.5
 .SH SEE ALSO
 .BR libssh2_keepalive_send(3)
+

@@ -125,16 +125,16 @@ class IdbAdapter:
 
     def frame_globals(self, fid):
         frame = frametable[fid]
-        gdict = frame.f_globals
-        did = id(gdict)
-        dicttable[did] = gdict
+        dict = frame.f_globals
+        did = id(dict)
+        dicttable[did] = dict
         return did
 
     def frame_locals(self, fid):
         frame = frametable[fid]
-        ldict = frame.f_locals
-        did = id(ldict)
-        dicttable[did] = ldict
+        dict = frame.f_locals
+        did = id(dict)
+        dicttable[did] = dict
         return did
 
     def frame_code(self, fid):
@@ -158,17 +158,20 @@ class IdbAdapter:
 
     def dict_keys(self, did):
         raise NotImplementedError("dict_keys not public or pickleable")
-##         return dicttable[did].keys()
+##         dict = dicttable[did]
+##         return dict.keys()
 
-    ### Needed until dict_keys type is finished and pickleable.
-    # xxx finished. pickleable?
+    ### Needed until dict_keys is type is finished and pickealable.
     ### Will probably need to extend rpc.py:SocketIO._proxify at that time.
     def dict_keys_list(self, did):
-        return list(dicttable[did].keys())
+        dict = dicttable[did]
+        return list(dict.keys())
 
     def dict_item(self, did, key):
-        value = dicttable[did][key]
-        return reprlib.repr(value) # Can't pickle module 'builtins'.
+        dict = dicttable[did]
+        value = dict[key]
+        value = reprlib.repr(value) ### can't pickle module 'builtins'
+        return value
 
 #----------end class IdbAdapter----------
 

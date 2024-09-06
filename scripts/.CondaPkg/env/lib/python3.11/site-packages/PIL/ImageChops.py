@@ -15,13 +15,11 @@
 # See the README file for information on usage and redistribution.
 #
 
-from __future__ import annotations
-
 from . import Image
 
 
-def constant(image: Image.Image, value: int) -> Image.Image:
-    """Fill a channel with a given gray level.
+def constant(image, value):
+    """Fill a channel with a given grey level.
 
     :rtype: :py:class:`~PIL.Image.Image`
     """
@@ -29,7 +27,7 @@ def constant(image: Image.Image, value: int) -> Image.Image:
     return Image.new("L", image.size, value)
 
 
-def duplicate(image: Image.Image) -> Image.Image:
+def duplicate(image):
     """Copy a channel. Alias for :py:meth:`PIL.Image.Image.copy`.
 
     :rtype: :py:class:`~PIL.Image.Image`
@@ -38,7 +36,7 @@ def duplicate(image: Image.Image) -> Image.Image:
     return image.copy()
 
 
-def invert(image: Image.Image) -> Image.Image:
+def invert(image):
     """
     Invert an image (channel). ::
 
@@ -51,7 +49,7 @@ def invert(image: Image.Image) -> Image.Image:
     return image._new(image.im.chop_invert())
 
 
-def lighter(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def lighter(image1, image2):
     """
     Compares the two images, pixel by pixel, and returns a new image containing
     the lighter values. ::
@@ -66,7 +64,7 @@ def lighter(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_lighter(image2.im))
 
 
-def darker(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def darker(image1, image2):
     """
     Compares the two images, pixel by pixel, and returns a new image containing
     the darker values. ::
@@ -81,7 +79,7 @@ def darker(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_darker(image2.im))
 
 
-def difference(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def difference(image1, image2):
     """
     Returns the absolute value of the pixel-by-pixel difference between the two
     images. ::
@@ -96,7 +94,7 @@ def difference(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_difference(image2.im))
 
 
-def multiply(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def multiply(image1, image2):
     """
     Superimposes two images on top of each other.
 
@@ -113,7 +111,7 @@ def multiply(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_multiply(image2.im))
 
 
-def screen(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def screen(image1, image2):
     """
     Superimposes two inverted images on top of each other. ::
 
@@ -127,7 +125,7 @@ def screen(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_screen(image2.im))
 
 
-def soft_light(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def soft_light(image1, image2):
     """
     Superimposes two images on top of each other using the Soft Light algorithm
 
@@ -139,7 +137,7 @@ def soft_light(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_soft_light(image2.im))
 
 
-def hard_light(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def hard_light(image1, image2):
     """
     Superimposes two images on top of each other using the Hard Light algorithm
 
@@ -151,7 +149,7 @@ def hard_light(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_hard_light(image2.im))
 
 
-def overlay(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def overlay(image1, image2):
     """
     Superimposes two images on top of each other using the Overlay algorithm
 
@@ -163,9 +161,7 @@ def overlay(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_overlay(image2.im))
 
 
-def add(
-    image1: Image.Image, image2: Image.Image, scale: float = 1.0, offset: float = 0
-) -> Image.Image:
+def add(image1, image2, scale=1.0, offset=0):
     """
     Adds two images, dividing the result by scale and adding the
     offset. If omitted, scale defaults to 1.0, and offset to 0.0. ::
@@ -180,9 +176,7 @@ def add(
     return image1._new(image1.im.chop_add(image2.im, scale, offset))
 
 
-def subtract(
-    image1: Image.Image, image2: Image.Image, scale: float = 1.0, offset: float = 0
-) -> Image.Image:
+def subtract(image1, image2, scale=1.0, offset=0):
     """
     Subtracts two images, dividing the result by scale and adding the offset.
     If omitted, scale defaults to 1.0, and offset to 0.0. ::
@@ -197,7 +191,7 @@ def subtract(
     return image1._new(image1.im.chop_subtract(image2.im, scale, offset))
 
 
-def add_modulo(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def add_modulo(image1, image2):
     """Add two images, without clipping the result. ::
 
         out = ((image1 + image2) % MAX)
@@ -210,7 +204,7 @@ def add_modulo(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_add_modulo(image2.im))
 
 
-def subtract_modulo(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def subtract_modulo(image1, image2):
     """Subtract two images, without clipping the result. ::
 
         out = ((image1 - image2) % MAX)
@@ -223,7 +217,7 @@ def subtract_modulo(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_subtract_modulo(image2.im))
 
 
-def logical_and(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def logical_and(image1, image2):
     """Logical AND between two images.
 
     Both of the images must have mode "1". If you would like to perform a
@@ -241,7 +235,7 @@ def logical_and(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_and(image2.im))
 
 
-def logical_or(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def logical_or(image1, image2):
     """Logical OR between two images.
 
     Both of the images must have mode "1". ::
@@ -256,7 +250,7 @@ def logical_or(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_or(image2.im))
 
 
-def logical_xor(image1: Image.Image, image2: Image.Image) -> Image.Image:
+def logical_xor(image1, image2):
     """Logical XOR between two images.
 
     Both of the images must have mode "1". ::
@@ -271,7 +265,7 @@ def logical_xor(image1: Image.Image, image2: Image.Image) -> Image.Image:
     return image1._new(image1.im.chop_xor(image2.im))
 
 
-def blend(image1: Image.Image, image2: Image.Image, alpha: float) -> Image.Image:
+def blend(image1, image2, alpha):
     """Blend images using constant transparency weight. Alias for
     :py:func:`PIL.Image.blend`.
 
@@ -281,9 +275,7 @@ def blend(image1: Image.Image, image2: Image.Image, alpha: float) -> Image.Image
     return Image.blend(image1, image2, alpha)
 
 
-def composite(
-    image1: Image.Image, image2: Image.Image, mask: Image.Image
-) -> Image.Image:
+def composite(image1, image2, mask):
     """Create composite using transparency mask. Alias for
     :py:func:`PIL.Image.composite`.
 
@@ -293,7 +285,7 @@ def composite(
     return Image.composite(image1, image2, mask)
 
 
-def offset(image: Image.Image, xoffset: int, yoffset: int | None = None) -> Image.Image:
+def offset(image, xoffset, yoffset=None):
     """Returns a copy of the image where data has been offset by the given
     distances. Data wraps around the edges. If ``yoffset`` is omitted, it
     is assumed to be equal to ``xoffset``.

@@ -13,27 +13,12 @@ endif()
 
 include(CMakeFindDependencyMacro)
 
-# We cannot have a find_dependency() call between cmake_policy(PUSH)/cmake_policy(POP)
-# because find_dependency() issues a return() on failure, which results in
-# imbalanced push/pop
-# Cf https://gitlab.kitware.com/cmake/cmake/-/issues/17612
 cmake_policy(PUSH)
 cmake_policy(SET CMP0012 NEW)
 if("ON")
-    set(PROJ_CONFIG_FIND_TIFF_DEP ON)
-endif()
-if("TRUE")
-    set(PROJ_CONFIG_FIND_CURL_DEP ON)
-endif()
-cmake_policy(POP)
-
-find_dependency(SQLite3)
-
-if(DEFINED PROJ_CONFIG_FIND_TIFF_DEP)
     find_dependency(TIFF)
 endif()
-
-if(DEFINED PROJ_CONFIG_FIND_CURL_DEP)
+if("TRUE")
   # Chainload CURL usage requirements
   find_dependency(CURL)
   # Target CURL::libcurl only defined since CMake 3.12
@@ -45,6 +30,7 @@ if(DEFINED PROJ_CONFIG_FIND_CURL_DEP)
       )
   endif()
 endif()
+cmake_policy(POP)
 
 function(set_variable_from_rel_or_absolute_path var root rel_or_abs_path)
   if(IS_ABSOLUTE "${rel_or_abs_path}")
@@ -65,9 +51,7 @@ set_variable_from_rel_or_absolute_path("PROJ4_BINARY_DIRS" "${_ROOT}" "bin")
 set (PROJ4_LIBRARIES PROJ4::proj)
 # Read in the exported definition of the library
 include ("${_DIR}/proj-targets.cmake")
-if (ON)
-  include ("${_DIR}/proj4-targets.cmake")
-endif()
+include ("${_DIR}/proj4-targets.cmake")
 
 unset (_ROOT)
 unset (_DIR)

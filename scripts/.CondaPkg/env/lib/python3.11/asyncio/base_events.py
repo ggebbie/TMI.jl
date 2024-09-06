@@ -16,7 +16,6 @@ to modify the meaning of the API call itself.
 import collections
 import collections.abc
 import concurrent.futures
-import errno
 import functools
 import heapq
 import itertools
@@ -578,11 +577,9 @@ class BaseEventLoop(events.AbstractEventLoop):
     def _do_shutdown(self, future):
         try:
             self._default_executor.shutdown(wait=True)
-            if not self.is_closed():
-                self.call_soon_threadsafe(future.set_result, None)
+            self.call_soon_threadsafe(future.set_result, None)
         except Exception as ex:
-            if not self.is_closed():
-                self.call_soon_threadsafe(future.set_exception, ex)
+            self.call_soon_threadsafe(future.set_exception, ex)
 
     def _check_running(self):
         if self.is_running():
@@ -596,13 +593,12 @@ class BaseEventLoop(events.AbstractEventLoop):
         self._check_closed()
         self._check_running()
         self._set_coroutine_origin_tracking(self._debug)
+        self._thread_id = threading.get_ident()
 
         old_agen_hooks = sys.get_asyncgen_hooks()
+        sys.set_asyncgen_hooks(firstiter=self._asyncgen_firstiter_hook,
+                               finalizer=self._asyncgen_finalizer_hook)
         try:
-            self._thread_id = threading.get_ident()
-            sys.set_asyncgen_hooks(firstiter=self._asyncgen_firstiter_hook,
-                                   finalizer=self._asyncgen_finalizer_hook)
-
             events._set_running_loop(self)
             while True:
                 self._run_once()
@@ -717,7 +713,7 @@ class BaseEventLoop(events.AbstractEventLoop):
         always relative to the current time.
 
         Each callback will be called exactly once.  If two callbacks
-        are scheduled for exactly the same time, it is undefined which
+        are scheduled for exactly the same time, it undefined which
         will be called first.
 
         Any positional arguments after the callback will be passed to
@@ -951,10 +947,7 @@ class BaseEventLoop(events.AbstractEventLoop):
             sock = socket.socket(family=family, type=type_, proto=proto)
             sock.setblocking(False)
             if local_addr_infos is not None:
-                for lfamily, _, _, _, laddr in local_addr_infos:
-                    # skip local addresses of different family
-                    if lfamily != family:
-                        continue
+                for _, _, _, _, laddr in local_addr_infos:
                     try:
                         sock.bind(laddr)
                         break
@@ -967,10 +960,7 @@ class BaseEventLoop(events.AbstractEventLoop):
                         exc = OSError(exc.errno, msg)
                         my_exceptions.append(exc)
                 else:  # all bind attempts failed
-                    if my_exceptions:
-                        raise my_exceptions.pop()
-                    else:
-                        raise OSError(f"no matching local address with {family=} found")
+                    raise my_exceptions.pop()
             await self.sock_connect(sock, address)
             return sock
         except OSError as exc:
@@ -982,8 +972,6 @@ class BaseEventLoop(events.AbstractEventLoop):
             if sock is not None:
                 sock.close()
             raise
-        finally:
-            exceptions = my_exceptions = None
 
     async def create_connection(
             self, protocol_factory, host=None, port=None,
@@ -1081,20 +1069,17 @@ class BaseEventLoop(events.AbstractEventLoop):
 
             if sock is None:
                 exceptions = [exc for sub in exceptions for exc in sub]
-                try:
-                    if len(exceptions) == 1:
+                if len(exceptions) == 1:
+                    raise exceptions[0]
+                else:
+                    # If they all have the same str(), raise one.
+                    model = str(exceptions[0])
+                    if all(str(exc) == model for exc in exceptions):
                         raise exceptions[0]
-                    else:
-                        # If they all have the same str(), raise one.
-                        model = str(exceptions[0])
-                        if all(str(exc) == model for exc in exceptions):
-                            raise exceptions[0]
-                        # Raise a combined exception so the user can see all
-                        # the various error messages.
-                        raise OSError('Multiple exceptions: {}'.format(
-                            ', '.join(str(exc) for exc in exceptions)))
-                finally:
-                    exceptions = None
+                    # Raise a combined exception so the user can see all
+                    # the various error messages.
+                    raise OSError('Multiple exceptions: {}'.format(
+                        ', '.join(str(exc) for exc in exceptions)))
 
         else:
             if sock is None:
@@ -1281,9 +1266,9 @@ class BaseEventLoop(events.AbstractEventLoop):
                                        allow_broadcast=None, sock=None):
         """Create datagram connection."""
         if sock is not None:
-            if sock.type == socket.SOCK_STREAM:
+            if sock.type != socket.SOCK_DGRAM:
                 raise ValueError(
-                    f'A datagram socket was expected, got {sock!r}')
+                    f'A UDP Socket was expected, got {sock!r}')
             if (local_addr or remote_addr or
                     family or proto or flags or
                     reuse_port or allow_broadcast):
@@ -1523,22 +1508,9 @@ class BaseEventLoop(events.AbstractEventLoop):
                     try:
                         sock.bind(sa)
                     except OSError as err:
-                        msg = ('error while attempting '
-                               'to bind on address %r: %s'
-                               % (sa, err.strerror.lower()))
-                        if err.errno == errno.EADDRNOTAVAIL:
-                            # Assume the family is not enabled (bpo-30945)
-                            sockets.pop()
-                            sock.close()
-                            if self._debug:
-                                logger.warning(msg)
-                            continue
-                        raise OSError(err.errno, msg) from None
-
-                if not sockets:
-                    raise OSError('could not bind on any address out of %r'
-                                  % ([info[4] for info in infos],))
-
+                        raise OSError(err.errno, 'error while attempting '
+                                      'to bind on address %r: %s'
+                                      % (sa, err.strerror.lower())) from None
                 completed = True
             finally:
                 if not completed:
@@ -1842,9 +1814,12 @@ class BaseEventLoop(events.AbstractEventLoop):
                                  exc_info=True)
 
     def _add_callback(self, handle):
-        """Add a Handle to _ready."""
-        if not handle._cancelled:
-            self._ready.append(handle)
+        """Add a Handle to _scheduled (TimerHandle) or _ready."""
+        assert isinstance(handle, events.Handle), 'A Handle is required here'
+        if handle._cancelled:
+            return
+        assert not isinstance(handle, events.TimerHandle)
+        self._ready.append(handle)
 
     def _add_callback_signalsafe(self, handle):
         """Like _add_callback() but called from a signal handler."""
@@ -1897,8 +1872,6 @@ class BaseEventLoop(events.AbstractEventLoop):
 
         event_list = self._selector.select(timeout)
         self._process_events(event_list)
-        # Needed to break cycles when an exception occurs.
-        event_list = None
 
         # Handle 'later' callbacks that are ready.
         end_time = self.time() + self._clock_resolution

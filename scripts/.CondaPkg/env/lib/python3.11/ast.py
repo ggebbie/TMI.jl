@@ -53,12 +53,10 @@ def parse(source, filename='<unknown>', mode='exec', *,
 
 def literal_eval(node_or_string):
     """
-    Evaluate an expression node or a string containing only a Python
+    Safely evaluate an expression node or a string containing a Python
     expression.  The string or node provided may only consist of the following
     Python literal structures: strings, bytes, numbers, tuples, lists, dicts,
     sets, booleans, and None.
-
-    Caution: A complex expression can overflow the C stack and cause a crash.
     """
     if isinstance(node_or_string, str):
         node_or_string = parse(node_or_string.lstrip(" \t"), mode='eval')
@@ -236,12 +234,6 @@ def increment_lineno(node, n=1):
     location in a file.
     """
     for child in walk(node):
-        # TypeIgnore is a special case where lineno is not an attribute
-        # but rather a field of the node itself.
-        if isinstance(child, TypeIgnore):
-            child.lineno = getattr(child, 'lineno', 0) + n
-            continue
-
         if 'lineno' in child._attributes:
             child.lineno = getattr(child, 'lineno', 0) + n
         if (
@@ -1175,29 +1167,13 @@ class _Unparser(NodeVisitor):
 
         new_fstring_parts = []
         quote_types = list(_ALL_QUOTES)
-        fallback_to_repr = False
         for value, is_constant in fstring_parts:
-            value, new_quote_types = self._str_literal_helper(
+            value, quote_types = self._str_literal_helper(
                 value,
                 quote_types=quote_types,
                 escape_special_whitespace=is_constant,
             )
             new_fstring_parts.append(value)
-            if set(new_quote_types).isdisjoint(quote_types):
-                fallback_to_repr = True
-                break
-            quote_types = new_quote_types
-
-        if fallback_to_repr:
-            # If we weren't able to find a quote type that works for all parts
-            # of the JoinedStr, fallback to using repr and triple single quotes.
-            quote_types = ["'''"]
-            new_fstring_parts.clear()
-            for value, is_constant in fstring_parts:
-                value = repr('"' + value)  # force repr to use single quotes
-                expected_prefix = "'\""
-                assert value.startswith(expected_prefix), repr(value)
-                new_fstring_parts.append(value[len(expected_prefix):-1])
 
         value = "".join(new_fstring_parts)
         quote_type = quote_types[0]

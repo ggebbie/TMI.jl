@@ -5,6 +5,7 @@ import os
 from distutils.dep_util import newer, newer_pairwise, newer_group
 from distutils.errors import DistutilsFileError
 from distutils.tests import support
+from test.support import run_unittest
 
 class DepUtilTestCase(support.TempdirManager, unittest.TestCase):
 
@@ -72,5 +73,8 @@ class DepUtilTestCase(support.TempdirManager, unittest.TestCase):
                                     missing='newer'))
 
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(DepUtilTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

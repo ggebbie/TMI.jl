@@ -1077,16 +1077,15 @@ class _BaseNetwork(_IPAddressBase):
 
     @property
     def is_private(self):
-        """Test if this network belongs to a private range.
+        """Test if this address is allocated for private networks.
 
         Returns:
-            A boolean, True if the network is reserved per
+            A boolean, True if the address is reserved per
             iana-ipv4-special-registry or iana-ipv6-special-registry.
 
         """
-        return any(self.network_address in priv_network and
-                   self.broadcast_address in priv_network
-                   for priv_network in self._constants._private_networks)
+        return (self.network_address.is_private and
+                self.broadcast_address.is_private)
 
     @property
     def is_global(self):
@@ -1122,15 +1121,6 @@ class _BaseNetwork(_IPAddressBase):
         """
         return (self.network_address.is_loopback and
                 self.broadcast_address.is_loopback)
-
-
-class _BaseConstants:
-
-    _private_networks = []
-
-
-_BaseNetwork._constants = _BaseConstants
-
 
 class _BaseV4:
 
@@ -1571,7 +1561,6 @@ class _IPv4Constants:
 
 
 IPv4Address._constants = _IPv4Constants
-IPv4Network._constants = _IPv4Constants
 
 
 class _BaseV6:
@@ -1941,9 +1930,6 @@ class IPv6Address(_BaseV6, _BaseAddress):
             return False
         return self._scope_id == getattr(other, '_scope_id', None)
 
-    def __reduce__(self):
-        return (self.__class__, (str(self),))
-
     @property
     def scope_id(self):
         """Identifier of a particular zone of the address's scope.
@@ -2299,4 +2285,3 @@ class _IPv6Constants:
 
 
 IPv6Address._constants = _IPv6Constants
-IPv6Network._constants = _IPv6Constants

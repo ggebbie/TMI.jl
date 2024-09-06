@@ -22,7 +22,7 @@ class FileList:
             # This can happen when bad filename is passed on command line:
             messagebox.showerror(
                 "File Error",
-                f"{filename!r} is a directory.",
+                "%r is a directory." % (filename,),
                 master=self.root)
             return None
         key = os.path.normcase(filename)
@@ -90,7 +90,7 @@ class FileList:
             self.inversedict[conflict] = None
             messagebox.showerror(
                 "Name Conflict",
-                f"You now have multiple edit windows open for {filename!r}",
+                "You now have multiple edit windows open for %r" % (filename,),
                 master=self.root)
         self.dict[newkey] = edit
         self.inversedict[edit] = newkey
@@ -123,7 +123,6 @@ def _test():  # TODO check and convert to htest
     flist.new()
     if flist.inversedict:
         root.mainloop()
-
 
 if __name__ == '__main__':
     from unittest import main

@@ -1,9 +1,5 @@
 """Event loop and event loop policy."""
 
-# Contains code from https://github.com/MagicStack/uvloop/tree/v0.16.0
-# SPDX-License-Identifier: PSF-2.0 AND (MIT OR Apache-2.0)
-# SPDX-FileCopyrightText: Copyright (c) 2015-2021 MagicStack Inc.  http://magic.io
-
 __all__ = (
     'AbstractEventLoopPolicy',
     'AbstractEventLoop', 'AbstractServer',
@@ -617,7 +613,7 @@ class AbstractEventLoopPolicy:
     def get_event_loop(self):
         """Get the event loop for the current context.
 
-        Returns an event loop object implementing the AbstractEventLoop interface,
+        Returns an event loop object implementing the BaseEventLoop interface,
         or raises an exception in case no event loop has been set for the
         current context and the current policy does not specify to create one.
 
@@ -790,13 +786,12 @@ def get_event_loop():
 
 
 def _get_event_loop(stacklevel=3):
-    # This internal method is going away in Python 3.12, left here only for
-    # backwards compatibility with 3.10.0 - 3.10.8 and 3.11.0.
-    # Similarly, this method's C equivalent in _asyncio is going away as well.
-    # See GH-99949 for more details.
     current_loop = _get_running_loop()
     if current_loop is not None:
         return current_loop
+    import warnings
+    warnings.warn('There is no current event loop',
+                  DeprecationWarning, stacklevel=stacklevel)
     return get_event_loop_policy().get_event_loop()
 
 

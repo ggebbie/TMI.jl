@@ -68,10 +68,6 @@ FLAGS = {
 TYPE_FLAGS = SRE_FLAG_ASCII | SRE_FLAG_LOCALE | SRE_FLAG_UNICODE
 GLOBAL_FLAGS = SRE_FLAG_DEBUG | SRE_FLAG_TEMPLATE
 
-# Maximal value returned by SubPattern.getwidth().
-# Must be larger than MAXREPEAT, MAXCODE and sys.maxsize.
-MAXWIDTH = 1 << 64
-
 class State:
     # keeps track of state for parsing
     def __init__(self):
@@ -118,6 +114,7 @@ class SubPattern:
         self.width = None
 
     def dump(self, level=0):
+        nl = True
         seqtypes = (tuple, list)
         for op, av in self.data:
             print(level*"  " + str(op), end='')
@@ -139,9 +136,6 @@ class SubPattern:
                 if item_no:
                     print(level*"  " + "ELSE")
                     item_no.dump(level+1)
-            elif isinstance(av, SubPattern):
-                print()
-                av.dump(level+1)
             elif isinstance(av, seqtypes):
                 nl = False
                 for a in av:
@@ -182,7 +176,7 @@ class SubPattern:
         lo = hi = 0
         for op, av in self.data:
             if op is BRANCH:
-                i = MAXWIDTH
+                i = MAXREPEAT - 1
                 j = 0
                 for av in av[1]:
                     l, h = av.getwidth()
@@ -201,10 +195,7 @@ class SubPattern:
             elif op in _REPEATCODES:
                 i, j = av[2].getwidth()
                 lo = lo + i * av[0]
-                if av[1] == MAXREPEAT and j:
-                    hi = MAXWIDTH
-                else:
-                    hi = hi + j * av[1]
+                hi = hi + j * av[1]
             elif op in _UNITCODES:
                 lo = lo + 1
                 hi = hi + 1
@@ -224,7 +215,7 @@ class SubPattern:
                 hi = hi + j
             elif op is SUCCESS:
                 break
-        self.width = min(lo, MAXWIDTH), min(hi, MAXWIDTH)
+        self.width = min(lo, MAXREPEAT - 1), min(hi, MAXREPEAT)
         return self.width
 
 class Tokenizer:

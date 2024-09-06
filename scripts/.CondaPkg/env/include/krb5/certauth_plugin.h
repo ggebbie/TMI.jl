@@ -35,7 +35,7 @@
  *
  * The certauth pluggable interface currently has only one supported major
  * version, which is 1.  Major version 1 has a current minor version number of
- * 2.
+ * 1.
  *
  * certauth plugin modules should define a function named
  * certauth_<modulename>_initvt, matching the signature:
@@ -77,13 +77,6 @@ struct _krb5_db_entry_new;
 typedef krb5_error_code
 (*krb5_certauth_init_fn)(krb5_context context,
                          krb5_certauth_moddata *moddata_out);
-
-/*
- * Optional: Initialize module data.  Supersedes init if present.
- */
-typedef krb5_error_code
-(*krb5_certauth_init_ex_fn)(krb5_context context, const char *const *realmlist,
-                            krb5_certauth_moddata *moddata_out);
 
 /*
  * Optional: Clean up the module data.
@@ -139,10 +132,6 @@ typedef struct krb5_certauth_vtable_st {
     krb5_certauth_fini_fn fini;
     krb5_certauth_authorize_fn authorize;
     krb5_certauth_free_indicator_fn free_ind;
-    /* Minor version 1 ends here. */
-
-    krb5_certauth_init_ex_fn init_ex;
-    /* Minor version 2 ends here. */
 } *krb5_certauth_vtable;
 
 #endif /* KRB5_CERTAUTH_PLUGIN_H */

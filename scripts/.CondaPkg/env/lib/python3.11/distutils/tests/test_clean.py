@@ -4,6 +4,7 @@ import unittest
 
 from distutils.command.clean import clean
 from distutils.tests import support
+from test.support import run_unittest
 
 class cleanTestCase(support.TempdirManager,
                     support.LoggingSilencer,
@@ -41,5 +42,8 @@ class cleanTestCase(support.TempdirManager,
         cmd.ensure_finalized()
         cmd.run()
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(cleanTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

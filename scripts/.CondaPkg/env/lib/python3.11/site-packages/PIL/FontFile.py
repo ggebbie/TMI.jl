@@ -13,19 +13,16 @@
 #
 # See the README file for information on usage and redistribution.
 #
-from __future__ import annotations
+
 
 import os
-from typing import BinaryIO
 
 from . import Image, _binary
 
 WIDTH = 800
 
 
-def puti16(
-    fp: BinaryIO, values: tuple[int, int, int, int, int, int, int, int, int, int]
-) -> None:
+def puti16(fp, values):
     """Write network order (big-endian) 16-bit sequence"""
     for v in values:
         if v < 0:
@@ -36,32 +33,16 @@ def puti16(
 class FontFile:
     """Base class for raster font file handlers."""
 
-    bitmap: Image.Image | None = None
+    bitmap = None
 
-    def __init__(self) -> None:
-        self.info: dict[bytes, bytes | int] = {}
-        self.glyph: list[
-            tuple[
-                tuple[int, int],
-                tuple[int, int, int, int],
-                tuple[int, int, int, int],
-                Image.Image,
-            ]
-            | None
-        ] = [None] * 256
+    def __init__(self):
+        self.info = {}
+        self.glyph = [None] * 256
 
-    def __getitem__(self, ix: int) -> (
-        tuple[
-            tuple[int, int],
-            tuple[int, int, int, int],
-            tuple[int, int, int, int],
-            Image.Image,
-        ]
-        | None
-    ):
+    def __getitem__(self, ix):
         return self.glyph[ix]
 
-    def compile(self) -> None:
+    def compile(self):
         """Create metrics and bitmap"""
 
         if self.bitmap:
@@ -70,7 +51,7 @@ class FontFile:
         # create bitmap large enough to hold all data
         h = w = maxwidth = 0
         lines = 1
-        for glyph in self.glyph:
+        for glyph in self:
             if glyph:
                 d, dst, src, im = glyph
                 h = max(h, src[3] - src[1])
@@ -84,22 +65,20 @@ class FontFile:
         ysize = lines * h
 
         if xsize == 0 and ysize == 0:
-            return
+            return ""
 
         self.ysize = h
 
         # paste glyphs into bitmap
         self.bitmap = Image.new("1", (xsize, ysize))
-        self.metrics: list[
-            tuple[tuple[int, int], tuple[int, int, int, int], tuple[int, int, int, int]]
-            | None
-        ] = [None] * 256
+        self.metrics = [None] * 256
         x = y = 0
         for i in range(256):
             glyph = self[i]
             if glyph:
                 d, dst, src, im = glyph
                 xx = src[2] - src[0]
+                # yy = src[3] - src[1]
                 x0, y0 = x, y
                 x = x + xx
                 if x > WIDTH:
@@ -110,15 +89,12 @@ class FontFile:
                 self.bitmap.paste(im.crop(src), s)
                 self.metrics[i] = d, dst, s
 
-    def save(self, filename: str) -> None:
+    def save(self, filename):
         """Save font"""
 
         self.compile()
 
         # font data
-        if not self.bitmap:
-            msg = "No bitmap created"
-            raise ValueError(msg)
         self.bitmap.save(os.path.splitext(filename)[0] + ".pbm", "PNG")
 
         # font metrics
@@ -129,6 +105,6 @@ class FontFile:
             for id in range(256):
                 m = self.metrics[id]
                 if not m:
-                    puti16(fp, (0,) * 10)
+                    puti16(fp, [0] * 10)
                 else:
                     puti16(fp, m[0] + m[1] + m[2])

@@ -7,6 +7,7 @@ from distutils.command.install_scripts import install_scripts
 from distutils.core import Distribution
 
 from distutils.tests import support
+from test.support import run_unittest
 
 
 class InstallScriptsTestCase(support.TempdirManager,
@@ -74,5 +75,8 @@ class InstallScriptsTestCase(support.TempdirManager,
             self.assertIn(name, installed)
 
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(InstallScriptsTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

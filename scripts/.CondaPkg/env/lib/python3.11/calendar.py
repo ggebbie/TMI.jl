@@ -693,7 +693,7 @@ def main(args):
     parser.add_argument(
         "-L", "--locale",
         default=None,
-        help="locale to use for month and weekday names"
+        help="locale to be used from month and weekday names"
     )
     parser.add_argument(
         "-e", "--encoding",
@@ -709,7 +709,7 @@ def main(args):
     parser.add_argument(
         "year",
         nargs='?', type=int,
-        help="year number"
+        help="year number (1-9999)"
     )
     parser.add_argument(
         "month",

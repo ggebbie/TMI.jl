@@ -368,7 +368,7 @@ class CustomRun(Query):
                              sticky='we')
 
     def cli_args_ok(self):
-        "Return command line arg list or None if error."
+        "Validity check and parsing for command line arguments."
         cli_string = self.entry.get().strip()
         try:
             cli_args = shlex.split(cli_string, posix=True)

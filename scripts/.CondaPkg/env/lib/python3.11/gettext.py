@@ -46,7 +46,6 @@ internationalized, to the local language and cultural habits.
 #   find this format documented anywhere.
 
 
-import operator
 import os
 import re
 import sys
@@ -167,21 +166,14 @@ def _parse(tokens, priority=-1):
 
 def _as_int(n):
     try:
-        round(n)
+        i = round(n)
     except TypeError:
         raise TypeError('Plural value must be an integer, got %s' %
                         (n.__class__.__name__,)) from None
-
     import warnings
-    frame = sys._getframe(1)
-    stacklevel = 2
-    while frame.f_back is not None and frame.f_globals.get('__name__') == __name__:
-        stacklevel += 1
-        frame = frame.f_back
     warnings.warn('Plural value must be an integer, got %s' %
                   (n.__class__.__name__,),
-                  DeprecationWarning,
-                  stacklevel)
+                  DeprecationWarning, 4)
     return n
 
 
@@ -208,7 +200,7 @@ def c2py(plural):
             elif c == ')':
                 depth -= 1
 
-        ns = {'_as_int': _as_int, '__name__': __name__}
+        ns = {'_as_int': _as_int}
         exec('''if True:
             def func(n):
                 if not isinstance(n, int):
@@ -430,12 +422,10 @@ class GNUTranslations(NullTranslations):
         missing = object()
         tmsg = self._catalog.get(message, missing)
         if tmsg is missing:
-            tmsg = self._catalog.get((message, self.plural(1)), missing)
-        if tmsg is not missing:
-            return tmsg
-        if self._fallback:
-            return self._fallback.gettext(message)
-        return message
+            if self._fallback:
+                return self._fallback.gettext(message)
+            return message
+        return tmsg
 
     def ngettext(self, msgid1, msgid2, n):
         try:
@@ -454,12 +444,10 @@ class GNUTranslations(NullTranslations):
         missing = object()
         tmsg = self._catalog.get(ctxt_msg_id, missing)
         if tmsg is missing:
-            tmsg = self._catalog.get((ctxt_msg_id, self.plural(1)), missing)
-        if tmsg is not missing:
-            return tmsg
-        if self._fallback:
-            return self._fallback.pgettext(context, message)
-        return message
+            if self._fallback:
+                return self._fallback.pgettext(context, message)
+            return message
+        return tmsg
 
     def npgettext(self, context, msgid1, msgid2, n):
         ctxt_msg_id = self.CONTEXT % (context, msgid1)

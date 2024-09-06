@@ -719,9 +719,6 @@
 /* Define if compiling using Linux 4.1 or later. */
 /* #undef HAVE_LINUX_CAN_RAW_JOIN_FILTERS */
 
-/* Define to 1 if you have the <linux/limits.h> header file. */
-/* #undef HAVE_LINUX_LIMITS_H */
-
 /* Define to 1 if you have the <linux/memfd.h> header file. */
 /* #undef HAVE_LINUX_MEMFD_H */
 
@@ -968,9 +965,6 @@
 
 /* Define if you can turn off readline's signal handling. */
 #define HAVE_RL_CATCH_SIGNAL 1
-
-/* Define if readline supports rl_compdisp_func_t */
-#define HAVE_RL_COMPDISP_FUNC_T 1
 
 /* Define if you have readline 2.2 */
 #define HAVE_RL_COMPLETION_APPEND_CHARACTER 1
@@ -1596,9 +1590,6 @@
 /* Define if you want to enable internal statistics gathering. */
 /* #undef Py_STATS */
 
-/* The version of SunOS/Solaris as reported by `uname -r' without the dot. */
-/* #undef Py_SUNOS_VERSION */
-
 /* Define if you want to enable tracing references for debugging purpose */
 /* #undef Py_TRACE_REFS */
 
@@ -1710,7 +1701,7 @@
 
 
 /* Define if WINDOW in curses.h offers a field _flags. */
-/* #undef WINDOW_HAS_FLAGS */
+#define WINDOW_HAS_FLAGS 1
 
 /* Define if you want build the _decimal module using a coroutine-local rather
    than a thread-local context */

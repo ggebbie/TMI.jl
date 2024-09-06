@@ -65,7 +65,6 @@
 #ifndef KRB5_KDB5__
 #define KRB5_KDB5__
 
-#include <time.h>
 #include <krb5.h>
 
 /* This version will be incremented when incompatible changes are made to the
@@ -133,7 +132,6 @@
 #define KRB5_DB_ITER_RECURSE    0x00000004
 
 /* String attribute names recognized by krb5 */
-#define KRB5_KDB_SK_PAC_PRIVSVR_ENCTYPE         "pac_privsvr_enctype"
 #define KRB5_KDB_SK_SESSION_ENCTYPES            "session_enctypes"
 #define KRB5_KDB_SK_REQUIRE_AUTH                "require_auth"
 

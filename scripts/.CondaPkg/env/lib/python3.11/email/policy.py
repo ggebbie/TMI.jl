@@ -210,15 +210,8 @@ class EmailPolicy(Policy):
                   self.refold_source == 'long' and
                     (lines and len(lines[0])+len(name)+2 > maxlen or
                      any(len(x) > maxlen for x in lines[1:])))
-
-        if not refold:
-            if not self.utf8:
-                refold = not value.isascii()
-            elif refold_binary:
-                refold = _has_surrogates(value)
-        if refold:
+        if refold or refold_binary and _has_surrogates(value):
             return self.header_factory(name, ''.join(lines)).fold(policy=self)
-
         return name + ': ' + self.linesep.join(lines) + self.linesep
 
 

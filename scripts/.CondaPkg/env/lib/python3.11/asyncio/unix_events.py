@@ -223,8 +223,7 @@ class _UnixSelectorEventLoop(selector_events.BaseSelectorEventLoop):
         return transp
 
     def _child_watcher_callback(self, pid, returncode, transp):
-        # Skip one iteration for callbacks to be executed
-        self.call_soon_threadsafe(self.call_soon, transp._process_exited, returncode)
+        self.call_soon_threadsafe(transp._process_exited, returncode)
 
     async def create_unix_connection(
             self, protocol_factory, path=None, *,
@@ -482,20 +481,12 @@ class _UnixReadPipeTransport(transports.ReadTransport):
 
         self._loop.call_soon(self._protocol.connection_made, self)
         # only start reading when connection_made() has been called
-        self._loop.call_soon(self._add_reader,
+        self._loop.call_soon(self._loop._add_reader,
                              self._fileno, self._read_ready)
         if waiter is not None:
             # only wake up the waiter when connection_made() has been called
             self._loop.call_soon(futures._set_result_unless_cancelled,
                                  waiter, None)
-
-    def _add_reader(self, fd, callback):
-        if not self.is_reading():
-            return
-        self._loop._add_reader(fd, callback)
-
-    def is_reading(self):
-        return not self._paused and not self._closing
 
     def __repr__(self):
         info = [self.__class__.__name__]
@@ -537,7 +528,7 @@ class _UnixReadPipeTransport(transports.ReadTransport):
                 self._loop.call_soon(self._call_connection_lost, None)
 
     def pause_reading(self):
-        if not self.is_reading():
+        if self._closing or self._paused:
             return
         self._paused = True
         self._loop._remove_reader(self._fileno)
@@ -808,11 +799,12 @@ class _UnixSubprocessTransport(base_subprocess.BaseSubprocessTransport):
 
     def _start(self, args, shell, stdin, stdout, stderr, bufsize, **kwargs):
         stdin_w = None
-        if stdin == subprocess.PIPE and sys.platform.startswith('aix'):
-            # Use a socket pair for stdin on AIX, since it does not
+        if stdin == subprocess.PIPE:
+            # Use a socket pair for stdin, since not all platforms
             # support selecting read events on the write end of a
             # socket (which we use in order to detect closing of the
-            # other end).
+            # other end).  Notably this is needed on AIX, and works
+            # just fine on other platforms.
             stdin, stdin_w = socket.socketpair()
         try:
             self._proc = subprocess.Popen(
@@ -1363,7 +1355,14 @@ class ThreadedChildWatcher(AbstractChildWatcher):
         return True
 
     def close(self):
-        pass
+        self._join_threads()
+
+    def _join_threads(self):
+        """Internal: Join all non-daemon threads"""
+        threads = [thread for thread in list(self._threads.values())
+                   if thread.is_alive() and not thread.daemon]
+        for thread in threads:
+            thread.join()
 
     def __enter__(self):
         return self
@@ -1382,7 +1381,7 @@ class ThreadedChildWatcher(AbstractChildWatcher):
     def add_child_handler(self, pid, callback, *args):
         loop = events.get_running_loop()
         thread = threading.Thread(target=self._do_waitpid,
-                                  name=f"asyncio-waitpid-{next(self._pid_counter)}",
+                                  name=f"waitpid-{next(self._pid_counter)}",
                                   args=(loop, pid, callback, args),
                                   daemon=True)
         self._threads[pid] = thread
@@ -1436,6 +1435,8 @@ class _UnixDefaultEventLoopPolicy(events.BaseDefaultEventLoopPolicy):
         with events._lock:
             if self._watcher is None:  # pragma: no branch
                 self._watcher = ThreadedChildWatcher()
+                if threading.current_thread() is threading.main_thread():
+                    self._watcher.attach_loop(self._local._loop)
 
     def set_event_loop(self, loop):
         """Set the event loop.

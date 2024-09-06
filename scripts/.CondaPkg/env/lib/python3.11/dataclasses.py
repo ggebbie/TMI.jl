@@ -223,26 +223,6 @@ _POST_INIT_NAME = '__post_init__'
 # https://bugs.python.org/issue33453 for details.
 _MODULE_IDENTIFIER_RE = re.compile(r'^(?:\s*(\w+)\s*\.)?\s*(\w+)')
 
-# This function's logic is copied from "recursive_repr" function in
-# reprlib module to avoid dependency.
-def _recursive_repr(user_function):
-    # Decorator to make a repr function return "..." for a recursive
-    # call.
-    repr_running = set()
-
-    @functools.wraps(user_function)
-    def wrapper(self):
-        key = id(self), _thread.get_ident()
-        if key in repr_running:
-            return '...'
-        repr_running.add(key)
-        try:
-            result = user_function(self)
-        finally:
-            repr_running.discard(key)
-        return result
-    return wrapper
-
 class InitVar:
     __slots__ = ('type', )
 
@@ -300,7 +280,6 @@ class Field:
         self.kw_only = kw_only
         self._field_type = None
 
-    @_recursive_repr
     def __repr__(self):
         return ('Field('
                 f'name={self.name!r},'
@@ -410,13 +389,36 @@ def _tuple_str(obj_name, fields):
     return f'({",".join([f"{obj_name}.{f.name}" for f in fields])},)'
 
 
+# This function's logic is copied from "recursive_repr" function in
+# reprlib module to avoid dependency.
+def _recursive_repr(user_function):
+    # Decorator to make a repr function return "..." for a recursive
+    # call.
+    repr_running = set()
+
+    @functools.wraps(user_function)
+    def wrapper(self):
+        key = id(self), _thread.get_ident()
+        if key in repr_running:
+            return '...'
+        repr_running.add(key)
+        try:
+            result = user_function(self)
+        finally:
+            repr_running.discard(key)
+        return result
+    return wrapper
+
+
 def _create_fn(name, args, body, *, globals=None, locals=None,
                return_type=MISSING):
-    # Note that we may mutate locals. Callers beware!
-    # The only callers are internal to this module, so no
+    # Note that we mutate locals when exec() is called.  Caller
+    # beware!  The only callers are internal to this module, so no
     # worries about external callers.
     if locals is None:
         locals = {}
+    if 'BUILTINS' not in locals:
+        locals['BUILTINS'] = builtins
     return_annotation = ''
     if return_type is not MISSING:
         locals['_return_type'] = return_type
@@ -442,7 +444,7 @@ def _field_assign(frozen, name, value, self_name):
     # self_name is what "self" is called in this function: don't
     # hard-code "self", since that might be a field name.
     if frozen:
-        return f'__dataclass_builtins_object__.__setattr__({self_name},{name!r},{value})'
+        return f'BUILTINS.object.__setattr__({self_name},{name!r},{value})'
     return f'{self_name}.{name}={value}'
 
 
@@ -549,7 +551,6 @@ def _init_fn(fields, std_fields, kw_only_fields, frozen, has_post_init,
     locals.update({
         'MISSING': MISSING,
         '_HAS_DEFAULT_FACTORY': _HAS_DEFAULT_FACTORY,
-        '__dataclass_builtins_object__': object,
     })
 
     body_lines = []
@@ -1092,13 +1093,8 @@ def _process_class(cls, init, repr, eq, order, unsafe_hash, frozen,
 
     if not getattr(cls, '__doc__'):
         # Create a class doc-string.
-        try:
-            # In some cases fetching a signature is not possible.
-            # But, we surely should not fail in this case.
-            text_sig = str(inspect.signature(cls)).replace(' -> None', '')
-        except (TypeError, ValueError):
-            text_sig = ''
-        cls.__doc__ = (cls.__name__ + text_sig)
+        cls.__doc__ = (cls.__name__ +
+                       str(inspect.signature(cls)).replace(' -> None', ''))
 
     if match_args:
         # I could probably compute this once
@@ -1132,10 +1128,8 @@ def _dataclass_setstate(self, state):
 
 def _get_slots(cls):
     match cls.__dict__.get('__slots__'):
-        # A class which does not define __slots__ at all is equivalent
-        # to a class defining __slots__ = ('__dict__', '__weakref__')
         case None:
-            yield from ('__dict__', '__weakref__')
+            return
         case str(slot):
             yield slot
         # Slots may be any iterable, but we cannot handle an iterator
@@ -1182,9 +1176,6 @@ def _add_slots(cls, is_frozen, weakref_slot):
     # Remove __dict__ itself.
     cls_dict.pop('__dict__', None)
 
-    # Clear existing `__weakref__` descriptor, it belongs to a previous type:
-    cls_dict.pop('__weakref__', None)  # gh-102069
-
     # And finally create the class.
     qualname = getattr(cls, '__qualname__', None)
     cls = type(cls)(cls.__name__, cls.__bases__, cls_dict)
@@ -1193,10 +1184,8 @@ def _add_slots(cls, is_frozen, weakref_slot):
 
     if is_frozen:
         # Need this for pickling frozen classes with slots.
-        if '__getstate__' not in cls_dict:
-            cls.__getstate__ = _dataclass_getstate
-        if '__setstate__' not in cls_dict:
-            cls.__setstate__ = _dataclass_setstate
+        cls.__getstate__ = _dataclass_getstate
+        cls.__setstate__ = _dataclass_setstate
 
     return cls
 
@@ -1243,7 +1232,7 @@ def fields(class_or_instance):
     try:
         fields = getattr(class_or_instance, _FIELDS)
     except AttributeError:
-        raise TypeError('must be called with a dataclass type or instance') from None
+        raise TypeError('must be called with a dataclass type or instance')
 
     # Exclude pseudo-fields.  Note that fields is sorted by insertion
     # order, so the order of the tuple is as the fields were defined.

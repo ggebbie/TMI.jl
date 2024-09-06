@@ -4,10 +4,10 @@
 
 import distutils.versionpredicate
 import doctest
+from test.support import run_unittest
 
-def load_tests(loader, tests, pattern):
-    tests.addTest(doctest.DocTestSuite(distutils.versionpredicate))
-    return tests
+def test_suite():
+    return doctest.DocTestSuite(distutils.versionpredicate)
 
 if __name__ == '__main__':
-    unittest.main()
+    run_unittest(test_suite())

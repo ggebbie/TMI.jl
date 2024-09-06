@@ -24,7 +24,6 @@
 # governing permissions and limitations under the License.
 
 
-import io
 import sys
 import time
 import marshal
@@ -588,7 +587,7 @@ def main():
         else:
             progname = args[0]
             sys.path.insert(0, os.path.dirname(progname))
-            with io.open_code(progname) as fp:
+            with open(progname, 'rb') as fp:
                 code = compile(fp.read(), progname, 'exec')
             globs = {
                 '__file__': progname,

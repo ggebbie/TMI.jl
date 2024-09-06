@@ -1,16 +1,13 @@
 .\"
 .\" Copyright (c) 2009 by Daiki Ueno
 .\"
-.TH libssh2_agent_list_identities 3 "23 Dec 2009" "libssh2" "libssh2"
+.TH libssh2_agent_list_identities 3 "23 Dec 2009" "libssh2 1.2" "libssh2 manual"
 .SH NAME
 libssh2_agent_list_identities - request an ssh-agent to list of public keys.
 .SH SYNOPSIS
-.nf
 #include <libssh2.h>
 
-int
-libssh2_agent_list_identities(LIBSSH2_AGENT *agent);
-.fi
+int libssh2_agent_list_identities(LIBSSH2_AGENT *agent);
 .SH DESCRIPTION
 Request an ssh-agent to list of public keys, and stores them in the
 internal collection of the handle.  Call
@@ -24,3 +21,4 @@ Added in libssh2 1.2
 .SH SEE ALSO
 .BR libssh2_agent_connect(3)
 .BR libssh2_agent_get_identity(3)
+

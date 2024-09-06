@@ -69,11 +69,6 @@ class _ThreadWakeup:
         self._reader, self._writer = mp.Pipe(duplex=False)
 
     def close(self):
-        # Please note that we do not take the shutdown lock when
-        # calling clear() (to avoid deadlocking) so this method can
-        # only be called safely from the same thread as all calls to
-        # clear() even if you hold the shutdown lock. Otherwise we
-        # might try to read from the closed pipe.
         if not self._closed:
             self._closed = True
             self._writer.close()
@@ -369,11 +364,6 @@ class _ExecutorManagerThread(threading.Thread):
             if self.is_shutting_down():
                 self.flag_executor_shutting_down()
 
-                # When only canceled futures remain in pending_work_items, our
-                # next call to wait_result_broken_or_wakeup would hang forever.
-                # This makes sure we have some running futures or none at all.
-                self.add_call_item_to_queue()
-
                 # Since no new work items can be added, it is safe to shutdown
                 # this thread if there are no pending work items.
                 if not self.pending_work_items:
@@ -429,12 +419,8 @@ class _ExecutorManagerThread(threading.Thread):
         elif wakeup_reader in ready:
             is_broken = False
 
-        # No need to hold the _shutdown_lock here because:
-        # 1. we're the only thread to use the wakeup reader
-        # 2. we're also the only thread to call thread_wakeup.close()
-        # 3. we want to avoid a possible deadlock when both reader and writer
-        #    would block (gh-105829)
-        self.thread_wakeup.clear()
+        with self.shutdown_lock:
+            self.thread_wakeup.clear()
 
         return result_item, is_broken, cause
 
@@ -505,15 +491,6 @@ class _ExecutorManagerThread(threading.Thread):
         # locks may be in a dirty state and block forever.
         for p in self.processes.values():
             p.terminate()
-
-        # Prevent queue writing to a pipe which is no longer read.
-        # https://github.com/python/cpython/issues/94777
-        self.call_queue._reader.close()
-
-        # gh-107219: Close the connection writer which can unblock
-        # Queue._feed() if it was stuck in send_bytes().
-        if sys.platform == 'win32':
-            self.call_queue._writer.close()
 
         # clean up resources
         self.join_executor_internals()
@@ -718,10 +695,7 @@ class ProcessPoolExecutor(_base.Executor):
         # as it could result in a deadlock if a worker process dies with the
         # _result_queue write lock still acquired.
         #
-        # _shutdown_lock must be locked to access _ThreadWakeup.close() and
-        # .wakeup(). Care must also be taken to not call clear or close from
-        # more than one thread since _ThreadWakeup.clear() is not protected by
-        # the _shutdown_lock
+        # _shutdown_lock must be locked to access _ThreadWakeup.
         self._executor_manager_thread_wakeup = _ThreadWakeup()
 
         # Create communication channels for the executor

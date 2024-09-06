@@ -43,19 +43,19 @@ _log_to_stderr = False
 
 def sub_debug(msg, *args):
     if _logger:
-        _logger.log(SUBDEBUG, msg, *args, stacklevel=2)
+        _logger.log(SUBDEBUG, msg, *args)
 
 def debug(msg, *args):
     if _logger:
-        _logger.log(DEBUG, msg, *args, stacklevel=2)
+        _logger.log(DEBUG, msg, *args)
 
 def info(msg, *args):
     if _logger:
-        _logger.log(INFO, msg, *args, stacklevel=2)
+        _logger.log(INFO, msg, *args)
 
 def sub_warning(msg, *args):
     if _logger:
-        _logger.log(SUBWARNING, msg, *args, stacklevel=2)
+        _logger.log(SUBWARNING, msg, *args)
 
 def get_logger():
     '''
@@ -130,10 +130,7 @@ abstract_sockets_supported = _platform_supports_abstract_sockets()
 #
 
 def _remove_temp_dir(rmtree, tempdir):
-    def onerror(func, path, err_info):
-        if not issubclass(err_info[0], FileNotFoundError):
-            raise
-    rmtree(tempdir, onerror=onerror)
+    rmtree(tempdir)
 
     current_process = process.current_process()
     # current_process() can be None if the finalizer is called

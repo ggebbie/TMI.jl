@@ -132,8 +132,7 @@ def glob1(dirname, pattern):
 
 def _glob2(dirname, pattern, dir_fd, dironly, include_hidden=False):
     assert _isrecursive(pattern)
-    if not dirname or _isdir(dirname, dir_fd):
-        yield pattern[:0]
+    yield pattern[:0]
     yield from _rlistdir(dirname, dir_fd, dironly,
                          include_hidden=include_hidden)
 

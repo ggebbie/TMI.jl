@@ -254,18 +254,17 @@ class socket(_socket.socket):
                self.type,
                self.proto)
         if not closed:
-            # getsockname and getpeername may not be available on WASI.
             try:
                 laddr = self.getsockname()
                 if laddr:
                     s += ", laddr=%s" % str(laddr)
-            except (error, AttributeError):
+            except error:
                 pass
             try:
                 raddr = self.getpeername()
                 if raddr:
                     s += ", raddr=%s" % str(raddr)
-            except (error, AttributeError):
+            except error:
                 pass
         s += '>'
         return s
@@ -381,7 +380,7 @@ class socket(_socket.socket):
                     if timeout and not selector_select(timeout):
                         raise TimeoutError('timed out')
                     if count:
-                        blocksize = min(count - total_sent, blocksize)
+                        blocksize = count - total_sent
                         if blocksize <= 0:
                             break
                     try:
@@ -784,11 +783,11 @@ def getfqdn(name=''):
 
     First the hostname returned by gethostbyaddr() is checked, then
     possibly existing aliases. In case no FQDN is available and `name`
-    was given, it is returned unchanged. If `name` was empty, '0.0.0.0' or '::',
+    was given, it is returned unchanged. If `name` was empty or '0.0.0.0',
     hostname from gethostname() is returned.
     """
     name = name.strip()
-    if not name or name in ('0.0.0.0', '::'):
+    if not name or name == '0.0.0.0':
         name = gethostname()
     try:
         hostname, aliases, ipaddrs = gethostbyaddr(name)
@@ -909,7 +908,7 @@ def create_server(address, *, family=AF_INET, backlog=None, reuse_port=False,
         # address, effectively preventing this one from accepting
         # connections. Also, it may set the process in a state where
         # it'll no longer respond to any signals or graceful kills.
-        # See: https://learn.microsoft.com/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        # See: msdn2.microsoft.com/en-us/library/ms740621(VS.85).aspx
         if os.name not in ('nt', 'cygwin') and \
                 hasattr(_socket, 'SO_REUSEADDR'):
             try:

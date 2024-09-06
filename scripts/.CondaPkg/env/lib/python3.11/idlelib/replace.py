@@ -4,7 +4,6 @@ Defines various replace related functions like replace, replace all,
 and replace+find.
 """
 import re
-re.PatternError = re.error  # New in 3.13.
 
 from tkinter import StringVar, TclError
 
@@ -26,8 +25,7 @@ def replace(text, insert_tags=None):
     if not hasattr(engine, "_replacedialog"):
         engine._replacedialog = ReplaceDialog(root, engine)
     dialog = engine._replacedialog
-    searchphrase = text.get("sel.first", "sel.last")
-    dialog.open(text, searchphrase, insert_tags=insert_tags)
+    dialog.open(text, insert_tags=insert_tags)
 
 
 class ReplaceDialog(SearchDialogBase):
@@ -53,17 +51,27 @@ class ReplaceDialog(SearchDialogBase):
         self.replvar = StringVar(root)
         self.insert_tags = None
 
-    def open(self, text, searchphrase=None, *, insert_tags=None):
+    def open(self, text, insert_tags=None):
         """Make dialog visible on top of others and ready to use.
 
-        Also, set the search to include the current selection
-        (self.ok).
+        Also, highlight the currently selected text and set the
+        search to include the current selection (self.ok).
 
         Args:
             text: Text widget being searched.
-            searchphrase: String phrase to search.
         """
-        SearchDialogBase.open(self, text, searchphrase)
+        SearchDialogBase.open(self, text)
+        try:
+            first = text.index("sel.first")
+        except TclError:
+            first = None
+        try:
+            last = text.index("sel.last")
+        except TclError:
+            last = None
+        first = first or text.index("insert")
+        last = last or first
+        self.show_hit(first, last)
         self.ok = True
         self.insert_tags = insert_tags
 
@@ -112,7 +120,7 @@ class ReplaceDialog(SearchDialogBase):
         if self.engine.isre():
             try:
                 new = m.expand(repl)
-            except re.PatternError:
+            except re.error:
                 self.engine.report_error(repl, 'Invalid Replace Expression')
                 new = None
         else:
@@ -290,7 +298,6 @@ def _replace_dialog(parent):  # htest #
 
     button = Button(frame, text="Replace", command=show_replace)
     button.pack()
-
 
 if __name__ == '__main__':
     from unittest import main

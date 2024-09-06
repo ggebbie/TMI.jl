@@ -1,6 +1,5 @@
 '''Define SearchEngine for search dialogs.'''
 import re
-re.PatternError = re.error  # New in 3.13.
 
 from tkinter import StringVar, BooleanVar, TclError
 from tkinter import messagebox
@@ -85,7 +84,7 @@ class SearchEngine:
             flags = flags | re.IGNORECASE
         try:
             prog = re.compile(pat, flags)
-        except re.PatternError as e:
+        except re.error as e:
             self.report_error(pat, e.msg, e.pos)
             return None
         return prog

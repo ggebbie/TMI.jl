@@ -52,13 +52,13 @@ def idle_formatwarning(message, category, filename, lineno, line=None):
     """Format warnings the IDLE way."""
 
     s = "\nWarning (from warnings module):\n"
-    s += f'  File \"{filename}\", line {lineno}\n'
+    s += '  File \"%s\", line %s\n' % (filename, lineno)
     if line is None:
         line = linecache.getline(filename, lineno)
     line = line.strip()
     if line:
         s += "    %s\n" % line
-    s += f"{category.__name__}: {message}\n"
+    s += "%s: %s\n" % (category.__name__, message)
     return s
 
 def idle_showwarning_subproc(
@@ -140,12 +140,11 @@ def main(del_exitfunc=False):
 
     capture_warnings(True)
     sys.argv[:] = [""]
-    threading.Thread(target=manage_socket,
-                     name='SockThread',
-                     args=((LOCALHOST, port),),
-                     daemon=True,
-                    ).start()
-
+    sockthread = threading.Thread(target=manage_socket,
+                                  name='SockThread',
+                                  args=((LOCALHOST, port),))
+    sockthread.daemon = True
+    sockthread.start()
     while True:
         try:
             if exit_now:
@@ -622,7 +621,7 @@ class Executive:
 
     def stackviewer(self, flist_oid=None):
         if self.user_exc_info:
-            _, exc, tb = self.user_exc_info
+            typ, val, tb = self.user_exc_info
         else:
             return None
         flist = None
@@ -630,8 +629,9 @@ class Executive:
             flist = self.rpchandler.get_remote_proxy(flist_oid)
         while tb and tb.tb_frame.f_globals["__name__"] in ["rpc", "run"]:
             tb = tb.tb_next
-        exc.__traceback__ = tb
-        item = stackviewer.StackTreeItem(exc, flist)
+        sys.last_type = typ
+        sys.last_value = val
+        item = stackviewer.StackTreeItem(flist, tb)
         return debugobj_r.remote_object_tree_item(item)
 
 

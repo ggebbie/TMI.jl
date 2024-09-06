@@ -2,6 +2,7 @@
 import unittest
 from distutils.version import LooseVersion
 from distutils.version import StrictVersion
+from test.support import run_unittest
 
 class VersionTestCase(unittest.TestCase):
 
@@ -79,5 +80,8 @@ class VersionTestCase(unittest.TestCase):
                           'cmp(%s, %s) should be NotImplemented, got %s' %
                           (v1, v2, res))
 
+def test_suite():
+    return unittest.TestLoader().loadTestsFromTestCase(VersionTestCase)
+
 if __name__ == "__main__":
-    unittest.main()
+    run_unittest(test_suite())

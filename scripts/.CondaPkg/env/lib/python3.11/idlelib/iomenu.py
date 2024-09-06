@@ -7,7 +7,7 @@ import tokenize
 
 from tkinter import filedialog
 from tkinter import messagebox
-from tkinter.simpledialog import askstring  # loadfile encoding.
+from tkinter.simpledialog import askstring
 
 from idlelib.config import idleConf
 from idlelib.util import py_extensions
@@ -180,25 +180,24 @@ class IOBinding:
         return True
 
     def maybesave(self):
-        """Return 'yes', 'no', 'cancel' as appropriate.
-
-        Tkinter messagebox.askyesnocancel converts these tk responses
-        to True, False, None.  Convert back, as now expected elsewhere.
-        """
         if self.get_saved():
             return "yes"
-        message = ("Do you want to save "
-                   f"{self.filename or 'this untitled document'}"
-                   " before closing?")
+        message = "Do you want to save %s before closing?" % (
+            self.filename or "this untitled document")
         confirm = messagebox.askyesnocancel(
                   title="Save On Close",
                   message=message,
                   default=messagebox.YES,
                   parent=self.text)
         if confirm:
+            reply = "yes"
             self.save(None)
-            reply = "yes" if self.get_saved() else "cancel"
-        else:  reply = "cancel" if confirm is None else "no"
+            if not self.get_saved():
+                reply = "cancel"
+        elif confirm is None:
+            reply = "cancel"
+        else:
+            reply = "no"
         self.text.focus_set()
         return reply
 
@@ -394,15 +393,13 @@ class IOBinding:
         if self.editwin.flist:
             self.editwin.update_recent_files_list(filename)
 
-
 def _io_binding(parent):  # htest #
     from tkinter import Toplevel, Text
 
-    top = Toplevel(parent)
-    top.title("Test IOBinding")
+    root = Toplevel(parent)
+    root.title("Test IOBinding")
     x, y = map(int, parent.geometry().split('+')[1:])
-    top.geometry("+%d+%d" % (x, y + 175))
-
+    root.geometry("+%d+%d" % (x, y + 175))
     class MyEditWin:
         def __init__(self, text):
             self.text = text
@@ -426,12 +423,11 @@ def _io_binding(parent):  # htest #
         def savecopy(self, event):
             self.text.event_generate("<<save-copy-of-window-as-file>>")
 
-    text = Text(top)
+    text = Text(root)
     text.pack()
     text.focus_set()
     editwin = MyEditWin(text)
     IOBinding(editwin)
-
 
 if __name__ == "__main__":
     from unittest import main

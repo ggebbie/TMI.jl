@@ -218,13 +218,6 @@ class _RLock:
     def _is_owned(self):
         return self._owner == get_ident()
 
-    # Internal method used for reentrancy checks
-
-    def _recursion_count(self):
-        if self._owner != get_ident():
-            return 0
-        return self._count
-
 _PyRLock = _RLock
 
 
@@ -1651,11 +1644,6 @@ def _after_fork():
                 # its new value since it can have changed.
                 thread._reset_internal_locks(True)
                 ident = get_ident()
-                if isinstance(thread, _DummyThread):
-                    thread.__class__ = _MainThread
-                    thread._name = 'MainThread'
-                    thread._daemonic = False
-                    thread._set_tstate_lock()
                 thread._ident = ident
                 new_active[ident] = thread
             else:

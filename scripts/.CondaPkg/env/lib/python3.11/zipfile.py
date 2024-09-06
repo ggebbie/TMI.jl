@@ -211,8 +211,6 @@ def _strip_extra(extra, xids):
         i = j
     if not modified:
         return extra
-    if start != len(extra):
-        buffer.append(extra[start:])
     return b''.join(buffer)
 
 def _check_zipfile(fp):
@@ -367,7 +365,6 @@ class ZipInfo (object):
         'compress_size',
         'file_size',
         '_raw_time',
-        '_end_offset',
     )
 
     def __init__(self, filename="NoName", date_time=(1980,1,1,0,0,0)):
@@ -409,7 +406,6 @@ class ZipInfo (object):
         self.external_attr = 0          # External file attributes
         self.compress_size = 0          # Size of the compressed file
         self.file_size = 0              # Size of the uncompressed file
-        self._end_offset = None         # Start of the next local header or central directory
         # Other attributes are set by class ZipFile:
         # header_offset         Byte offset to the file header
         # CRC                   CRC-32 of the uncompressed file
@@ -437,12 +433,7 @@ class ZipInfo (object):
         return ''.join(result)
 
     def FileHeader(self, zip64=None):
-        """Return the per-file header as a bytes object.
-
-        When the optional zip64 arg is None rather than a bool, we will
-        decide based upon the file_size and compress_size, if known,
-        False otherwise.
-        """
+        """Return the per-file header as a bytes object."""
         dt = self.date_time
         dosdate = (dt[0] - 1980) << 9 | dt[1] << 5 | dt[2]
         dostime = dt[3] << 11 | dt[4] << 5 | (dt[5] // 2)
@@ -458,13 +449,16 @@ class ZipInfo (object):
 
         min_version = 0
         if zip64 is None:
-            # We always explicitly pass zip64 within this module.... This
-            # remains for anyone using ZipInfo.FileHeader as a public API.
             zip64 = file_size > ZIP64_LIMIT or compress_size > ZIP64_LIMIT
         if zip64:
             fmt = '<HHQQ'
             extra = extra + struct.pack(fmt,
                                         1, struct.calcsize(fmt)-4, file_size, compress_size)
+        if file_size > ZIP64_LIMIT or compress_size > ZIP64_LIMIT:
+            if not zip64:
+                raise LargeZipFile("Filesize would require ZIP64 extensions")
+            # File is larger than what fits into a 4 byte integer,
+            # fall back to the ZIP64 extension
             file_size = 0xffffffff
             compress_size = 0xffffffff
             min_version = ZIP64_VERSION
@@ -559,15 +553,7 @@ class ZipInfo (object):
 
     def is_dir(self):
         """Return True if this archive member is a directory."""
-        if self.filename.endswith('/'):
-            return True
-        # The ZIP format specification requires to use forward slashes
-        # as the directory separator, but in practice some ZIP files
-        # created on Windows can use backward slashes.  For compatibility
-        # with the extraction code which already handles this:
-        if os.path.altsep:
-            return self.filename.endswith((os.path.sep, os.path.altsep))
-        return False
+        return self.filename[-1] == '/'
 
 
 # ZIP encryption uses the CRC32 one-byte primitive for scrambling some
@@ -1195,12 +1181,6 @@ class _ZipWriteFile(io.BufferedIOBase):
             self._zinfo.CRC = self._crc
             self._zinfo.file_size = self._file_size
 
-            if not self._zip64:
-                if self._file_size > ZIP64_LIMIT:
-                    raise RuntimeError("File size too large, try using force_zip64")
-                if self._compress_size > ZIP64_LIMIT:
-                    raise RuntimeError("Compressed size too large, try using force_zip64")
-
             # Write updated header info
             if self._zinfo.flag_bits & _MASK_USE_DATA_DESCRIPTOR:
                 # Write CRC and file sizes after the file data
@@ -1209,6 +1189,13 @@ class _ZipWriteFile(io.BufferedIOBase):
                     self._zinfo.compress_size, self._zinfo.file_size))
                 self._zipfile.start_dir = self._fileobj.tell()
             else:
+                if not self._zip64:
+                    if self._file_size > ZIP64_LIMIT:
+                        raise RuntimeError(
+                            'File size unexpectedly exceeded ZIP64 limit')
+                    if self._compress_size > ZIP64_LIMIT:
+                        raise RuntimeError(
+                            'Compressed size unexpectedly exceeded ZIP64 limit')
                 # Seek backwards and write file header (which will now include
                 # correct CRC and file sizes)
 
@@ -1447,12 +1434,6 @@ class ZipFile:
             if self.debug > 2:
                 print("total", total)
 
-        end_offset = self.start_dir
-        for zinfo in sorted(self.filelist,
-                            key=lambda zinfo: zinfo.header_offset,
-                            reverse=True):
-            zinfo._end_offset = end_offset
-            end_offset = zinfo.header_offset
 
     def namelist(self):
         """Return a list of file names in the archive."""
@@ -1606,10 +1587,6 @@ class ZipFile:
                     'File name in directory %r and header %r differ.'
                     % (zinfo.orig_filename, fname))
 
-            if (zinfo._end_offset is not None and
-                zef_file.tell() + zinfo.compress_size > zinfo._end_offset):
-                raise BadZipFile(f"Overlapped entries: {zinfo.orig_filename!r} (possible zip bomb)")
-
             # check for encrypted flag & handle password
             is_encrypted = zinfo.flag_bits & _MASK_ENCRYPTED
             if is_encrypted:
@@ -1654,9 +1631,8 @@ class ZipFile:
             zinfo.external_attr = 0o600 << 16  # permissions: ?rw-------
 
         # Compressed size can be larger than uncompressed size
-        zip64 = force_zip64 or (zinfo.file_size * 1.05 > ZIP64_LIMIT)
-        if not self._allowZip64 and zip64:
-            raise LargeZipFile("Filesize would require ZIP64 extensions")
+        zip64 = self._allowZip64 and \
+                (force_zip64 or zinfo.file_size * 1.05 > ZIP64_LIMIT)
 
         if self._seekable:
             self.fp.seek(self.start_dir)
@@ -2272,17 +2248,6 @@ class CompleteDirs(ZipFile):
         dir_match = name not in names and dirname in names
         return dirname if dir_match else name
 
-    def getinfo(self, name):
-        """
-        Supplement getinfo for implied dirs.
-        """
-        try:
-            return super().getinfo(name)
-        except KeyError:
-            if not name.endswith('/') or name not in self._name_set():
-                raise
-            return ZipInfo(filename=name)
-
     @classmethod
     def make(cls, source):
         """
@@ -2320,11 +2285,6 @@ class FastLookup(CompleteDirs):
             return self.__lookup
         self.__lookup = super(FastLookup, self)._name_set()
         return self.__lookup
-
-
-def _extract_text_encoding(encoding=None, *args, **kwargs):
-    # stacklevel=3 so that the caller of the caller see any warning.
-    return io.text_encoding(encoding, 3), args, kwargs
 
 
 class Path:
@@ -2436,36 +2396,33 @@ class Path:
             if args or kwargs:
                 raise ValueError("encoding args invalid for binary operation")
             return stream
-        # Text mode:
-        encoding, args, kwargs = _extract_text_encoding(*args, **kwargs)
-        return io.TextIOWrapper(stream, encoding, *args, **kwargs)
-
-    def _base(self):
-        return pathlib.PurePosixPath(self.at or self.root.filename)
+        else:
+            kwargs["encoding"] = io.text_encoding(kwargs.get("encoding"))
+        return io.TextIOWrapper(stream, *args, **kwargs)
 
     @property
     def name(self):
-        return self._base().name
+        return pathlib.Path(self.at).name or self.filename.name
 
     @property
     def suffix(self):
-        return self._base().suffix
+        return pathlib.Path(self.at).suffix or self.filename.suffix
 
     @property
     def suffixes(self):
-        return self._base().suffixes
+        return pathlib.Path(self.at).suffixes or self.filename.suffixes
 
     @property
     def stem(self):
-        return self._base().stem
+        return pathlib.Path(self.at).stem or self.filename.stem
 
     @property
     def filename(self):
         return pathlib.Path(self.root.filename).joinpath(self.at)
 
     def read_text(self, *args, **kwargs):
-        encoding, args, kwargs = _extract_text_encoding(*args, **kwargs)
-        with self.open('r', encoding, *args, **kwargs) as strm:
+        kwargs["encoding"] = io.text_encoding(kwargs.get("encoding"))
+        with self.open('r', *args, **kwargs) as strm:
             return strm.read()
 
     def read_bytes(self):

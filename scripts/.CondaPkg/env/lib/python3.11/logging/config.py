@@ -1,4 +1,4 @@
-# Copyright 2001-2023 by Vinay Sajip. All Rights Reserved.
+# Copyright 2001-2019 by Vinay Sajip. All Rights Reserved.
 #
 # Permission to use, copy, modify, and distribute this software and its
 # documentation for any purpose and without fee is hereby granted,
@@ -19,7 +19,7 @@ Configuration functions for the logging package for Python. The core package
 is based on PEP 282 and comments thereto in comp.lang.python, and influenced
 by Apache's log4j system.
 
-Copyright (C) 2001-2023 Vinay Sajip. All Rights Reserved.
+Copyright (C) 2001-2019 Vinay Sajip. All Rights Reserved.
 
 To use, simply 'import logging' and log away!
 """
@@ -28,8 +28,6 @@ import errno
 import io
 import logging
 import logging.handlers
-import os
-import queue
 import re
 import struct
 import threading
@@ -60,24 +58,15 @@ def fileConfig(fname, defaults=None, disable_existing_loggers=True, encoding=Non
     """
     import configparser
 
-    if isinstance(fname, str):
-        if not os.path.exists(fname):
-            raise FileNotFoundError(f"{fname} doesn't exist")
-        elif not os.path.getsize(fname):
-            raise RuntimeError(f'{fname} is an empty file')
-
     if isinstance(fname, configparser.RawConfigParser):
         cp = fname
     else:
-        try:
-            cp = configparser.ConfigParser(defaults)
-            if hasattr(fname, 'readline'):
-                cp.read_file(fname)
-            else:
-                encoding = io.text_encoding(encoding)
-                cp.read(fname, encoding=encoding)
-        except configparser.ParsingError as e:
-            raise RuntimeError(f'{fname} is invalid: {e}')
+        cp = configparser.ConfigParser(defaults)
+        if hasattr(fname, 'readline'):
+            cp.read_file(fname)
+        else:
+            encoding = io.text_encoding(encoding)
+            cp.read(fname, encoding=encoding)
 
     formatters = _create_formatters(cp)
 
@@ -477,10 +466,10 @@ class BaseConfigurator(object):
         c = config.pop('()')
         if not callable(c):
             c = self.resolve(c)
-        # Check for valid identifiers
-        kwargs = {k: config[k] for k in config if (k != '.' and valid_ident(k))}
-        result = c(**kwargs)
         props = config.pop('.', None)
+        # Check for valid identifiers
+        kwargs = {k: config[k] for k in config if valid_ident(k)}
+        result = c(**kwargs)
         if props:
             for name, value in props.items():
                 setattr(result, name, value)
@@ -752,7 +741,8 @@ class DictConfigurator(BaseConfigurator):
                 'address' in config:
                 config['address'] = self.as_tuple(config['address'])
             factory = klass
-        kwargs = {k: config[k] for k in config if (k != '.' and valid_ident(k))}
+        props = config.pop('.', None)
+        kwargs = {k: config[k] for k in config if valid_ident(k)}
         try:
             result = factory(**kwargs)
         except TypeError as te:
@@ -770,7 +760,6 @@ class DictConfigurator(BaseConfigurator):
             result.setLevel(logging._checkLevel(level))
         if filters:
             self.add_filters(result, filters)
-        props = config.pop('.', None)
         if props:
             for name, value in props.items():
                 setattr(result, name, value)

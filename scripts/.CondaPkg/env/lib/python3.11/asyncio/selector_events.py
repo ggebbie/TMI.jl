@@ -222,10 +222,6 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
                 await waiter
             except BaseException:
                 transport.close()
-                # gh-109534: When an exception is raised by the SSLProtocol object the
-                # exception set in this future can keep the protocol object alive and
-                # cause a reference cycle.
-                waiter = None
                 raise
                 # It's now up to the protocol to handle the connection.
 
@@ -634,11 +630,7 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
 
         fut = self.create_future()
         self._sock_connect(fut, sock, address)
-        try:
-            return await fut
-        finally:
-            # Needed to break cycles when an exception occurs.
-            fut = None
+        return await fut
 
     def _sock_connect(self, fut, sock, address):
         fd = sock.fileno()
@@ -660,8 +652,6 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
             fut.set_exception(exc)
         else:
             fut.set_result(None)
-        finally:
-            fut = None
 
     def _sock_write_done(self, fd, fut, handle=None):
         if handle is None or not handle.cancelled():
@@ -685,8 +675,6 @@ class BaseSelectorEventLoop(base_events.BaseEventLoop):
             fut.set_exception(exc)
         else:
             fut.set_result(None)
-        finally:
-            fut = None
 
     async def sock_accept(self, sock):
         """Accept a connection.
@@ -787,8 +775,6 @@ class _SelectorTransport(transports._FlowControlMixin,
         self._buffer = self._buffer_factory()
         self._conn_lost = 0  # Set when call to connection_lost scheduled.
         self._closing = False  # Set when close() called.
-        self._paused = False  # Set when pause_reading() called
-
         if self._server is not None:
             self._server._attach()
         loop._transports[self._sock_fd] = self
@@ -833,25 +819,6 @@ class _SelectorTransport(transports._FlowControlMixin,
 
     def is_closing(self):
         return self._closing
-
-    def is_reading(self):
-        return not self.is_closing() and not self._paused
-
-    def pause_reading(self):
-        if not self.is_reading():
-            return
-        self._paused = True
-        self._loop._remove_reader(self._sock_fd)
-        if self._loop.get_debug():
-            logger.debug("%r pauses reading", self)
-
-    def resume_reading(self):
-        if self._closing or not self._paused:
-            return
-        self._paused = False
-        self._add_reader(self._sock_fd, self._read_ready)
-        if self._loop.get_debug():
-            logger.debug("%r resumes reading", self)
 
     def close(self):
         if self._closing:
@@ -912,8 +879,9 @@ class _SelectorTransport(transports._FlowControlMixin,
         return len(self._buffer)
 
     def _add_reader(self, fd, callback, *args):
-        if not self.is_reading():
+        if self._closing:
             return
+
         self._loop._add_reader(fd, callback, *args)
 
 
@@ -928,6 +896,7 @@ class _SelectorSocketTransport(_SelectorTransport):
         self._read_ready_cb = None
         super().__init__(loop, sock, protocol, extra, server)
         self._eof = False
+        self._paused = False
         self._empty_waiter = None
 
         # Disable the Nagle algorithm -- small writes will be
@@ -951,6 +920,25 @@ class _SelectorSocketTransport(_SelectorTransport):
             self._read_ready_cb = self._read_ready__data_received
 
         super().set_protocol(protocol)
+
+    def is_reading(self):
+        return not self._paused and not self._closing
+
+    def pause_reading(self):
+        if self._closing or self._paused:
+            return
+        self._paused = True
+        self._loop._remove_reader(self._sock_fd)
+        if self._loop.get_debug():
+            logger.debug("%r pauses reading", self)
+
+    def resume_reading(self):
+        if self._closing or not self._paused:
+            return
+        self._paused = False
+        self._add_reader(self._sock_fd, self._read_ready)
+        if self._loop.get_debug():
+            logger.debug("%r resumes reading", self)
 
     def _read_ready(self):
         self._read_ready_cb()

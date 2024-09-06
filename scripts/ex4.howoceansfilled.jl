@@ -12,15 +12,21 @@
 % See Section 3 and Supplementary Section 4, Gebbie & Huybers 2011. 
 =#
 
-import Pkg; Pkg.activate(".")
+import Pkg; Pkg.activate("./Documents/GitHub/TMI.jl/scripts")
 
 using Revise
 using TMI
 using Test
-using GeoPythonPlot
+# using GeoPythonPlot
+using PythonCall
+using CondaPkg
+using PythonPlot
+const cartopy = pyimport("cartopy")
+ccrs = cartopy.crs
 
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+
 
 volume = volumefilled(TMIversion,Alu,γ)
 
@@ -30,6 +36,11 @@ tlabel="Volume filled by surface patch [log₁₀(m)]"
 GeoPythonPlot.pygui(true) # to help plots appear on screen using Python GUI
 planviewplot(volume,cntrs,titlelabel=tlabel) 
 
+fig, axs = subplots(subplot_kw=Dict("projection"=> ccrs.PlateCarree()), figsize=(11,8.5))
+
+
+axs.coastlines()
+fig
 
 
 
