@@ -11,7 +11,7 @@
 %
 % See Supplementary Section 2, Gebbie & Huybers 2011.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
-import Pkg; Pkg.activate(".")
+import Pkg; Pkg.activate("..")
 
 using Revise
 using TMI

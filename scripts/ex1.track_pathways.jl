@@ -9,7 +9,7 @@
  See Section 2b of Gebbie & Huybers 2010, esp. eqs. (15)-(17).
 =#
 
-import Pkg; Pkg.activate(".")
+import Pkg; Pkg.activate("..")
 
 using Revise
 using TMI
