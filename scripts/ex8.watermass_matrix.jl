@@ -10,7 +10,7 @@ Details of algorithm:
 2. Use least-squares to find smallest deviation that perfectly fits tracers and conserves mass.
 3. If non-negativity is violated, use quadratic programming to invert locally.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
-import Pkg; Pkg.activate(".")
+import Pkg; Pkg.activate("..")
 
 using Revise
 using LinearAlgebra

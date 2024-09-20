@@ -12,7 +12,6 @@ COSMO should be improved by warm starting and making tolerances more strict.
 #using HiGHS
 using COSMO
 
-
 """
 function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)
 
