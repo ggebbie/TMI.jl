@@ -16,18 +16,18 @@ using NCDatasets
 using UnicodePlots
 using Statistics
 using OrderedCollections
-
-using JuMP
-
-#= HiGHS vs. COSMO
-HiGHS is more accurate when fitting both tracers and mass.
-Computational time is the same.
-COSMO is more robust when fitting mass alone (imperfect fit of tracers).
-COSMO should be improved by warm starting and making tolerances more strict.
-=#
-#using HiGHS
-using COSMO
 using Downloads
+
+# using JuMP
+
+# #= HiGHS vs. COSMO
+# HiGHS is more accurate when fitting both tracers and mass.
+# Computational time is the same.
+# COSMO is more robust when fitting mass alone (imperfect fit of tracers).
+# COSMO should be improved by warm starting and making tolerances more strict.
+# =#
+# #using HiGHS
+# using COSMO
 
 export config, config_from_mat, config_from_nc,
     download_ncfile, download_matfile,
