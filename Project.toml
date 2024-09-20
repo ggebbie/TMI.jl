@@ -30,7 +30,7 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 GeoPythonPlot = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
 
 [extensions]
-TMIGeoPythonPlotExt = ["GeoPythonPlot"]
+TMIGeoPythonPlotExt = "GeoPythonPlot"
 
 [compat]
 COSMO = "0.8"
