@@ -2,7 +2,13 @@
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "721fa3ffff1318da85ebff3a592754c0e5bbd003"
+project_hash = "2c942afc5479023e990373bb09c3cb54316c991b"
+
+[[deps.AMD]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse_jll"]
+git-tree-sha1 = "45a1272e3f809d36431e57ab22703c6896b8908f"
+uuid = "14f7f29c-3bd6-536c-9a0b-7339e30b5a3e"
+version = "0.5.3"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -99,6 +105,18 @@ deps = ["Dates", "Printf"]
 git-tree-sha1 = "5afb5c5ba2688ca43a9ad2e5a91cbb93921ccfa1"
 uuid = "179af706-886a-5703-950a-314cd64e0468"
 version = "0.1.3"
+
+[[deps.COSMO]]
+deps = ["AMD", "COSMOAccelerators", "DataStructures", "IterTools", "LinearAlgebra", "MathOptInterface", "Pkg", "Printf", "QDLDL", "Random", "Reexport", "Requires", "SparseArrays", "Statistics", "SuiteSparse", "Test", "UnsafeArrays"]
+git-tree-sha1 = "9ee9809bde10b6875ca58aadcb22af8e36bd83f9"
+uuid = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
+version = "0.8.9"
+
+[[deps.COSMOAccelerators]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "Test"]
+git-tree-sha1 = "b1153b40dd95f856e379f25ae335755ecc24298e"
+uuid = "bbd8fffe-5ad0-4d78-a55e-85575421b4ac"
+version = "0.1.0"
 
 [[deps.CSV]]
 deps = ["CodecZlib", "Dates", "FilePathsBase", "InlineStrings", "Mmap", "Parsers", "PooledArrays", "PrecompileTools", "SentinelArrays", "Tables", "Unicode", "WeakRefStrings", "WorkerUtilities"]
@@ -487,6 +505,11 @@ git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
 version = "0.2.2"
 
+[[deps.IterTools]]
+git-tree-sha1 = "42d5f897009e7ff2cf88db414a389e5ed1bdd023"
+uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
+version = "1.10.0"
+
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
@@ -515,6 +538,18 @@ version = "1.14.0"
 
     [deps.JSON3.weakdeps]
     ArrowTypes = "31f734f8-188a-4ce0-8406-c8a06bd891cd"
+
+[[deps.JuMP]]
+deps = ["LinearAlgebra", "MacroTools", "MathOptInterface", "MutableArithmetics", "OrderedCollections", "PrecompileTools", "Printf", "SparseArrays"]
+git-tree-sha1 = "c95f443d4641b128d626a429b51d5185050135b5"
+uuid = "4076af6c-e467-56ae-b986-b466b2749572"
+version = "1.23.2"
+
+    [deps.JuMP.extensions]
+    JuMPDimensionalDataExt = "DimensionalData"
+
+    [deps.JuMP.weakdeps]
+    DimensionalData = "0703355e-b756-11e9-17c0-8b28908087d0"
 
 [[deps.LLVMOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
@@ -880,6 +915,12 @@ git-tree-sha1 = "6ec334b52f9547f84fde749e512a97d0372ae395"
 uuid = "274fc56d-3b97-40fa-a1cd-1b4a50311bf9"
 version = "1.0.5"
 
+[[deps.QDLDL]]
+deps = ["AMD", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "5a3c14e534faf5b66c4633b5770a665ec1a87503"
+uuid = "bfc457fd-c171-5ab7-bd9e-d5dbfc242d63"
+version = "0.4.1"
+
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
 git-tree-sha1 = "1d587203cf851a51bf1ea31ad7ff89eff8d625ea"
@@ -1127,6 +1168,11 @@ version = "3.6.4"
     IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
     Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[[deps.UnsafeArrays]]
+git-tree-sha1 = "da0c9ca60d3371a4bc86b4e65c45db17086fb3ac"
+uuid = "c4a57d5a-5b31-53a6-b365-19f8c011fbd6"
+version = "1.0.6"
 
 [[deps.UnsafePointers]]
 git-tree-sha1 = "c81331b3b2e60a982be57c046ec91f599ede674a"

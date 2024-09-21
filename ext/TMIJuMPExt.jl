@@ -12,28 +12,9 @@ COSMO should be improved by warm starting and making tolerances more strict.
 #using HiGHS
 using COSMO
 
-"""
-function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)
+import TMI: local_solve, local_quadprog
 
-Create NamedTuple of mass fractions from observations `c`
-
-Doesn't produce a `MassFraction` struct and thus
-is named in lower case.
-
-# Arguments
-- `c::NamedTuple`: input observations
-- `w::NamedTuple`: scale size of observations (used if obs not fit exactly)
-- `alg=:local`: default algorithm is `:local`
-# Output
-- `m::NamedTuple`: collection of mass fractions
-"""
-function massfractions(c::NamedTuple, w::NamedTuple; alg = :local) # assume: `Field`s inside
-    if alg == :local
-        return local_solve(c::NamedTuple, w::NamedTuple)
-    else
-        println("TMI.massfractions: global solution for TMI water-mass matrix not implemented yet")
-    end
-end
+export local_solve, local_quadprog 
 
 """
 function local_solve(c::NamedTuple, w::NamedTuple)
@@ -54,7 +35,7 @@ of `α=100_000`.
 function local_solve(c::NamedTuple, w::NamedTuple) # assume: `Field`s inside
     γ = first(c).γ # assumption: all grids match up
     m̃ = TMI.massfractions_isotropic(γ) # good first guess
-    TMI.local_solve!(m̃,c,w)
+    local_solve!(m̃,c,w)
     return m̃
 end
 
@@ -103,5 +84,80 @@ function local_quadprog(Alocal::Matrix,m0local::Vector,w::Vector)
     return model, x
 end
 
-local_objective_obs(Alocal,x,w) =
-    sum(((Alocal*x)./w).^2)
+local_objective_obs(Alocal,x,w) = sum(((Alocal*x)./w).^2)
+
+
+function local_solve!(m::Union{NamedTuple,Vector}, c::NamedTuple, w::NamedTuple ; alg = :quadprog)
+
+    γ = first(c).γ
+    #Rfull = CartesianIndices(γ.wet)
+    Iint = cartesianindex(γ.interior)
+
+    n   = TMI.neighbors(m,γ)
+    nrow   = length(c) + 1 # add mass conservation
+
+    # allocate maximum needed
+    nmax = maximum(n)
+    b = vcat(zeros(nrow-1),1.0)
+    mlocal = zeros(nmax)
+    nlocal = zeros(nrow)
+    ϵ = 1e-6 # tolerance of mass conservation
+    Jlimit = 1e-4 # scaled cost function target
+    wlocal = vcat([w1 for w1 in w],ϵ)
+
+    for I in Iint
+
+        # well-mixed first guess
+        ncol = n.tracer[I]
+        m0local = ones(ncol) ./ ncol
+        Alocal, single_connection = TMI.local_watermass_matrix(c,m,I,n)
+        n0 = b - Alocal*m0local
+        J0 = sum((n0./wlocal).^2)/nrow
+
+        if J0 < Jlimit # hit target already?
+            mlocal[1:ncol] = m0local
+            #println("first guess good enough @ ",I)
+        else
+            mlocal[1:ncol] = m0local + Alocal\n0
+            nlocal[1:nrow] = b - Alocal*mlocal[1:ncol]
+            Jlocal = sum((nlocal./wlocal).^2)/nrow
+
+            # check connection, fit, and non-negativity
+            if single_connection ||
+                ((Jlocal > Jlimit) ||
+                    !(1.0 - ϵ < sum(abs.(mlocal[1:ncol])) < 1 + ϵ ))
+
+                # quadratic programming
+                # println("run local quadprog @ ",I)
+                model, x = local_quadprog(m0local, Alocal, b)
+
+                if termination_status(model) != OPTIMAL
+                    model2, x2 = local_quadprog(Alocal,
+                        m0local, wlocal)
+                    if termination_status(model2) != OPTIMAL
+                        println("TMI.local solve: WARNING: NEVER FOUND A BETTER SOLUTION! @ ",I)
+                        mlocal[1:ncol] = m0local
+                    else
+                        # println("satisfied only mass cons @ ",I)
+                        mlocal[1:ncol] = value.(x2)
+                    end
+                else
+                    #println("solved for both perfect data and mass cons @ ",I)
+                    mlocal[1:ncol] = value.(x)
+                end
+            end
+        end
+        
+        # Save into proper mass fractions
+        i = 0
+        for m1 in m
+            if m1.γ.wet[I]
+                i += 1
+                # should not need to check bounds 
+                m1.fraction[I] = mlocal[i]
+            end
+        end
+    end
+end
+
+end # module 

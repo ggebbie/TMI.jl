@@ -16,6 +16,8 @@ using Revise
 using LinearAlgebra
 using TMI
 using GeoPythonPlot # will load optional extension
+using COSMO # will load optional extension
+using JuMP # will load optional extension
 
 TMIversion = versionlist()[6] # G14 has no remote mass fractions
 A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
