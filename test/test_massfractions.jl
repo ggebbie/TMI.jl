@@ -1,8 +1,9 @@
 @testset "mass fractions" begin
-
+    using JuMP, COSMO
+    
     TMIversion = versionlist()[6] # G14 has no remote mass fractions
     #    TMIversion = "modern_90x45x33_G14"
-    A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+    A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
     ϵ = 1e-4
     

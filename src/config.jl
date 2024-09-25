@@ -1,7 +1,7 @@
 using Base: print_module_path_file
 # mostly unchanging functions that help configure TMI
 """
-    function config_from_nc(TMIversion; compute_lu = true)
+    function config(TMIversion; compute_lu = true)
     Configure TMI environment from NetCDF input file.
 # Arguments
 - `TMIversion`: TMI version for water-mass/circulation model

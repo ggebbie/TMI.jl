@@ -11,7 +11,6 @@ using Distributions
 using Optim
 using Interpolations
 using LineSearches
-using MAT
 using NCDatasets
 using UnicodePlots
 using Statistics
@@ -29,10 +28,9 @@ using Downloads
 # #using HiGHS
 # using COSMO
 
-export config, config_from_mat, config_from_nc,
-    download_ncfile, download_matfile,
-    vec2fld, fld2vec, surfaceindex,
-    lonindex, latindex, depthindex,
+export config, download_file, #, config_from_mat, config_from_nc,
+    #download_ncfile, download_matfile,
+    surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
     planview, 
@@ -44,7 +42,7 @@ export config, config_from_mat, config_from_nc,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
     readsource,
-    cartesianindex, Γ,
+    cartesianindex, #Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
@@ -982,7 +980,7 @@ end
 """
 function one(T::Type{Field})
     TMIversion = "modern_90x45x33_GH10_GH12"
-    TMIfile = download_ncfile(TMIversion)
+    TMIfile = download_file(TMIversion)
     γ = Grid(TMIfile)
 
     return TMI.ones(γ)

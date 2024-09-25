@@ -6,7 +6,7 @@
 """
 function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
     #get wet mask 
-    TMIfile = download_ncfile(TMIversion)
+    TMIfile = download_file(TMIversion)
     γ = Grid(TMIfile)
     wet = γ.wet[:, :, 1]
     
