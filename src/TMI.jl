@@ -11,28 +11,26 @@ using Distributions
 using Optim
 using Interpolations
 using LineSearches
-using MAT
 using NCDatasets
 using UnicodePlots
 using Statistics
 using OrderedCollections
-
-using JuMP
-
-#= HiGHS vs. COSMO
-HiGHS is more accurate when fitting both tracers and mass.
-Computational time is the same.
-COSMO is more robust when fitting mass alone (imperfect fit of tracers).
-COSMO should be improved by warm starting and making tolerances more strict.
-=#
-#using HiGHS
-using COSMO
 using Downloads
 
-export config, config_from_mat, config_from_nc,
-    download_ncfile, download_matfile,
-    vec2fld, fld2vec, surfaceindex,
-    lonindex, latindex, depthindex,
+# using JuMP
+
+# #= HiGHS vs. COSMO
+# HiGHS is more accurate when fitting both tracers and mass.
+# Computational time is the same.
+# COSMO is more robust when fitting mass alone (imperfect fit of tracers).
+# COSMO should be improved by warm starting and making tolerances more strict.
+# =#
+# #using HiGHS
+# using COSMO
+
+export config, download_file, #, config_from_mat, config_from_nc,
+    #download_ncfile, download_matfile,
+    surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
     planview, 
@@ -44,7 +42,7 @@ export config, config_from_mat, config_from_nc,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
     readsource,
-    cartesianindex, Γ,
+    cartesianindex, #Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
@@ -982,7 +980,7 @@ end
 """
 function one(T::Type{Field})
     TMIversion = "modern_90x45x33_GH10_GH12"
-    TMIfile = download_ncfile(TMIversion)
+    TMIfile = download_file(TMIversion)
     γ = Grid(TMIfile)
 
     return TMI.ones(γ)

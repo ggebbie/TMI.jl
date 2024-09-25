@@ -38,7 +38,7 @@
     c̃ = steadyinversion(A,b,γ)
     @test abs(maximum(c-c̃)) < 1e-4
 
-    # Introduce a nonconservative variables with a source
+    # Introduce a nonconservative variable with a source
     qfield = 1.0e-2 * ones(ngrid)
     # requires negative sign which is counterintutive (needs to be fixed)
     q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)

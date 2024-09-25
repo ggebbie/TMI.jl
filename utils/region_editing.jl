@@ -155,7 +155,7 @@ TMIregionlist = joinpath.(dirname(projectdir()), "data", ["regions_90x45_edit", 
 # then, edit any points in an spreadsheet editor
 # then, write to new file in `TMIregionlist` using the following code 
 for (TMIregion, TMIversion) in zip(TMIregionlist, TMIversionlist) 
-    TMIfile = download_ncfile(TMIversion)
+    TMIfile = download_file(TMIversion)
     γ = Grid(TMIfile)
     for r in TMI.regionlist()
         tracer = CSV_to_tracer(joinpath(datapath, TMIversion * "_" * r * ".csv"))
@@ -175,7 +175,7 @@ TMIregionlist_er = joinpath.(dirname(projectdir()), "data", ["regions_90x45_edit
 # Can then manually change gridcells to numbers corresponding to regions 
 TMIversion, TMIregion = TMIversionlist[2], TMIregionlist[2]
 CSVpathname = joinpath(datapath, "northatlantic_180x90.csv")
-TMIfile = download_ncfile(TMIversion)
+TMIfile = download_file(TMIversion)
 γ = Grid(TMIfile)
 CSV.write(CSVpathname, DataFrame(zeros(3,1,γ,:none,"","").tracer, :auto))
 

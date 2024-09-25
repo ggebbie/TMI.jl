@@ -1,7 +1,7 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
-version = "0.2.17"
+version = "0.2.18"
 
 [deps]
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
@@ -27,10 +27,15 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [weakdeps]
+COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
 GeoPythonPlot = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
+MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
 
 [extensions]
 TMIGeoPythonPlotExt = "GeoPythonPlot"
+TMIJuMPExt = ["JuMP", "COSMO"]
+TMI_MAT_Ext = "MAT"
 
 [compat]
 COSMO = "0.8"
@@ -52,6 +57,8 @@ julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
+JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 
 [targets]
-test = ["Test"]
+test = ["Test", "COSMO", "JuMP"]
