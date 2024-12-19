@@ -76,3 +76,9 @@
 +https://conda.anaconda.org/conda-forge/noarch::colorspacious-1.1.2-pyh24bf2e0_0
 +https://conda.anaconda.org/conda-forge/noarch::cmocean-4.0.3-pyhd8ed1ab_0
 # update specs: ["cartopy=*", "cmocean=*", "matplotlib[version='>=1']", "matplotlib==3.7.3", "openssl[version='>=3, <3.1']", "conda-forge::python[version='>=3.8,<4',build=*cpython*]"]
+==> 2024-09-20 09:37:15 <==
+# cmd: /Users/anthonymeza/.julia/artifacts/98aba21a6802e06a5d2e7c48633d7dc1c3d4a749/bin/micromamba -r /Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root install -y -p /Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env --override-channels --no-channel-priority cartopy[version='*'] cmocean[version='*'] matplotlib[version='>=1'] matplotlib[version='3.7.3'] openssl[version='>=3, <3.1'] pip[version='>=22.0.0'] python[version='>=3.8,<4',channel='conda-forge',build='*cpython*'] -c conda-forge
+# conda version: 3.8.0
+-https://conda.anaconda.org/conda-forge/osx-arm64::python-3.11.0-h3ba56d0_1_cpython
++https://conda.anaconda.org/conda-forge/osx-arm64::python-3.11.0-h3ba56d0_1_cpython
+# update specs: ["cartopy=*", "cmocean=*", "matplotlib[version='>=1']", "matplotlib==3.7.3", "openssl[version='>=3, <3.1']", "pip[version='>=22.0.0']", "conda-forge::python[version='>=3.8,<4',build=*cpython*]"]

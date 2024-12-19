@@ -167,3 +167,23 @@ function regions_mat2nc(TMIversion,γ)
     end
 end
 
+function inregion(loc::Tuple,mask::Array)
+    # wetness bounded by 0 and 1
+    # should be an argument
+    # 1 = very strict
+    # 0 = all points
+    wetness = 0.2
+    wis = interpindex(loc,γ)
+    # handle wraparound
+    list = vcat(1:length(γ.lon),1)
+    wetwrap = view(mask,list,:,:)
+    # are any of them wet?
+    # interpolate ones and zeros on to this loc.
+    # if there is land nearby, the interpolated value
+    # will be greater than 0.
+    # this criterion only requires on land point nearby,
+    # where nearby is one of the 8 corners of the cube that contains loc
+    return Interpolations.InterpGetindex(wetwrap)[wis...] > wetness
+end
+
+inregion(locs::Vector,mask::Array) = [inregion(loc,mask) for loc in locs]

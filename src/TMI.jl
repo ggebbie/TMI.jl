@@ -80,7 +80,8 @@ export config, config_from_mat, config_from_nc,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors
+    massfractions, massfractions_isotropic, neighbors, inregion, 
+    wetsurfacelocation, synthetic_column_observations
 
 import Base: zeros, one, oneunit, ones,  (\)
 import Base: maximum, minimum
@@ -1408,6 +1409,187 @@ function synthetic_observations(TMIversion,variable,γ,N,σ=nothing)
     return y, W⁻, θtrue, ytrue, locs, wis
 end
 
+""" 
+    function synthetic_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+function synthetic_observations(TMIversion,variable,γ,N,maxdepth, σ=nothing)
+
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # take synthetic observations
+    # get observational uncertainty
+    
+    θtrue = readfield(TMIfile,variable,γ)
+    replace!(θtrue.tracer,NaN=>0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile,"σ"*variable,γ)
+        replace!(σθ.tracer,NaN=>0.0)
+    end
+
+    # get random locations that are wet (ocean)
+    locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
+    [locs[i] = wetlocation(γ, maxdepth) for i in eachindex(locs)]
+
+    # get weighted interpolation indices
+    N = length(locs)
+    wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+    [wis[i] = interpindex(locs[i],γ) for i in 1:N]
+
+    ytrue = observe(θtrue,wis,γ)
+    if isnothing(σ)
+        σtrue = observe(σθ,wis,γ)
+    else
+        σtrue = σ * ones(N)
+    end
+
+    #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+    ntrue = rand(Normal(),N).*σtrue
+    y = ytrue .+ ntrue
+
+    # weighting matrix
+    #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+""" 
+    function synthetic_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+function synthetic_column_observations(TMIversion,variable,γ,N::Int, σ=nothing)
+
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # take synthetic observations
+    # get observational uncertainty
+    
+    θtrue = readfield(TMIfile,variable,γ)
+    replace!(θtrue.tracer,NaN=>0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile,"σ"*variable,γ)
+        replace!(σθ.tracer,NaN=>0.0)
+    end
+
+    # get random locations that are wet (ocean)
+    locs = Vector{Tuple{Float64,Float64}}(undef,N)
+    [locs[i] = wetsurfacelocation(γ)[1:2] for i in eachindex(locs)]
+
+    # get weighted interpolation indices
+    N = length(locs)
+    
+    Nd = length(γ.depth)
+    ytrue = zeros(Nd, N)
+    wis = Any[]
+
+    for k in 1:Nd 
+        wisd= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+        dloc = [(locs[i]...,γ.depth[k]) for i in 1:N]
+        println(dloc)
+        [wisd[i] = interpindex(dloc[i],γ) for i in 1:N]
+        push!(wis, wisd)
+        ytrue[k, :] .= observe(θtrue,wisd,γ)
+    end
+
+    σtrue = σ * ones(Nd, N)
+
+    #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+    ntrue = rand(Normal(),(Nd, N)).*σtrue
+    y = ytrue .+ ntrue
+
+    # weighting matrix
+    #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
+
+
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+""" 
+    function synthetic_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+function synthetic_column_observations(TMIversion,variable,γ, locs, σ=nothing)
+
+    # get weighted interpolation indices
+    N = length(locs)
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # take synthetic observations
+    # get observational uncertainty
+    
+    θtrue = readfield(TMIfile,variable,γ)
+    replace!(θtrue.tracer,NaN=>0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile,"σ"*variable,γ)
+        replace!(σθ.tracer,NaN=>0.0)
+    end
+
+
+    
+    Nd = length(γ.depth)
+    ytrue = zeros(Nd, N)
+    wis = Any[]
+
+    for k in 1:Nd 
+        wisd= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+        dloc = [(locs[i]...,γ.depth[k]) for i in 1:N]
+        println(dloc)
+        [wisd[i] = interpindex(dloc[i],γ) for i in 1:N]
+        push!(wis, wisd)
+        ytrue[k, :] .= observe(θtrue,wisd,γ)
+    end
+
+    σtrue = σ * ones(Nd, N)
+
+    #ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+    ntrue = rand(Normal(),(Nd, N)).*σtrue
+    y = ytrue .+ ntrue
+
+    # weighting matrix
+    #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
+
+
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
 """
     function observe
     Take a observation at location given by weights wis
@@ -1920,7 +2102,52 @@ function wetlocation(γ)
         println("dry point, try again")
     end # if not, then start over.
 end
-    
+
+"""
+    function wetlocation(γ)
+    Get (lon,lat,depth) tuples of wet locations.
+    Allow a location to be wet if at least one out of 8 nearby gridpoints is wet.
+    Certainly "wet" gridpoints could be defined more strictly.
+# Arguments
+- `γ`: TMI.grid
+# Output
+- `loc`: lon,lat,depth """
+function wetsurfacelocation(γ)
+
+    confirmwet = false
+    neighbors  = 8
+    while !confirmwet
+        loc = (rand(minimum(γ.lon):0.1:maximum(γ.lon)),
+               rand(minimum(γ.lat):0.1:maximum(γ.lat)), 
+               0)
+
+        iswet(loc,γ) && return loc
+        println("dry point, try again")
+    end # if not, then start over.
+end
+
+"""
+    function wetlocation(γ)
+        restrict wetlocation to only sample surface points
+# Arguments
+- `γ`: TMI.grid
+# Output
+- `loc`: lon,lat,depth """
+
+function wetlocation(γ, maxdepth)
+
+    confirmwet = false
+    neighbors  = 8
+    while !confirmwet
+        loc = (rand(minimum(γ.lon):0.1:maximum(γ.lon)),
+               rand(minimum(γ.lat):0.1:maximum(γ.lat)),
+               rand(minimum(γ.depth):1.0:maxdepth))
+
+        iswet(loc,γ) && return loc
+        println("dry point, try again")
+    end # if not, then start over.
+end
+
 function iswet(loc,γ,neighbors)
     # two approaches
     # approach 2
