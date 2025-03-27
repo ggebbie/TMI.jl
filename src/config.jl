@@ -1,4 +1,3 @@
-using Base: print_module_path_file
 # mostly unchanging functions that help configure TMI
 """
     function config(TMIversion; compute_lu = true)
@@ -430,7 +429,6 @@ function optim2nc(TMIversion)
         nccreate(filenetcdf,varname,"control_element",1:length(ũ),iteratts,atts=uatts)
     end
     close(matobj)
-
 end
 
 """
