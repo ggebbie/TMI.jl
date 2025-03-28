@@ -307,4 +307,18 @@
         compare_controls(u.west,u2.west,2.0)
 
     end
+
+    @testset "mixed layer" begin
+        mixedlayer = mixedlayermask(A,γ)
+        @test sum(mixedlayer) == 13744
+        @test iszero(sum(mixedlayer[:,:,1]))
+
+        τ = 0.1
+        Lmix = mixedlayermatrix(A, γ, τ)
+        @test Lmix isa SparseMatrixCSC
+        @test maximum(Lmix) < 2/τ
+
+        Ldir = dirichletmatrix(γ, τ)
+        @test maximum(Ldir) < 2 / τ
+    end
 end

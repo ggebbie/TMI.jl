@@ -193,14 +193,11 @@ end
 - `b::BoundaryCondition`
 """
 function zeros(dim::I,dimval::I,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition where I <: Integer
-
     baxes,k,wet = boundaryconditionatts(dim,dimval,γ)
-
     tracer = Array{Float64}(undef,size(wet))
     tracer[wet] .= zero(Float64)
     tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,baxes,k,dim,dimval,wet,name,longname,units)
-
+    return BoundaryCondition(tracer,baxes,k,dim,dimval,wet,name,longname,units)
 end
 
 """
@@ -209,14 +206,11 @@ end
        Initialize boundary condition with ones
 """
 function ones(dim::I,dimval::I,γ::Grid,name::Symbol,longname::String,units::String)::BoundaryCondition where I <: Integer
-
     baxes,k,wet = boundaryconditionatts(dim,dimval,γ)
-
     tracer = Array{Float64}(undef,size(wet))
     tracer[wet] .= ones(Float64)
     tracer[.!wet] .= zero(Float64)/zero(Float64)
-    b = BoundaryCondition(tracer,baxes,k,dim,dimval,wet)
-
+    return BoundaryCondition(tracer,baxes,k,dim,dimval,wet)
 end
 
 """
@@ -258,35 +252,6 @@ end
 getboundarycondition(field::Field,dim::Integer,dimval::Integer) =
     getboundarycondition(field,dim,dimval,field.γ)
     
-#     dimsize = size(field.γ.wet)
-#     # dumb way to do it
-#     if dim == 1
-#         wet2d = field.γ.wet[dimval,:,:]
-#         tracer2d = field.tracer[dimval,:,:]
-#         i = field.γ.lat
-#         j = field.γ.depth
-#         k = field.γ.lon[dimval]
-#     elseif dim == 2
-#         wet2d = field.γ.wet[:,dimval,:]
-#         tracer2d = field.tracer[:,dimval,:]
-#         i = field.γ.lon
-#         j = field.γ.depth
-#         k = field.γ.lat[dimval]
-#     elseif dim == 3
-#         wet2d = field.γ.wet[:,:,dimval]
-#         tracer2d = field.tracer[:,:,dimval]
-#         i = field.γ.lon
-#         j = field.γ.lat
-#         k = field.γ.depth[dimval]
-#     else
-#         error("boundary condition not implemented in 4+ dimensions")
-#     end
-    
-#     b = BoundaryCondition(tracer2d,i,j,k,dim,dimval,wet2d,
-#                           field.name,field.longname,field.units)
-
-# end
-
 vec(u::BoundaryCondition) = u.tracer[u.wet]
 
 """
@@ -365,7 +330,6 @@ getwestboundary(c::Field) = getboundarycondition(c,1,1)::BoundaryCondition
 - `b`::BoundaryCondition
 """
 function setboundarycondition!(d::Field,b::BoundaryCondition)
-
     if b.dim == 1
         d.tracer[b.dimval,:,:] += b.tracer
     elseif b.dim == 2
