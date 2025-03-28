@@ -231,3 +231,8 @@ function mixedlayermask(A,γ::Grid)
     end
     return mixedlayer 
 end
+
+"""
+function boundarymask(γ)
+"""
+boundarymask(γ::Grid) = BitArray(γ.wet - γ.interior)

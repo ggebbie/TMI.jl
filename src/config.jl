@@ -239,7 +239,7 @@ Read and assemble the circulation matrix from the efficient storage of A and F�
 # Arguments
 - `A`: TMI water-mass matrix
 - `γ`: TMI grid
-- `τ`: uniform residence timescale for all mixed layer points 
+- `τ`: uniform residence timescale (years) for all mixed layer points 
 # Output
 - `Lmix`: circulation matrix in xyz format for mixed layer points
 """
@@ -253,6 +253,31 @@ function mixedlayermatrix(A, γ, τ)
         end
     end
     return Lmix
+end
+
+"""
+     function dirichletmatrix(γ, τ)
+
+Dirichlet surface boundary matrix with uniform timescale.
+Assumes that the Dirichlet boundary condition is zero.
+
+# Arguments
+- `γ`: TMI grid
+- `τ`: uniform restoring timescale (years) for all boundary points 
+# Output
+- `Ldir`: circulation matrix in xyz format for boundary points
+"""
+function dirichletmatrix(γ::Grid, τ)
+    nfield = sum(γ.wet)
+    Ldir = spzeros(nfield, nfield)
+    boundary = boundarymask(γ)
+    I = γ.I
+    for r in  1:nfield
+        if boundary[I[r]]
+            Ldir[r,r] = - 1.0 / τ
+        end
+    end
+    return Ldir
 end
 
 """ 

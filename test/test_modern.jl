@@ -317,5 +317,8 @@
         Lmix = mixedlayermatrix(A, γ, τ)
         @test Lmix isa SparseMatrixCSC
         @test maximum(Lmix) < 2/τ
+
+        Ldir = dirichletmatrix(γ, τ)
+        @test maximum(Ldir) < 2 / τ
     end
 end
