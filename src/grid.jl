@@ -1,4 +1,3 @@
-using Base: index_ndims, methods_including_ambiguous
 """
     struct Grid
 
@@ -194,6 +193,8 @@ function interiormask(A,wet,nx,ny,nz)
 function interiormask(A,wet,nx,ny,nz)
     interior = falses(nx,ny,nz)
     I = cartesianindex(wet)
+    # Boundaries have rows of A that equal one
+    # Interior points have rows that equal zero
     list = findall(.!(isone.(sum(abs.(A),dims=2))))
     interior[I[list]] .= true 
     return interior
@@ -204,4 +205,29 @@ function interiormask(A,wet,dimsize::NTuple)
     list = findall(.!(isone.(sum(abs.(A),dims=2))))
     interior[I[list]] .= true 
     return interior
+end
+
+"""
+function mixedlayermask(A,wet,nx,ny,nz)
+"""
+function mixedlayermask(A,γ::Grid)
+    mixedlayer = falses(length.(γ.axes))
+
+    Adiag = [A[i,i] for i in 1:size(A,1)]
+    # search the interior for mixed layer points
+
+    Iint = cartesianindex(γ.interior)
+    Rint = γ.R[Iint] # do this once for comp. savings
+
+    # Non mixed layer have diagonals of A that equal -1
+    # Mixed layer have diagonals of A that equal 1
+    for i in eachindex(Iint)
+        #Imatrix = γ.R[I] # index in A matrix
+
+        #list = findall(.!(isone.(sum(abs.(A),dims=2))))
+        if isone(Adiag[Rint[i]]) 
+            mixedlayer[Iint[i]] = true
+        end
+    end
+    return mixedlayer 
 end
