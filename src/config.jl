@@ -151,8 +151,8 @@ end
 
 """
     function circulationmatrix(file,γ)
-    Read and assemble the circulation matrix from MATLAB.
-    Transfer to updated x,y,z version
+    Read and assemble the circulation matrix from NetCDF.
+
 # Arguments
 - `file`: TMI MATLAB file name
 - `γ`: TMI grid
@@ -231,6 +231,29 @@ function boundarymatrix(file,γ)
     end
 end
 
+"""
+     function mixedlayermatrix(A, γ, τ)
+
+Read and assemble the circulation matrix from the efficient storage of A and F₀ variables. 
+
+# Arguments
+- `A`: TMI water-mass matrix
+- `γ`: TMI grid
+- `τ`: uniform residence timescale for all mixed layer points 
+# Output
+- `Lmix`: circulation matrix in xyz format for mixed layer points
+"""
+function mixedlayermatrix(A, γ, τ)
+    Lmix = spzeros(size(A))
+    I = γ.I # coordinates of all wet points, precompute this for speed
+    mixedlayer = mixedlayermask(A,γ)
+    for r in  1:size(A,1)
+        if mixedlayer[I[r]]
+            Lmix[r,:] = - A[r,:] / τ
+        end
+    end
+    return Lmix
+end
 
 """ 
     function ncurl(TMIversion)

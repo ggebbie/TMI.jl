@@ -17,19 +17,7 @@ using Statistics
 using OrderedCollections
 using Downloads
 
-# using JuMP
-
-# #= HiGHS vs. COSMO
-# HiGHS is more accurate when fitting both tracers and mass.
-# Computational time is the same.
-# COSMO is more robust when fitting mass alone (imperfect fit of tracers).
-# COSMO should be improved by warm starting and making tolerances more strict.
-# =#
-# #using HiGHS
-# using COSMO
-
-export config, download_file, #, config_from_mat, config_from_nc,
-    #download_ncfile, download_matfile,
+export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
@@ -42,7 +30,7 @@ export config, download_file, #, config_from_mat, config_from_nc,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
     readsource,
-    cartesianindex, #Γ,
+    cartesianindex,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
@@ -65,7 +53,7 @@ export config, download_file, #, config_from_mat, config_from_nc,
     getsurfaceboundary,getnorthboundary,geteastboundary,
     getsouthboundary,getwestboundary,
     setboundarycondition!,
-    wetmask, interiormask,
+    wetmask, interiormask, mixedlayermask,
     adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
