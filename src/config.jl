@@ -62,13 +62,8 @@ function download_file(TMIversion::String)
     if !isfile(TMIfile)
 
         # add a workaround for large files
-        if TMIversion == "modern_180x90x33_GH11_GH12"
-            println("workaround for 2° x 2°")
-            shellscript = pkgsrcdir("read_nc_modern_180x90x33_GH11_GH12.sh")
-            run(`sh $shellscript`)
-            mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
-        elseif  TMIversion == "nordic_201x115x46_B23"
-            println("use `Downloads.download` for regional Nordic Seas file")
+        if  TMIversion == "nordic_201x115x46_B23" || TMIversion == "modern_180x90x33_GH11_GH12" 
+            println("use `Downloads.download` for large files")
             #shellscript = pkgsrcdir("read_nc_nordic_201x115x46_B23.sh")
             #run(`sh $shellscript`)
             #mv(joinpath(pwd(),"TMI_"*TMIversion*".nc"),TMIfile)
