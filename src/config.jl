@@ -293,7 +293,7 @@ function ncurl(TMIname)
     if TMIname == "modern_90x45x33_GH10_GH12"
         url = "https://docs.google.com/uc?export=download&id=1Fn_cY-90_RDbBGh6kV0kpXmsvwdjp1Cd"
     elseif TMIname == "modern_180x90x33_GH11_GH12"
-        url = "https://docs.google.com/uc?export=download&id=1-YEkB_YeQGqPRH6kauhBb2bi_BjVGt9b"
+        url = "https://argo.whoi.edu/jake/TMI_modern_180x90x33_GH11_GH12.nc"
     elseif TMIname == "modern_90x45x33_unpub12"
         url = "https://docs.google.com/uc?export=download&id=1Kw_Mr7fiKqan0nx0dKvGHnSInP0hQ7AV"
     elseif TMIname == "modern_90x45x33_G14"
