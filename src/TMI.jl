@@ -13,7 +13,6 @@ using Interpolations
 using LineSearches
 using NCDatasets
 using UnicodePlots
-using Statistics
 using OrderedCollections
 using Downloads
 
@@ -931,10 +930,8 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
-    #println("calling one with ",T)
     tracer[γ.wet] .= Base.one(T) # add Base: error "should import Base"
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
-
     d = Field(tracer,γ,name,longname,units)
 
     return d
@@ -1073,16 +1070,6 @@ Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)
     Extend `length` to give the number of wet (i.e., ocean) gridcells.
 """
 Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
-
-"""
-    function Statistics.mean(c::Field)
-
-    Take the volume-weighted mean of a `Field`
-"""
-function Statistics.mean(c::Field)
-    vol = cellvolume(c.γ)
-    return sum(vol.tracer[wet(c)].*c.tracer[wet(c)])/sum(vol.tracer[wet(c)])
-end
 
 """
     Iterate over Field

@@ -1,7 +1,6 @@
 module TMI_MAT_Ext
 
-using TMI 
-using MAT
+using TMI, MAT
 
 import TMI: config, download_file, cartesianindex
 import TMI: axislabels, watermassmatrix, boundarymatrix

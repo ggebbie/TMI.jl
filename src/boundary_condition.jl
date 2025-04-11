@@ -273,14 +273,9 @@ function surfacepatch(lonbox,latbox,γ::Grid{R,3})::BoundaryCondition where R
     # reference longitude to closest central longitude
     lon_central = (lonbox[1] + lonbox[2])/2
 
-    println(lon_central)
-    
     # shift longitudes so that wraparound values are far away
     lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
     replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
-
-    println(maximum(lon_shifted))
-    println(minimum(lon_shifted))
     
     # preallocate
     patch = zeros(γ.wet[:,:,1])

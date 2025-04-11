@@ -186,7 +186,8 @@
     ## globalmap
     @testset "sparsedatamap" begin
 
-        using Statistics, Interpolations, LinearAlgebra
+        using Interpolations, LinearAlgebra
+        using Statistics
         
         N = 20
         y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
@@ -233,7 +234,8 @@
 
     @testset "sourcemap" begin
 
-        using Statistics, Interpolations
+        using Interpolations
+        using Statistics
 
         for lscale in (false,true)
             for surfacetoo in (false,true)
