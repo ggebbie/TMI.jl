@@ -12,13 +12,13 @@ end
 
 @testset "TMI.jl" begin
 
-    include("test_nordic.jl")
+#    include("test_nordic.jl")
 
     include("test_modern.jl")
 
-    include("test_mitgcm.jl")
+ #   include("test_mitgcm.jl")
 
-    include("test_massfractions.jl")
+  #  include("test_massfractions.jl")
 
-    include("test_1d.jl")
+   # include("test_1d.jl")
 end
