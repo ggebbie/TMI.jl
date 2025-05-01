@@ -1,0 +1,64 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.24 (MiKTeX 22.1) (preloaded format=pdflatex 2024.8.29)  3 SEP 2024 23:53
+entering extended mode
+ restricted \write18 enabled.
+ file:line:error style messages enabled.
+ %&-line parsing enabled.
+**/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTech
+nology/Documents/GitHub/TMI.jl/docs/docs.tex
+
+(/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechn
+ology/Documents/GitHub/TMI.jl/docs/docs.tex
+LaTeX2e <2024-06-01> patch level 2
+L3 programming layer <2024-07-20>
+
+(/Users/anthonymeza/Library/Application Support/MiKTeX/texmfs/install/tex/latex
+/aguplus/aguplus.cls
+Document Class: aguplus 1999/08/19 1.6b (PWD)
+(/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/article.cls
+Document Class: article 2024/02/08 v1.4n Standard LaTeX document class
+(/Library/Application Support/MiKTeX/texmfs/install/tex/latex/base/size12.clo
+File: size12.clo 2024/02/08 v1.4n Standard LaTeX file (size option)
+)
+\c@part=\count194
+\c@section=\count195
+\c@subsection=\count196
+\c@subsubsection=\count197
+\c@paragraph=\count198
+\c@subparagraph=\count199
+\c@figure=\count266
+\c@table=\count267
+\abovecaptionskip=\skip49
+\belowcaptionskip=\skip50
+\bibindent=\dimen141
+)
+\@maxsep=\dimen142
+\@dblmaxsep=\dimen143
+
+/Users/anthonymeza/Library/Application Support/MiKTeX/texmfs/install/tex/latex/
+aguplus/aguplus.cls:76: Class aguplus Error: File agums.sty does not exist.
+
+See the aguplus class documentation for explanation.
+Type  H <return>  for immediate help.
+ ...                                              
+                                                  
+l.76    \stop}
+              
+Make agums.sty accessible
+
+ ) )
+(\end occurred when \ifx on line 6 was incomplete) 
+Here is how much of TeX's memory you used:
+ 261 strings out of 473899
+ 3815 string characters out of 5723633
+ 1925957 words of memory out of 5000000
+ 23218 multiletter control sequences out of 15000+600000
+ 558367 words of font info for 37 fonts, out of 8000000 for 9000
+ 1141 hyphenation exceptions out of 8191
+ 49i,1n,52p,277b,36s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+No pages of output.
+PDF statistics:
+ 0 PDF objects out of 1000 (max. 8388607)
+ 0 named destinations out of 1000 (max. 500000)
+ 1 words of extra memory for PDF output out of 10000 (max. 10000000)
+
