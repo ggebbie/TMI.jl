@@ -1,5 +1,4 @@
 module TMI
-
 using LinearAlgebra
 using SparseArrays
 using NetCDF
@@ -11,13 +10,28 @@ using Distributions
 using Optim
 using Interpolations
 using LineSearches
+using MAT
 using NCDatasets
 using UnicodePlots
+using Statistics
 using OrderedCollections
+#using Pkg
+using JuMP
+using StatsBase
+#= HiGHS vs. COSMO
+HiGHS is more accurate when fitting both tracers and mass.
+Computational time is the same.
+COSMO is more robust when fitting mass alone (imperfect fit of tracers).
+COSMO should be improved by warm starting and making tolerances more strict.
+=#
+#using HiGHS
+using COSMO
 using Downloads
 
-export config, download_file,
-    surfaceindex, lonindex, latindex, depthindex,
+export config, config_from_mat, config_from_nc,
+    download_ncfile, download_matfile,
+    vec2fld, fld2vec, surfaceindex,
+    lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
     planview, 
@@ -25,12 +39,11 @@ export config, download_file,
     tracerinit,
     watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
-    dirichletmatrix, mixedlayermatrix, 
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
     readsource,
-    cartesianindex,
+    cartesianindex, Γ,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
@@ -53,7 +66,7 @@ export config, download_file,
     getsurfaceboundary,getnorthboundary,geteastboundary,
     getsouthboundary,getwestboundary,
     setboundarycondition!,
-    wetmask, interiormask, mixedlayermask, boundarymask,
+    wetmask, interiormask,
     adjustboundarycondition, adjustboundarycondition!,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
@@ -66,9 +79,9 @@ export config, download_file,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors
+    massfractions, massfractions_isotropic, neighbors,ocean_synthetic_observations,
+    surface_synthetic_observations,surface_synthetic_observations2,ocean_synthetic_observations2
 
-export wetsurfacelocation, random_profiles
 import Base: zeros, one, oneunit, ones,  (\)
 import Base: maximum, minimum
 import Base: (+), (-), (*), (/), vec
@@ -102,7 +115,6 @@ include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
-include(pkgsrcdir("random_profiles.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -932,8 +944,10 @@ function ones(γ::Grid,name=:none,longname="unknown",units="unknown")::Field
 
     # set ocean to zero, land to NaN
     # consider whether land should be nothing or missing
+    #println("calling one with ",T)
     tracer[γ.wet] .= Base.one(T) # add Base: error "should import Base"
     tracer[.!γ.wet] .= zero(T)/zero(T) # NaNs with right type
+
     d = Field(tracer,γ,name,longname,units)
 
     return d
@@ -968,7 +982,7 @@ end
 """
 function one(T::Type{Field})
     TMIversion = "modern_90x45x33_GH10_GH12"
-    TMIfile = download_file(TMIversion)
+    TMIfile = download_ncfile(TMIversion)
     γ = Grid(TMIfile)
 
     return TMI.ones(γ)
@@ -1072,6 +1086,29 @@ Base.minimum(c::Union{Field,Source,BoundaryCondition}) = minimum(c.tracer[wet(c)
     Extend `length` to give the number of wet (i.e., ocean) gridcells.
 """
 Base.length(c::Union{Field,Source,BoundaryCondition}) = length(c.tracer[wet(c)])
+
+"""
+    function Statistics.mean(c::Field)
+
+    Take the volume-weighted mean of a `Field`
+"""
+function Statistics.mean(c::Field)
+    vol = cellvolume(c.γ)
+    return sum(vol.tracer[wet(c)].*c.tracer[wet(c)])/sum(vol.tracer[wet(c)])
+end
+"""
+    function Statistics.mean(c::BC) for boundary condition
+
+    Take the volume-weighted mean of a `Field`
+"""
+function Statistics.mean(c::BoundaryCondition,γ)
+    area = cellarea(γ)
+    return sum(area.tracer[wet(c)].*c.tracer[wet(c)])/sum(area.tracer[wet(c)])
+end
+
+Base.sort(y_all::BoundaryCondition;rev=true) = sort(y_all.tracer[y_all.wet],rev=rev)
+
+Base.sort(y_all::Field;rev=true) = sort(y_all.tracer[y_all.γ.wet],rev=rev)
 
 """
     Iterate over Field
@@ -1289,7 +1326,9 @@ function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
     end
 end
 
+
 """ 
+Modified 2
     function synthetic_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
     This version: gridded observations
@@ -1301,22 +1340,40 @@ end
 - `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
 - `θtrue`: real observations, 3D field
 """
-function synthetic_observations(TMIversion,variable,γ)
+function surface_synthetic_observations(TMIversion,variable,γ;σ=nothing)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     # take synthetic observations
     # get observational uncertainty
-    θtrue = readfield(TMIfile,variable,γ)
-    σθ = readfield(TMIfile,"σ"*variable,γ)
 
-    #ntrue = zeros(γ)
-    #ntrue = zeros(γ.wet)
-    #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
-
-    ntrue = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
-    ntrue *= σθ
+    θglobal = readfield(TMIfile,variable,γ)
+    θtrue = getsurfaceboundary(θglobal)
+    nglobal = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
+    ntrue = getsurfaceboundary(nglobal)
+    
+    if isnothing(σ)
+        
+        σθglobal = readfield(TMIfile,"σ"*variable,γ)
+        σθ = getsurfaceboundary(σθglobal)
+        ntrue *= σθ
+        W⁻ = (1/sum(γ.wet[:,:,1])) .* Diagonal(1 ./σθ.tracer[γ.wet[:,:,1]].^2)
+    elseif σ isa Number
+        
+        ntrue *= σ
+        nocean = sum(γ.wet[:,:,1])
+        diag = fill(1/σ^2,nocean)
+        println("4")
+        W⁻ = (1/sum(γ.wet[:,:,1])) .* Diagonal(diag)
+        
+    else
+        
+        error("Sigma is not a number")
+    end
+        
     y = θtrue + ntrue
+    
+
     #y = θtrue .+ ntrue
 
     # get cost function (J) based on model misfit
@@ -1324,11 +1381,356 @@ function synthetic_observations(TMIversion,variable,γ)
 
     # weighting matrix
     #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
-    W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ.tracer[γ.wet].^2)
+    
     return y, W⁻, θtrue
 end
- 
+
 """ 
+Modified
+    function synthetic_observations(TMIversion,variable)
+    Synthetic observations that are a contaminated version of real observations
+    This version: gridded observations
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `θtrue`: real observations, 3D field
+"""
+function synthetic_observations(TMIversion,variable,γ;σ=nothing)
+
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # take synthetic observations
+    # get observational uncertainty
+    θtrue = readfield(TMIfile,variable,γ)
+    ntrue = Field(rand(Normal(),size(γ.wet)),γ,θtrue.name,θtrue.longname,θtrue.units)
+    
+    if isnothing(σ)
+        
+        σθ = readfield(TMIfile,"σ"*variable,γ)
+            #ntrue = zeros(γ)
+        #ntrue = zeros(γ.wet)
+        #ntrue += rand(Normal(),length(σθ[γ.wet])) .* σθ[γ.wet]
+        ntrue *= σθ
+        W⁻ = (1/sum(γ.wet)) .* Diagonal(1 ./σθ.tracer[γ.wet].^2)
+    elseif σ isa Number
+        
+        ntrue *= σ
+        nocean = sum(γ.wet)
+        diag = fill(1/σ^2,nocean)
+        println("4")
+        W⁻ = (1/sum(γ.wet)) .* Diagonal(diag)
+        
+    else
+        
+        error("Sigma is not a number")
+    end
+        
+    y = θtrue + ntrue
+    
+
+    #y = θtrue .+ ntrue
+
+    # get cost function (J) based on model misfit
+    # here the data-model misfit is weighted by the expected error
+
+    # weighting matrix
+    #W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+    
+    return y, W⁻, θtrue
+end
+
+"""
+Paban Modified3 
+This function takes the tracer field as given, this function is tailored to GH19 
+Where the GH19 tracer field is already loaded and the weight is obtained from GH11_12
+function synthetic_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+    # Arguments
+    - `TMIversion::String`: version of TMI water-mass/circulation model
+    - `variable::String`: variable name to use as template
+    - `N`: number of observations
+    - `locs`: location of sampling
+    # Output
+    - `y`: contaminated observations on 3D grid
+    - `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+    - `ytrue`: uncontaminated observations, 3D field
+    - `locs`: 3-tuples of locations for observations
+    - `wis`: weighted indices for interpolation to locs sites
+    
+
+"""
+
+function ocean_synthetic_observations3(TMIfile_GH11_12, θtrue, γ, N; σ=nothing, locs=nothing, wis=nothing)
+    
+    replace!(θtrue.tracer, NaN => 0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile, "σ" * variable, γ)
+        replace!(σθ.tracer, NaN => 0.0)
+    end
+    println("taking ocean locs: $locs")
+    # Get random locations that are wet (ocean)
+    if isnothing(locs)
+        locs = [wetlocation(γ) for _ in 1:N]
+    end
+
+    # Get weighted interpolation indices
+    if isnothing(wis)
+        wis = [interpindex(locs[i], γ) for i in 1:N]
+    end
+
+    ytrue = observe(θtrue, wis, γ)
+    if isnothing(σ)
+        σtrue = observe(σθ, wis, γ)
+    else
+        σtrue = σ * ones(N)
+    end
+
+    ntrue = rand(Normal(), N) .* σtrue
+    y = ytrue .+ ntrue
+
+    W⁻ = (1 / N) .* Diagonal(1 ./ σtrue.^2)
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+
+
+
+
+
+""" 
+Paban Modified2 for given locations
+function synthetic_observations(TMIversion,variable,locs)
+Synthetic observations that are a contaminated version of real observations
+This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+- `locs`: location of sampling
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+
+function ocean_synthetic_observations2(TMIversion, variable, γ, N; σ=nothing, locs=nothing, wis=nothing)
+    TMIfile = pkgdatadir("TMI_" * TMIversion * ".nc")
+
+    # Take synthetic observations
+    # Get observational uncertainty
+    θtrue = readfield(TMIfile, variable, γ)
+    replace!(θtrue.tracer, NaN => 0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile, "σ" * variable, γ)
+        replace!(σθ.tracer, NaN => 0.0)
+    end
+    println("taking ocean locs: $locs")
+    # Get random locations that are wet (ocean)
+    if isnothing(locs)
+        locs = [wetlocation(γ) for _ in 1:N]
+    end
+
+    # Get weighted interpolation indices
+    if isnothing(wis)
+        wis = [interpindex(locs[i], γ) for i in 1:N]
+    end
+
+    ytrue = observe(θtrue, wis, γ)
+    if isnothing(σ)
+        σtrue = observe(σθ, wis, γ)
+    else
+        σtrue = σ * ones(N)
+    end
+
+    ntrue = rand(Normal(), N) .* σtrue
+    y = ytrue .+ ntrue
+
+    W⁻ = (1 / N) .* Diagonal(1 ./ σtrue.^2)
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+
+
+""" 
+Paban Modified
+function synthetic_observations(TMIversion,variable,locs)
+Synthetic observations that are a contaminated version of real observations
+This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+function ocean_synthetic_observations(TMIversion,variable,γ,N;σ=nothing)
+
+TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+# take synthetic observations
+# get observational uncertainty
+
+θtrue = readfield(TMIfile,variable,γ)
+replace!(θtrue.tracer,NaN=>0.0)
+
+if isnothing(σ)
+    σθ = readfield(TMIfile,"σ"*variable,γ)
+    replace!(σθ.tracer,NaN=>0.0)
+end
+
+# get random locations that are wet (ocean)
+locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
+[locs[i] = wetlocation(γ) for i in eachindex(locs)]
+
+# get weighted interpolation indices
+N = length(locs)
+wis= Vector{Tuple{Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}, Interpolations.WeightedAdjIndex{2, Float64}}}(undef,N)
+[wis[i] = interpindex(locs[i],γ) for i in 1:N]
+
+ytrue = observe(θtrue,wis,γ)
+if isnothing(σ)
+    σtrue = observe(σθ,wis,γ)
+else
+    σtrue = σ * ones(N)
+end
+
+#ntrue = rand(Normal.(zeros(N),σtrue),N)# .* σtrue
+ntrue = rand(Normal(),N).*σtrue
+y = ytrue .+ ntrue
+
+# weighting matrix
+#W = sum(γ.wet) .* Diagonal(σθ[γ.wet].^2)
+W⁻ = (1/N) .* Diagonal(1 ./σtrue.^2)
+return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+
+""" Paban Modified3 for given locations 
+    This function is modification of surface_synthetic_observations2, to adapt to the GH19 data,
+    where the tracer field is already available but the grid is obtained from GH11-12. So, provide the 
+    tracer field in this function.
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+- `locs`: provide the locations 
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+
+function surface_synthetic_observations3(TMIfile_GH11_12, θtrue, γ, N; σ=nothing, locs=nothing, wis=nothing)
+
+    replace!(θtrue.tracer, NaN => 0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile, "σ"*variable, γ)
+        replace!(σθ.tracer, NaN => 0.0)
+    end
+
+    # get random locations that are wet (ocean)
+    println("taking surface locs: $locs")
+    if isnothing(locs)
+        locs = [surface_wetlocation(γ) for _ in 1:N]
+    end
+
+    # get weighted interpolation indices
+    if isnothing(wis)
+        wis = [interpindex(locs[i], γ) for i in 1:N]
+    end
+
+    ytrue = observe(θtrue, wis, γ)
+    if isnothing(σ)
+        σtrue = observe(σθ, wis, γ)
+    else
+        σtrue = σ * ones(N)
+    end
+
+    ntrue = rand(Normal(), N) .* σtrue
+    y = ytrue .+ ntrue
+
+    W⁻ = (1/N) .* Diagonal(1 ./ σtrue.^2)
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+
+
+""" Paban Modified2 for given locations 
+    function synthetic_observations(TMIversion,variable,locs)
+    Synthetic observations that are a contaminated version of real observations
+    This version: observations with random (uniform) spatial sampling
+# Arguments
+- `TMIversion::String`: version of TMI water-mass/circulation model
+- `variable::String`: variable name to use as template
+- `N`: number of observations
+- `locs`: provide the locations 
+# Output
+- `y`: contaminated observations on 3D grid
+- `W⁻`: appropriate weighting (inverse covariance) matrix for these observations,
+- `ytrue`: uncontaminated observations, 3D field
+- `locs`: 3-tuples of locations for observations
+- `wis`: weighted indices for interpolation to locs sites
+"""
+
+function surface_synthetic_observations2(TMIversion, variable, γ, N; σ=nothing, locs=nothing, wis=nothing)
+    TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
+
+    # take synthetic observations
+    # get observational uncertainty
+    θtrue = readfield(TMIfile, variable, γ)
+    replace!(θtrue.tracer, NaN => 0.0)
+
+    if isnothing(σ)
+        σθ = readfield(TMIfile, "σ"*variable, γ)
+        replace!(σθ.tracer, NaN => 0.0)
+    end
+
+    # get random locations that are wet (ocean)
+    println("taking surface locs: $locs")
+    if isnothing(locs)
+        locs = [surface_wetlocation(γ) for _ in 1:N]
+    end
+
+    # get weighted interpolation indices
+    if isnothing(wis)
+        wis = [interpindex(locs[i], γ) for i in 1:N]
+    end
+
+    ytrue = observe(θtrue, wis, γ)
+    if isnothing(σ)
+        σtrue = observe(σθ, wis, γ)
+    else
+        σtrue = σ * ones(N)
+    end
+
+    ntrue = rand(Normal(), N) .* σtrue
+    y = ytrue .+ ntrue
+
+    W⁻ = (1/N) .* Diagonal(1 ./ σtrue.^2)
+    return y, W⁻, θtrue, ytrue, locs, wis
+end
+
+
+
+
+""" Paban Modified
     function synthetic_observations(TMIversion,variable,locs)
     Synthetic observations that are a contaminated version of real observations
     This version: observations with random (uniform) spatial sampling
@@ -1343,7 +1745,7 @@ end
 - `locs`: 3-tuples of locations for observations
 - `wis`: weighted indices for interpolation to locs sites
 """
-function synthetic_observations(TMIversion,variable,γ,N,σ=nothing)
+function surface_synthetic_observations(TMIversion,variable,γ,N;σ=nothing)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
@@ -1360,7 +1762,7 @@ function synthetic_observations(TMIversion,variable,γ,N,σ=nothing)
 
     # get random locations that are wet (ocean)
     locs = Vector{Tuple{Float64,Float64,Float64}}(undef,N)
-    [locs[i] = wetlocation(γ) for i in eachindex(locs)]
+    [locs[i] = surface_wetlocation(γ) for i in eachindex(locs)]
 
     # get weighted interpolation indices
     N = length(locs)
@@ -1874,6 +2276,50 @@ end
 #     return gb
 # end
 
+
+"""
+    function deep_wetlocation(γ) for bottom cell, for MOT calculation that uses deepest_wet_depth_at_location(lon, lat, γ)
+    Get (lon,lat,depth) tuples of wet locations.
+    Allow a location to be wet if at least one out of 8 nearby gridpoints is wet.
+    Certainly "wet" gridpoints could be defined more strictly.
+# Arguments
+- `γ`: TMI.grid
+# Output
+- `loc`: lon,lat,depth """
+
+function deepest_wet_depth_at_location(lon, lat, γ)
+    # Assume γ.depth is sorted in ascending order
+    for depth in reverse(γ.depth)
+        loc = (lon, lat, depth)
+        if iswet(loc, γ)
+            return depth
+        end
+    end
+    return nothing  # Return nothing if no wet depth is found
+end
+
+function deep_wetlocation(γ,lon,lat)
+    confirmwet = false
+    while !confirmwet
+        # # Generate random longitude and latitude
+        # lon = rand(minimum(γ.lon):0.1:maximum(γ.lon))
+        # lat = rand(minimum(γ.lat):0.1:maximum(γ.lat))
+
+        # Find the deepest wet depth at the random location
+        depth = deepest_wet_depth_at_location(lon, lat, γ)
+        println("Maximum depths is $depth")
+        
+        if depth !== nothing
+            loc = (lon, lat, depth)
+            return loc  # Return the location if it's wet
+        else
+            println("No wet depth found, try again")
+        end
+    end
+end
+
+
+
 """
     function wetlocation(γ)
     Get (lon,lat,depth) tuples of wet locations.
@@ -1896,6 +2342,59 @@ function wetlocation(γ)
         println("dry point, try again")
     end # if not, then start over.
 end
+
+function surface_wetlocation(γ)
+#Paban Modified
+    confirmwet = false
+    neighbors  = 8
+    while !confirmwet
+        loc = (rand(minimum(γ.lon):0.1:maximum(γ.lon)),
+               rand(minimum(γ.lat):0.1:maximum(γ.lat)),
+               γ.depth[0])
+
+        iswet(loc,γ) && return loc
+        println("dry point, try again")
+    end # if not, then start over.
+end
+
+
+############ Paban Modified for Weighted sampling on 09/28/24 ###############
+
+
+function calculate_lat_weights(latitudes)
+    # Calculate latitude weights similar to the Python approach
+    lat_weights = (cosd.(latitudes))  # Julia's cosd computes cosine in degrees
+    # lat_weights = 1 ./ (cosd.(latitudes) .+ 0.5)  # Julia's cosd computes cosine in degrees
+    lat_weights /= sum(lat_weights)  # Normalize the weights
+    return lat_weights
+end
+
+function sample_latitudes(latitudes, lat_weights, N)
+    #println(Pkg.installed()["StatsBase"])
+    lat_samples = sample(latitudes, Weights(lat_weights), N)
+    return lat_samples
+end
+
+function surface_wetlocation(γ, lat_weights)
+    # Calculate possible latitudes based on γ's grid
+    latitudes = collect(minimum(γ.lat):0.1:maximum(γ.lat))
+    confirmwet = false
+    while !confirmwet
+        # Sample a latitude using the weights
+        lat = sample_latitudes(latitudes, lat_weights, 1)[1]
+        # Randomly select a longitude
+        lon = rand(minimum(γ.lon):0.1:maximum(γ.lon))
+        loc = (lon, lat, 5.0)
+        iswet(loc, γ) && return loc
+        println("dry point, try again")
+    end
+end
+
+#############################################################################
+
+
+
+
     
 function iswet(loc,γ,neighbors)
     # two approaches
