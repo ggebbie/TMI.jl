@@ -289,6 +289,32 @@ function surfacepatch(lonbox,latbox,γ::Grid{R,3})::BoundaryCondition where R
     return b
 end
 
+function incube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+
+    # input must be self consistent
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    
+    # preallocate
+    cube = 0 * γ.wet
+
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
+                     lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+
+    return cube
+end
+
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
 zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
