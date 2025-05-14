@@ -290,20 +290,15 @@ function surfacepatch(lonbox,latbox,γ::Grid{R,3})::BoundaryCondition where R
 end
 
 function incube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
-
     # input must be self consistent
     ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
-
     # reference longitude to closest central longitude
     lon_central = (lonlims[1] + lonlims[2])/2
-
     # shift longitudes so that wraparound values are far away
     lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
     replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
-    
     # preallocate
     cube = 0 * γ.wet
-
     # can you add a logical to a Float64? yes, it's 1.0
     [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
                      lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
@@ -311,7 +306,123 @@ function incube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
     for i in eachindex(γ.lon)
     for j in eachindex(γ.lat)
     for k in eachindex(γ.depth)]
+    return cube
+end
 
+function east_of_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    # input must be self consistent
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
+                     lon_shifted[i] > lonlims[2] &&
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+    return cube
+end
+
+function west_of_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    # input must be self consistent
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
+                     lon_shifted[i] < lonlims[1] &&
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+    return cube
+end
+
+function south_of_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    # input must be self consistent
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  γ.lat[j] < latlims[1] &&
+                     lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+    return cube
+end
+
+function north_of_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    # input must be self consistent
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  γ.lat[j] > latlims[2] &&
+                     lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+    return cube
+end
+
+function above_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
+                     lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
+                     γ.depth[k] < depthlims[1] 
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
+    return cube
+end
+function below_cube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
+    ((lonlims[1] > lonlims[2]) || (latlims[1] > latlims[2]) || (depthlims[1] > depthlims[2])) && error("incube: upper bound less than lower bound")
+    # reference longitude to closest central longitude
+    lon_central = (lonlims[1] + lonlims[2])/2
+    # shift longitudes so that wraparound values are far away
+    lon_shifted = replace(x -> (x > lon_central + 180) ? x - 360 : x, γ.lon)
+    replace!(x -> (x < lon_central - 180) ? x + 360 : x, lon_shifted)
+    # preallocate
+    cube = 0 * γ.wet
+    # can you add a logical to a Float64? yes, it's 1.0
+    [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
+                     lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
+                     depthlims[2] <  γ.depth[k] 
+    for i in eachindex(γ.lon)
+    for j in eachindex(γ.lat)
+    for k in eachindex(γ.depth)]
     return cube
 end
 

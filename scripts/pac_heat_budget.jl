@@ -8,6 +8,7 @@ using Revise
 using LinearAlgebra
 using TMI
 using GeoPythonPlot # will load optional extension
+using SparseArrays
 
 TMIversion = versionlist()[1] # G14 has no remote mass fractions
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
@@ -19,27 +20,121 @@ y = (θ =  readfield(TMIfile, "θ", γ),
     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
 )
 
+## get steady version of tracers₄
+θb = getsurfaceboundary(y.θ)
+
+## preformed phosphate
+θ = steadyinversion(Alu,θb,γ)
+
 ## heat budget at one point
-Inorthpac = nearestneighbor((210,40,2500), γ)
+Inorthpac = nearestneighbor((210,35,2500), γ)
 row_northpac  = γ.R[Inorthpac]
-yprime = vec(y.θ)  .- y.θ.tracer[Inorthpac]
+yprime = vec(θ)  .- θ.tracer[Inorthpac]
 Tflux = (L[row_northpac,:] .* yprime) * 1e4  # cK/century
+col_northpac = Tflux.nzind
+
+γ.I[Tflux.nzind]
 
 # control volume
-cube = TMI.incube((135,240),(30,65),(2000,3000), γ)
-vol = cellvolume( γ)./1e12
+cube = TMI.incube((125,240),(30,65),(2000,3000), γ)
+cube_up = TMI.above_cube((125,240),(30,65),(2000,3000), γ)
+cube_down = TMI.below_cube((125,240),(30,65),(2000,3000), γ)
+cube_east = TMI.east_of_cube((125,240),(30,65),(2000,3000), γ)
+cube_west = TMI.west_of_cube((125,240),(30,65),(2000,3000), γ)
+cube_north = TMI.north_of_cube((125,240),(30,65),(2000,3000), γ)
+cube_south = TMI.south_of_cube((125,240),(30,65),(2000,3000), γ)
+
+cube = TMI.incube((209,211),(34,36),(2400,2600), γ)
+cube_up = TMI.above_cube((209,211),(34,36),(2400,2600), γ)
+cube_down = TMI.below_cube((209,211),(34,36),(2400,2600), γ)
+cube_east = TMI.east_of_cube((209,211),(34,36),(2400,2600), γ)
+cube_west = TMI.west_of_cube((209,211),(34,36),(2400,2600), γ)
+cube_north = TMI.north_of_cube((209,211),(34,36),(2400,2600), γ)
+cube_south = TMI.south_of_cube((209,211),(34,36),(2400,2600), γ)
+
+cube = TMI.incube((125,240),(20,40),(1500,2500), γ)
+cube_up = TMI.above_cube((125,240),(20,40),(1500,2500), γ)
+cube_down = TMI.below_cube((125,240),(20,40),(1500,2500), γ)
+cube_east = TMI.east_of_cube((125,240),(20,40),(1500,2500), γ)
+cube_west = TMI.west_of_cube((125,240),(20,40),(1500,2500), γ)
+cube_north = TMI.north_of_cube((125,240),(20,40),(1500,2500), γ)
+cube_south = TMI.south_of_cube((125,240),(20,40),(1500,2500), γ)
+
+volnormed = cellvolume( γ)./1e12
+vol= cellvolume( γ)
 
 dTdt = 0.0
+dTdt_down = 0.0
+dTdt_up = 0.0
+dTdt_east = 0.0
+dTdt_west = 0.0
+dTdt_north = 0.0
+dTdt_south = 0.0
+dTdt_int = 0.0
+
 cubevec = cube[γ.wet]
+cubevec = cube[γ.wet]
+cumvol = 0.0
 for i in eachindex(cubevec)
     if cubevec[i]
-        ypr = y.θ.tracer[γ.wet]  .- y.θ.tracer[γ.wet][i]
-        global dTdt += sum(dropzeros(L[i,:] .* ypr)) * 1e4 * vol[γ.wet][i]   # cK/century
+        local ypr = θ.tracer[γ.wet]  .- θ.tracer[γ.wet][i]
+        global dTdt += sum(dropzeros(Lsv[i,:] .* ypr))
+        global dTdt_down += sum(Lsv[i,:] .* (ypr.*cube_down[γ.wet]))
+        global dTdt_up += sum(Lsv[i,:] .* (ypr.*cube_up[γ.wet]))
+        global dTdt_east += sum(Lsv[i,:] .* (ypr.*cube_east[γ.wet]))
+        global dTdt_west += sum(Lsv[i,:] .* (ypr.*cube_west[γ.wet])) 
+        global dTdt_north += sum(Lsv[i,:] .* (ypr.*cube_north[γ.wet]))
+        global dTdt_south += sum(Lsv[i,:] .* (ypr.*cube_south[γ.wet]))
+        global dTdt_int += sum(Lsv[i,:] .* (ypr.*cube[γ.wet]))
+        global cumvol += vol[i]
     end
 end
+fac = cumvol / (3.1e11)
+dTdt /= fac
+dTdt_down /= fac
+dTdt_up /= fac
+dTdt_east /= fac
+dTdt_west /= fac
+dTdt_north /= fac
+dTdt_south /= fac
+dTdt_int /= fac
 
+# for i in eachindex(cubevec)
+#     if cubevec[i]
+#         local ypr = θ.tracer[γ.wet]  .- θ.tracer[γ.wet][i]
+#         global dTdt += sum(dropzeros(L[i,:] .* ypr)) * 1e4 * vol[i]   # cK/century
+#         global dTdt_down += sum(L[i,:] .* (ypr.*cube_down[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_up += sum(L[i,:] .* (ypr.*cube_up[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_east += sum(L[i,:] .* (ypr.*cube_east[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_west += sum(L[i,:] .* (ypr.*cube_west[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_north += sum(L[i,:] .* (ypr.*cube_north[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_south += sum(L[i,:] .* (ypr.*cube_south[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_int += sum(L[i,:] .* (ypr.*cube[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global cumvol += vol[i]
+#     end
+# end
+dTdt /= cumvol
+dTdt_down /= cumvol
+dTdt_up /= cumvol
+dTdt_east /= cumvol
+dTdt_west /= cumvol
+dTdt_north /= cumvol
+dTdt_south /= cumvol
+dTdt_int /= cumvol
 
-## end new work
+dTdt_north + dTdt_south + dTdt_east + dTdt_west + dTdt_up + dTdt_down + dTdt_int
+
+# get A into Sv
+scaler = Diagonal(vol ./ 3.1e13)
+Lsv = L * scaler
+## end new work #########################################
 
 @time m̃ = massfractions(y,w);
 Ã = watermassmatrix(m̃, γ)
