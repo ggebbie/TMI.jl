@@ -1,0 +1,46 @@
+{
+    "arch": "arm64",
+    "build": "hd74edd7_1002",
+    "build_number": 1002,
+    "build_string": "hd74edd7_1002",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/pthread-stubs-0.4-hd74edd7_1002",
+    "files": [
+        "lib/pkgconfig/pthread-stubs.pc"
+    ],
+    "fn": "pthread-stubs-0.4-hd74edd7_1002.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/pthread-stubs-0.4-hd74edd7_1002",
+        "type": 1
+    },
+    "md5": "415816daf82e0b23a736a069a75e9da7",
+    "name": "pthread-stubs",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/pthread-stubs-0.4-hd74edd7_1002.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/pkgconfig/pthread-stubs.pc",
+                "path_type": "hardlink",
+                "sha256": "7149b8f8a1ccc46388fd4b0768c923527fd7b1d70de89052c3f4840ed9138138",
+                "sha256_in_prefix": "60bcc4030f81b8527505623b7d6753bd1e9f0beee565c11a6fbff439a540c486",
+                "size_in_bytes": 490
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "8ed65e17fbb0ca944bfb8093b60086e3f9dd678c3448b5de212017394c247ee3",
+    "size": 8381,
+    "subdir": "osx-arm64",
+    "timestamp": 1726802424786,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hd74edd7_1002.conda",
+    "version": "0.4"
+}

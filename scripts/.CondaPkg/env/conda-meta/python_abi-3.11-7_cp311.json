@@ -1,0 +1,37 @@
+{
+    "arch": null,
+    "build": "7_cp311",
+    "build_number": 7,
+    "build_string": "7_cp311",
+    "channel": "https://conda.anaconda.org/conda-forge/noarch",
+    "constrains": [
+        "python 3.11.* *_cpython"
+    ],
+    "depends": [],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/python_abi-3.11-7_cp311",
+    "files": [],
+    "fn": "python_abi-3.11-7_cp311.conda",
+    "license": "BSD-3-Clause",
+    "license_family": "BSD",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/python_abi-3.11-7_cp311",
+        "type": 1
+    },
+    "md5": "6320dac78b3b215ceac35858b2cfdb70",
+    "name": "python_abi",
+    "noarch": "generic",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/python_abi-3.11-7_cp311.tar.bz2",
+    "paths_data": {
+        "paths": [],
+        "paths_version": 1
+    },
+    "platform": null,
+    "requested_spec": "",
+    "sha256": "705d06b15c497b585d235e7e87f6c893ffe5fbfdb3326e376e56c842879e0a09",
+    "size": 6996,
+    "subdir": "noarch",
+    "timestamp": 1745258878641,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/noarch/python_abi-3.11-7_cp311.conda",
+    "version": "3.11"
+}

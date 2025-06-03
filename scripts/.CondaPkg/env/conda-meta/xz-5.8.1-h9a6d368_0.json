@@ -1,0 +1,39 @@
+{
+    "arch": "arm64",
+    "build": "h9a6d368_0",
+    "build_number": 0,
+    "build_string": "h9a6d368_0",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0",
+        "liblzma 5.8.1 h39f12f2_0",
+        "liblzma-devel 5.8.1 h39f12f2_0",
+        "xz-gpl-tools 5.8.1 h9a6d368_0",
+        "xz-tools 5.8.1 h39f12f2_0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xz-5.8.1-h9a6d368_0",
+    "files": [],
+    "fn": "xz-5.8.1-h9a6d368_0.conda",
+    "license": "0BSD AND LGPL-2.1-or-later AND GPL-2.0-or-later",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xz-5.8.1-h9a6d368_0",
+        "type": 1
+    },
+    "md5": "6cbb460021a53fc29db69a51846e9b36",
+    "name": "xz",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xz-5.8.1-h9a6d368_0.tar.bz2",
+    "paths_data": {
+        "paths": [],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "339d096f9a08e08ddcedc65dd28635610f629cdb1b57d6851308605f6776d013",
+    "size": 23807,
+    "subdir": "osx-arm64",
+    "timestamp": 1743771462074,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/xz-5.8.1-h9a6d368_0.conda",
+    "version": "5.8.1"
+}

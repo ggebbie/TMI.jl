@@ -1,0 +1,5 @@
+#!/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env/bin/python3.11
+
+from idlelib.pyshell import main
+if __name__ == '__main__':
+    main()

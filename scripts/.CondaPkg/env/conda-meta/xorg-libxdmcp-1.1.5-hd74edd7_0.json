@@ -1,0 +1,69 @@
+{
+    "arch": "arm64",
+    "build": "hd74edd7_0",
+    "build_number": 0,
+    "build_string": "hd74edd7_0",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xorg-libxdmcp-1.1.5-hd74edd7_0",
+    "files": [
+        "include/X11/Xdmcp.h",
+        "lib/libXdmcp.6.dylib",
+        "lib/libXdmcp.dylib",
+        "lib/pkgconfig/xdmcp.pc"
+    ],
+    "fn": "xorg-libxdmcp-1.1.5-hd74edd7_0.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xorg-libxdmcp-1.1.5-hd74edd7_0",
+        "type": 1
+    },
+    "md5": "77c447f48cab5d3a15ac224edb86a968",
+    "name": "xorg-libxdmcp",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/xorg-libxdmcp-1.1.5-hd74edd7_0.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "include/X11/Xdmcp.h",
+                "path_type": "hardlink",
+                "sha256": "7fd3eb99f92b1c566c87cab744ccbb85a4530152eeace73dbb493952a4f40477",
+                "sha256_in_prefix": "7fd3eb99f92b1c566c87cab744ccbb85a4530152eeace73dbb493952a4f40477",
+                "size_in_bytes": 8535
+            },
+            {
+                "_path": "lib/libXdmcp.6.dylib",
+                "path_type": "hardlink",
+                "sha256": "8bb9d59ad1830449599a83fa7ceaa487368116c77cd5017f68f2ffa992f41ad1",
+                "sha256_in_prefix": "8bb9d59ad1830449599a83fa7ceaa487368116c77cd5017f68f2ffa992f41ad1",
+                "size_in_bytes": 53824
+            },
+            {
+                "_path": "lib/libXdmcp.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "8bb9d59ad1830449599a83fa7ceaa487368116c77cd5017f68f2ffa992f41ad1",
+                "size_in_bytes": 53824
+            },
+            {
+                "_path": "lib/pkgconfig/xdmcp.pc",
+                "path_type": "hardlink",
+                "sha256": "1525b188244b9b6e66c0be579817360cac94a74f1a0e1f845891b61541474cfb",
+                "sha256_in_prefix": "49091723b02d2194183fb0fe16de92a2d630ce9c69b1f315a53aed2f30736c5a",
+                "size_in_bytes": 491
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "9939a166d780700d81023546759102b33fdc2c5f11ef09f5f66c77210fd334c8",
+    "size": 18487,
+    "subdir": "osx-arm64",
+    "timestamp": 1727795205022,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/xorg-libxdmcp-1.1.5-hd74edd7_0.conda",
+    "version": "1.1.5"
+}

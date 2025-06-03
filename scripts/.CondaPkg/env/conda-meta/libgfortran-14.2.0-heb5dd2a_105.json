@@ -1,0 +1,36 @@
+{
+    "arch": "arm64",
+    "build": "heb5dd2a_105",
+    "build_number": 105,
+    "build_string": "heb5dd2a_105",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "libgfortran5 14.2.0 h2c44a93_105"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran-14.2.0-heb5dd2a_105",
+    "files": [],
+    "fn": "libgfortran-14.2.0-heb5dd2a_105.conda",
+    "license": "GPL-3.0-only WITH GCC-exception-3.1",
+    "license_family": "GPL",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran-14.2.0-heb5dd2a_105",
+        "type": 1
+    },
+    "md5": "ad35937216e65cfeecd828979ee5e9e6",
+    "name": "libgfortran",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran-14.2.0-heb5dd2a_105.tar.bz2",
+    "paths_data": {
+        "paths": [],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "6ca48762c330d1cdbdaa450f197ccc16ffb7181af50d112b4ccf390223d916a1",
+    "size": 155474,
+    "subdir": "osx-arm64",
+    "timestamp": 1743913530958,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgfortran-14.2.0-heb5dd2a_105.conda",
+    "version": "14.2.0"
+}

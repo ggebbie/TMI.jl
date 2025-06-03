@@ -1,0 +1,94 @@
+{
+    "arch": "arm64",
+    "build": "hde57baf_1",
+    "build_number": 1,
+    "build_string": "hde57baf_1",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [
+        "openmp 18.1.8|18.1.8.*"
+    ],
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/llvm-openmp-18.1.8-hde57baf_1",
+    "files": [
+        "include/omp-tools.h",
+        "include/omp.h",
+        "include/ompt.h",
+        "include/ompx.h",
+        "lib/clang/18.1.8/include/omp.h",
+        "lib/libiomp5.dylib",
+        "lib/libomp.dylib"
+    ],
+    "fn": "llvm-openmp-18.1.8-hde57baf_1.conda",
+    "license": "Apache-2.0 WITH LLVM-exception",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/llvm-openmp-18.1.8-hde57baf_1",
+        "type": 1
+    },
+    "md5": "fe89757e3cd14bb1c6ebd68dac591363",
+    "name": "llvm-openmp",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/llvm-openmp-18.1.8-hde57baf_1.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "include/omp-tools.h",
+                "path_type": "hardlink",
+                "sha256": "fa06b3089702db0d2dc5900caab6d93b2e5e0fd56295b65bf7611c436c72bff7",
+                "sha256_in_prefix": "fa06b3089702db0d2dc5900caab6d93b2e5e0fd56295b65bf7611c436c72bff7",
+                "size_in_bytes": 51555
+            },
+            {
+                "_path": "include/omp.h",
+                "path_type": "hardlink",
+                "sha256": "9ef85ad278e06954e97326ca6c515aa91f86f05cd54608a531a136a571174bd6",
+                "sha256_in_prefix": "9ef85ad278e06954e97326ca6c515aa91f86f05cd54608a531a136a571174bd6",
+                "size_in_bytes": 23818
+            },
+            {
+                "_path": "include/ompt.h",
+                "path_type": "hardlink",
+                "sha256": "fa06b3089702db0d2dc5900caab6d93b2e5e0fd56295b65bf7611c436c72bff7",
+                "sha256_in_prefix": "fa06b3089702db0d2dc5900caab6d93b2e5e0fd56295b65bf7611c436c72bff7",
+                "size_in_bytes": 51555
+            },
+            {
+                "_path": "include/ompx.h",
+                "path_type": "hardlink",
+                "sha256": "555e94eb0632b9dd448d0e757e8763b9af2e074b728e93576ed6ce80d1170c25",
+                "sha256_in_prefix": "555e94eb0632b9dd448d0e757e8763b9af2e074b728e93576ed6ce80d1170c25",
+                "size_in_bytes": 5326
+            },
+            {
+                "_path": "lib/clang/18.1.8/include/omp.h",
+                "path_type": "hardlink",
+                "sha256": "9ef85ad278e06954e97326ca6c515aa91f86f05cd54608a531a136a571174bd6",
+                "sha256_in_prefix": "9ef85ad278e06954e97326ca6c515aa91f86f05cd54608a531a136a571174bd6",
+                "size_in_bytes": 23818
+            },
+            {
+                "_path": "lib/libiomp5.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "246d3e28d37a0c3365bad5a6a931b0861c696a4fbc215b2e98d6441ab8847477",
+                "size_in_bytes": 824512
+            },
+            {
+                "_path": "lib/libomp.dylib",
+                "path_type": "hardlink",
+                "sha256": "246d3e28d37a0c3365bad5a6a931b0861c696a4fbc215b2e98d6441ab8847477",
+                "sha256_in_prefix": "246d3e28d37a0c3365bad5a6a931b0861c696a4fbc215b2e98d6441ab8847477",
+                "size_in_bytes": 824512
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "7a76e2932ac77e6314bfa1c4ff83f617c8260313bfed1b8401b508ed3e9d70ba",
+    "size": 276263,
+    "subdir": "osx-arm64",
+    "timestamp": 1723605341828,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/llvm-openmp-18.1.8-hde57baf_1.conda",
+    "version": "18.1.8"
+}

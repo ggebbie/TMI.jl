@@ -1,0 +1,14 @@
+prefix=/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env
+libdir=${prefix}/lib
+includedir=${prefix}/include
+datarootdir=${prefix}/share
+datadir=${datarootdir}/proj
+
+Name: PROJ
+Description: Coordinate transformation software library
+Requires:
+Version: 9.2.0
+Libs: -L${libdir} -lproj
+Libs.private: -lc++ -lm -ldl
+Requires.private: sqlite3 libtiff-4 libcurl
+Cflags: -I${includedir}

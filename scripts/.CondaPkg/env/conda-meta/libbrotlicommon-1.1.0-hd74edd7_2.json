@@ -1,0 +1,67 @@
+{
+    "arch": "arm64",
+    "build": "hd74edd7_2",
+    "build_number": 2,
+    "build_string": "hd74edd7_2",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libbrotlicommon-1.1.0-hd74edd7_2",
+    "files": [
+        "lib/libbrotlicommon.1.1.0.dylib",
+        "lib/libbrotlicommon.1.dylib",
+        "lib/libbrotlicommon.dylib",
+        "lib/pkgconfig/libbrotlicommon.pc"
+    ],
+    "fn": "libbrotlicommon-1.1.0-hd74edd7_2.conda",
+    "license": "MIT",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libbrotlicommon-1.1.0-hd74edd7_2",
+        "type": 1
+    },
+    "md5": "d0bf1dff146b799b319ea0434b93f779",
+    "name": "libbrotlicommon",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libbrotlicommon-1.1.0-hd74edd7_2.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/libbrotlicommon.1.1.0.dylib",
+                "path_type": "hardlink",
+                "sha256": "3fe2f48e4429c641a737218acc48ffba20706da76bbdf70e286ef1a4ebeebd8b",
+                "sha256_in_prefix": "3fe2f48e4429c641a737218acc48ffba20706da76bbdf70e286ef1a4ebeebd8b",
+                "size_in_bytes": 184224
+            },
+            {
+                "_path": "lib/libbrotlicommon.1.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "3fe2f48e4429c641a737218acc48ffba20706da76bbdf70e286ef1a4ebeebd8b",
+                "size_in_bytes": 184224
+            },
+            {
+                "_path": "lib/libbrotlicommon.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "3fe2f48e4429c641a737218acc48ffba20706da76bbdf70e286ef1a4ebeebd8b",
+                "size_in_bytes": 184224
+            },
+            {
+                "_path": "lib/pkgconfig/libbrotlicommon.pc",
+                "path_type": "hardlink",
+                "sha256": "f2918d4d24d7357b016ba8d5dd7f07e03318bf4648fb3d5bc6b02bc31d6bdf2e",
+                "sha256_in_prefix": "8cabf039e26095f009733d9b79dc39b4c38dad4134bd2f5eb050d63538772ec3",
+                "size_in_bytes": 760
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "839dacb741bdbb25e58f42088a2001b649f4f12195aeb700b5ddfca3267749e5",
+    "size": 68426,
+    "subdir": "osx-arm64",
+    "timestamp": 1725267943211,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libbrotlicommon-1.1.0-hd74edd7_2.conda",
+    "version": "1.1.0"
+}

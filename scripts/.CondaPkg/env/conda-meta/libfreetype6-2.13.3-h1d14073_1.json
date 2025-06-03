@@ -1,0 +1,49 @@
+{
+    "arch": "arm64",
+    "build": "h1d14073_1",
+    "build_number": 1,
+    "build_string": "h1d14073_1",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [
+        "freetype >=2.13.3"
+    ],
+    "depends": [
+        "__osx >=11.0",
+        "libpng >=1.6.47,<1.7.0a0",
+        "libzlib >=1.3.1,<2.0a0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libfreetype6-2.13.3-h1d14073_1",
+    "files": [
+        "lib/libfreetype.6.dylib"
+    ],
+    "fn": "libfreetype6-2.13.3-h1d14073_1.conda",
+    "license": "GPL-2.0-only OR FTL",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libfreetype6-2.13.3-h1d14073_1",
+        "type": 1
+    },
+    "md5": "b163d446c55872ef60530231879908b9",
+    "name": "libfreetype6",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libfreetype6-2.13.3-h1d14073_1.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/libfreetype.6.dylib",
+                "path_type": "hardlink",
+                "sha256": "53e7804bff7384eea6073d8b4d56b79bc06b7b5c5c2c93293ae591766313f03a",
+                "sha256_in_prefix": "53e7804bff7384eea6073d8b4d56b79bc06b7b5c5c2c93293ae591766313f03a",
+                "size_in_bytes": 720320
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "c278df049b1a071841aa0aca140a338d087ea594e07dcf8a871d2cfe0e330e75",
+    "size": 333529,
+    "subdir": "osx-arm64",
+    "timestamp": 1745370142848,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libfreetype6-2.13.3-h1d14073_1.conda",
+    "version": "2.13.3"
+}

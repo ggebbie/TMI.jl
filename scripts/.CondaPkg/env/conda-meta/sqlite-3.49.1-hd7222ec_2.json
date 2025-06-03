@@ -1,0 +1,49 @@
+{
+    "arch": "arm64",
+    "build": "hd7222ec_2",
+    "build_number": 2,
+    "build_string": "hd7222ec_2",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0",
+        "libsqlite 3.49.1 h3f77e49_2",
+        "libzlib >=1.3.1,<2.0a0",
+        "ncurses >=6.5,<7.0a0",
+        "readline >=8.2,<9.0a0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/sqlite-3.49.1-hd7222ec_2",
+    "files": [
+        "bin/sqlite3"
+    ],
+    "fn": "sqlite-3.49.1-hd7222ec_2.conda",
+    "license": "Unlicense",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/sqlite-3.49.1-hd7222ec_2",
+        "type": 1
+    },
+    "md5": "69dd1428d6a7d068bfc1d2ad70ab6701",
+    "name": "sqlite",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/sqlite-3.49.1-hd7222ec_2.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "bin/sqlite3",
+                "path_type": "hardlink",
+                "sha256": "06278a4d39b7cc1e527c355a6b2b6bf1c52b26a7bdd8b1f68b6ac3575d4c311f",
+                "sha256_in_prefix": "06278a4d39b7cc1e527c355a6b2b6bf1c52b26a7bdd8b1f68b6ac3575d4c311f",
+                "size_in_bytes": 2030384
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "d359322cb4404df74d938a11a22b932e49d5f8c931a03e63d34127c9fecac200",
+    "size": 883664,
+    "subdir": "osx-arm64",
+    "timestamp": 1742083897015,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/sqlite-3.49.1-hd7222ec_2.conda",
+    "version": "3.49.1"
+}

@@ -1,0 +1,90 @@
+{
+    "arch": "arm64",
+    "build": "h2c44a93_105",
+    "build_number": 105,
+    "build_string": "h2c44a93_105",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [
+        "libgfortran 14.2.0"
+    ],
+    "depends": [
+        "llvm-openmp >=8.0.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran5-14.2.0-h2c44a93_105",
+    "files": [
+        "lib/libgcc_s.1.1.dylib",
+        "lib/libgfortran.5.dylib",
+        "lib/libgfortran.dylib",
+        "lib/libgomp.1.dylib",
+        "lib/libgomp.dylib",
+        "lib/libquadmath.0.dylib",
+        "lib/libquadmath.dylib"
+    ],
+    "fn": "libgfortran5-14.2.0-h2c44a93_105.conda",
+    "license": "GPL-3.0-only WITH GCC-exception-3.1",
+    "license_family": "GPL",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran5-14.2.0-h2c44a93_105",
+        "type": 1
+    },
+    "md5": "06f35a3b1479ec55036e1c9872f97f2c",
+    "name": "libgfortran5",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libgfortran5-14.2.0-h2c44a93_105.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/libgcc_s.1.1.dylib",
+                "path_type": "hardlink",
+                "sha256": "1c16ed7f02c166e855bfdcdac4daca0e055317805f983b64cbdce527933bf033",
+                "sha256_in_prefix": "1c16ed7f02c166e855bfdcdac4daca0e055317805f983b64cbdce527933bf033",
+                "size_in_bytes": 182064
+            },
+            {
+                "_path": "lib/libgfortran.5.dylib",
+                "path_type": "hardlink",
+                "sha256": "2b12a108e5892b7dbf7c4d8a163ede0d965fca319a29c3b71cb77a12ed743dce",
+                "sha256_in_prefix": "2b12a108e5892b7dbf7c4d8a163ede0d965fca319a29c3b71cb77a12ed743dce",
+                "size_in_bytes": 1834416
+            },
+            {
+                "_path": "lib/libgfortran.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "2b12a108e5892b7dbf7c4d8a163ede0d965fca319a29c3b71cb77a12ed743dce",
+                "size_in_bytes": 1834416
+            },
+            {
+                "_path": "lib/libgomp.1.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "c38184c4fb9bbf57a3ff1ddbf6fc6e2334e56bc87b78e0ac4674b7a1a9a0d807"
+            },
+            {
+                "_path": "lib/libgomp.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "c38184c4fb9bbf57a3ff1ddbf6fc6e2334e56bc87b78e0ac4674b7a1a9a0d807"
+            },
+            {
+                "_path": "lib/libquadmath.0.dylib",
+                "path_type": "hardlink",
+                "sha256": "9fb7c0e195fd3eb9e0343a974b82f632548844e3aee7751244662a7e1e4d3958",
+                "sha256_in_prefix": "9fb7c0e195fd3eb9e0343a974b82f632548844e3aee7751244662a7e1e4d3958",
+                "size_in_bytes": 304960
+            },
+            {
+                "_path": "lib/libquadmath.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "9fb7c0e195fd3eb9e0343a974b82f632548844e3aee7751244662a7e1e4d3958",
+                "size_in_bytes": 304960
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "de09987e1080f71e2285deec45ccb949c2620a672b375029534fbb878e471b22",
+    "size": 806283,
+    "subdir": "osx-arm64",
+    "timestamp": 1743913488925,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgfortran5-14.2.0-h2c44a93_105.conda",
+    "version": "14.2.0"
+}

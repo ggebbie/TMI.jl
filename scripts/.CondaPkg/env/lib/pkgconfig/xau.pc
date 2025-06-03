@@ -1,0 +1,11 @@
+prefix=/Users/anthonymeza/Library/CloudStorage/OneDrive-MassachusettsInstituteofTechnology/Documents/GitHub/TMI.jl/scripts/.CondaPkg/env
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: Xau
+Description: X authorization file management library
+Version: 1.0.12
+Requires: xproto
+Cflags: -I${includedir}
+Libs: -L${libdir} -lXau

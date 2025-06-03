@@ -1,0 +1,272 @@
+{
+    "arch": null,
+    "build": "pyhecae5ae_1",
+    "build_number": 1,
+    "build_string": "pyhecae5ae_1",
+    "channel": "https://conda.anaconda.org/conda-forge/noarch",
+    "constrains": [],
+    "depends": [
+        "numpy",
+        "python >=3.9"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/colorspacious-1.1.2-pyhecae5ae_1",
+    "files": [
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/INSTALLER",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/LICENSE.txt",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/METADATA",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/RECORD",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/REQUESTED",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/WHEEL",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/direct_url.json",
+        "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/top_level.txt",
+        "lib/python3.11/site-packages/colorspacious/__init__.py",
+        "lib/python3.11/site-packages/colorspacious/basics.py",
+        "lib/python3.11/site-packages/colorspacious/ciecam02.py",
+        "lib/python3.11/site-packages/colorspacious/comparison.py",
+        "lib/python3.11/site-packages/colorspacious/conversion.py",
+        "lib/python3.11/site-packages/colorspacious/cvd.py",
+        "lib/python3.11/site-packages/colorspacious/gold_values.py",
+        "lib/python3.11/site-packages/colorspacious/illuminants.py",
+        "lib/python3.11/site-packages/colorspacious/luoetal2006.py",
+        "lib/python3.11/site-packages/colorspacious/testing.py",
+        "lib/python3.11/site-packages/colorspacious/transform_graph.py",
+        "lib/python3.11/site-packages/colorspacious/util.py",
+        "lib/python3.11/site-packages/colorspacious/version.py",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/__init__.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/basics.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/ciecam02.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/comparison.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/conversion.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/cvd.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/gold_values.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/illuminants.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/luoetal2006.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/testing.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/transform_graph.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/util.cpython-311.pyc",
+        "lib/python3.11/site-packages/colorspacious/__pycache__/version.cpython-311.pyc"
+    ],
+    "fn": "colorspacious-1.1.2-pyhecae5ae_1.conda",
+    "license": "MIT",
+    "license_family": "MIT",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/colorspacious-1.1.2-pyhecae5ae_1",
+        "type": 1
+    },
+    "md5": "04151bb8e351c6209caad045e4b1f4bd",
+    "name": "colorspacious",
+    "noarch": "python",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/colorspacious-1.1.2-pyhecae5ae_1.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/INSTALLER",
+                "path_type": "hardlink",
+                "sha256": "d0edee15f91b406f3f99726e44eb990be6e34fd0345b52b910c568e0eef6a2a8",
+                "sha256_in_prefix": "d0edee15f91b406f3f99726e44eb990be6e34fd0345b52b910c568e0eef6a2a8",
+                "size_in_bytes": 5
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/LICENSE.txt",
+                "path_type": "hardlink",
+                "sha256": "f67884433d4d8a3196895ad084abca8456081975842da71a9bb01e7cd5d5c514",
+                "sha256_in_prefix": "f67884433d4d8a3196895ad084abca8456081975842da71a9bb01e7cd5d5c514",
+                "size_in_bytes": 1096
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/METADATA",
+                "path_type": "hardlink",
+                "sha256": "09ed0a6b506156e7d101969209fb7eed8ced308f22c6a597d940d3e35d482e7a",
+                "sha256_in_prefix": "09ed0a6b506156e7d101969209fb7eed8ced308f22c6a597d940d3e35d482e7a",
+                "size_in_bytes": 3645
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/RECORD",
+                "path_type": "hardlink",
+                "sha256": "128689b96727b86861580bb8e57335ba38e3c6f671d9e5002aad5a4f304387ed",
+                "sha256_in_prefix": "128689b96727b86861580bb8e57335ba38e3c6f671d9e5002aad5a4f304387ed",
+                "size_in_bytes": 2499
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/REQUESTED",
+                "path_type": "hardlink",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "sha256_in_prefix": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/WHEEL",
+                "path_type": "hardlink",
+                "sha256": "a7178d5f925db427b9f0f51260ff6ea6673b8dd44f82f4f41a6f646f5487955c",
+                "sha256_in_prefix": "a7178d5f925db427b9f0f51260ff6ea6673b8dd44f82f4f41a6f646f5487955c",
+                "size_in_bytes": 109
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/direct_url.json",
+                "path_type": "hardlink",
+                "sha256": "47ed2e6cc00fc2fd084f8994ef95c4c397cbd03b8a05a8162292042da5411e5b",
+                "sha256_in_prefix": "47ed2e6cc00fc2fd084f8994ef95c4c397cbd03b8a05a8162292042da5411e5b",
+                "size_in_bytes": 109
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious-1.1.2.dist-info/top_level.txt",
+                "path_type": "hardlink",
+                "sha256": "c4f567bdacbdfb76c0ee741611fcea22e99be7a4fb323dbcb513238f7c736d6c",
+                "sha256_in_prefix": "c4f567bdacbdfb76c0ee741611fcea22e99be7a4fb323dbcb513238f7c736d6c",
+                "size_in_bytes": 14
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__init__.py",
+                "path_type": "hardlink",
+                "sha256": "dde96735c82c87c5292f9acd0a8d37a25cb5c32a47617341237b6341b7e4c7bc",
+                "sha256_in_prefix": "dde96735c82c87c5292f9acd0a8d37a25cb5c32a47617341237b6341b7e4c7bc",
+                "size_in_bytes": 532
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/basics.py",
+                "path_type": "hardlink",
+                "sha256": "df37ba3a371c6c38aa2a5cb286550ecab4af4645580d6c548541566dfd3ca530",
+                "sha256_in_prefix": "df37ba3a371c6c38aa2a5cb286550ecab4af4645580d6c548541566dfd3ca530",
+                "size_in_bytes": 7987
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/ciecam02.py",
+                "path_type": "hardlink",
+                "sha256": "cb9eadfe9bacce725fddfb7a528fa710012b8ff615e427462113f629666cb8f1",
+                "sha256_in_prefix": "cb9eadfe9bacce725fddfb7a528fa710012b8ff615e427462113f629666cb8f1",
+                "size_in_bytes": 20326
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/comparison.py",
+                "path_type": "hardlink",
+                "sha256": "cb4385239c7c528ba98b9c3c545ac1234723127d80b4e7e5cbd07c323bf6cf54",
+                "sha256_in_prefix": "cb4385239c7c528ba98b9c3c545ac1234723127d80b4e7e5cbd07c323bf6cf54",
+                "size_in_bytes": 2891
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/conversion.py",
+                "path_type": "hardlink",
+                "sha256": "115b29cf851a63c705198399814f4aa2a45d190dd9b838f715a6d037b9eda9ec",
+                "sha256_in_prefix": "115b29cf851a63c705198399814f4aa2a45d190dd9b838f715a6d037b9eda9ec",
+                "size_in_bytes": 16044
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/cvd.py",
+                "path_type": "hardlink",
+                "sha256": "3402160c31273abb0df5efd363ac4e5b021e039fe05e86e34e99c283e679efd0",
+                "sha256_in_prefix": "3402160c31273abb0df5efd363ac4e5b021e039fe05e86e34e99c283e679efd0",
+                "size_in_bytes": 9749
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/gold_values.py",
+                "path_type": "hardlink",
+                "sha256": "e3af7c61ed9355de45031690e8c0777a2b17cdf216a84a7144c99ca75d324b60",
+                "sha256_in_prefix": "e3af7c61ed9355de45031690e8c0777a2b17cdf216a84a7144c99ca75d324b60",
+                "size_in_bytes": 9931
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/illuminants.py",
+                "path_type": "hardlink",
+                "sha256": "29074d248ec7d737bdf61a969982dfc8aeccf87738ba5b72c73b92c330b098b8",
+                "sha256_in_prefix": "29074d248ec7d737bdf61a969982dfc8aeccf87738ba5b72c73b92c330b098b8",
+                "size_in_bytes": 4837
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/luoetal2006.py",
+                "path_type": "hardlink",
+                "sha256": "d4278db5816cd668cf8ffa2e783adab543533812d33e797c2af87f3924f05ca7",
+                "sha256_in_prefix": "d4278db5816cd668cf8ffa2e783adab543533812d33e797c2af87f3924f05ca7",
+                "size_in_bytes": 1811
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/testing.py",
+                "path_type": "hardlink",
+                "sha256": "9adf2cdc6407c49a4582438d43862ce8ef35c6550cfd35c4ca20f583538fb0d3",
+                "sha256_in_prefix": "9adf2cdc6407c49a4582438d43862ce8ef35c6550cfd35c4ca20f583538fb0d3",
+                "size_in_bytes": 2390
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/transform_graph.py",
+                "path_type": "hardlink",
+                "sha256": "c753a56c5a4c415e2498494f66343c862751d65892c93b6e693d7fb54f35bee9",
+                "sha256_in_prefix": "c753a56c5a4c415e2498494f66343c862751d65892c93b6e693d7fb54f35bee9",
+                "size_in_bytes": 25341
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/util.py",
+                "path_type": "hardlink",
+                "sha256": "78ab9dfcca71dc151dc1872c8f7d3271d82a919a63633a3fc83329e4b1cb7772",
+                "sha256_in_prefix": "78ab9dfcca71dc151dc1872c8f7d3271d82a919a63633a3fc83329e4b1cb7772",
+                "size_in_bytes": 1411
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/version.py",
+                "path_type": "hardlink",
+                "sha256": "025657935662f0f928393ad900d6d4a9bdeb67667ebbc32e777474fad35511fc",
+                "sha256_in_prefix": "025657935662f0f928393ad900d6d4a9bdeb67667ebbc32e777474fad35511fc",
+                "size_in_bytes": 836
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/__init__.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/basics.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/ciecam02.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/comparison.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/conversion.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/cvd.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/gold_values.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/illuminants.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/luoetal2006.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/testing.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/transform_graph.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/util.cpython-311.pyc",
+                "path_type": "pyc_file"
+            },
+            {
+                "_path": "lib/python3.11/site-packages/colorspacious/__pycache__/version.cpython-311.pyc",
+                "path_type": "pyc_file"
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": null,
+    "requested_spec": "",
+    "sha256": "2c778b2a96946970a133852c8eba5e93512a3e3e6626a7983481cc16babcd16e",
+    "size": 36130,
+    "subdir": "noarch",
+    "timestamp": 1734342046859,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/noarch/colorspacious-1.1.2-pyhecae5ae_1.conda",
+    "version": "1.1.2"
+}

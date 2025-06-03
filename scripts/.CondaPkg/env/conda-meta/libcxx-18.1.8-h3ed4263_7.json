@@ -1,0 +1,76 @@
+{
+    "arch": "arm64",
+    "build": "h3ed4263_7",
+    "build_number": 7,
+    "build_string": "h3ed4263_7",
+    "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+    "constrains": [],
+    "depends": [
+        "__osx >=11.0"
+    ],
+    "extracted_package_dir": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libcxx-18.1.8-h3ed4263_7",
+    "files": [
+        "lib/libc++.1.0.dylib",
+        "lib/libc++.1.dylib",
+        "lib/libc++.a",
+        "lib/libc++.dylib",
+        "lib/libc++experimental.a"
+    ],
+    "fn": "libcxx-18.1.8-h3ed4263_7.conda",
+    "license": "Apache-2.0 WITH LLVM-exception",
+    "license_family": "Apache",
+    "link": {
+        "source": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libcxx-18.1.8-h3ed4263_7",
+        "type": 1
+    },
+    "md5": "e0e7d9a2ec0f9509ffdfd5f48da522fb",
+    "name": "libcxx",
+    "package_tarball_full_path": "/Users/anthonymeza/.julia/scratchspaces/0b3b1443-0f03-428d-bdfb-f27f9c1191ea/root/pkgs/libcxx-18.1.8-h3ed4263_7.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/libc++.1.0.dylib",
+                "path_type": "hardlink",
+                "sha256": "10afd03c33f95ee95d6ff4aacf57da02927b0c394ca9f350e021d71b6a64f59a",
+                "sha256_in_prefix": "10afd03c33f95ee95d6ff4aacf57da02927b0c394ca9f350e021d71b6a64f59a",
+                "size_in_bytes": 1059968
+            },
+            {
+                "_path": "lib/libc++.1.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "10afd03c33f95ee95d6ff4aacf57da02927b0c394ca9f350e021d71b6a64f59a",
+                "size_in_bytes": 1059968
+            },
+            {
+                "_path": "lib/libc++.a",
+                "path_type": "hardlink",
+                "sha256": "958c3539d8f9754ee3228faca6806a44ff90ac4cbf46c2560468e15b6d420c77",
+                "sha256_in_prefix": "958c3539d8f9754ee3228faca6806a44ff90ac4cbf46c2560468e15b6d420c77",
+                "size_in_bytes": 1520016
+            },
+            {
+                "_path": "lib/libc++.dylib",
+                "path_type": "softlink",
+                "sha256_in_prefix": "10afd03c33f95ee95d6ff4aacf57da02927b0c394ca9f350e021d71b6a64f59a",
+                "size_in_bytes": 1059968
+            },
+            {
+                "_path": "lib/libc++experimental.a",
+                "path_type": "hardlink",
+                "sha256": "6f09505d7e06e36a02d840ff434e489cbdb1773c6175d7db8c8bfee33d5b505b",
+                "sha256_in_prefix": "6f09505d7e06e36a02d840ff434e489cbdb1773c6175d7db8c8bfee33d5b505b",
+                "size_in_bytes": 512
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "osx",
+    "requested_spec": "",
+    "sha256": "15b4abaa249f0965ce42aeb4a1a2b1b5df9a1f402e7c5bd8156272fd6cad2878",
+    "size": 436921,
+    "subdir": "osx-arm64",
+    "timestamp": 1725403628507,
+    "track_features": "",
+    "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-18.1.8-h3ed4263_7.conda",
+    "version": "18.1.8"
+}
