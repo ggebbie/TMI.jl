@@ -18,7 +18,7 @@ Started by G Jake Gebbie, WHOI, ggebbie@whoi.edu
 
 # Requirements
 
-The built-in tests are automatically checked with Julia 1.10. 
+The built-in tests are automatically checked with Julia 1.11. 
 
 # Setting up project environment
 
