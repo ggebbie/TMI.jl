@@ -13,10 +13,17 @@ using SparseArrays
 TMIversion = versionlist()[1] # G14 has no remote mass fractions
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
+volnormed = cellvolume( γ)./1e12
+vol= cellvolume( γ)
+
+# get A into Sv
+scaler = Diagonal(vol ./ 3.1e13)
+Lsv = scaler * L
+
 # get observations at surface
 # set them as surface boundary condition
 y = (θ =  readfield(TMIfile, "θ", γ),
-    S = readfield(TMIfile, "Sp", γ),
+#    S = readfield(TMIfile, "Sp", γ),
     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
 )
 
@@ -32,38 +39,67 @@ row_northpac  = γ.R[Inorthpac]
 yprime = vec(θ)  .- θ.tracer[Inorthpac]
 Tflux = (L[row_northpac,:] .* yprime) * 1e4  # cK/century
 col_northpac = Tflux.nzind
-
 γ.I[Tflux.nzind]
 
+## big control volume to stabilize results
+xlim = (125,240); ylim = (30,65); zlim = (2000,3000)
+#xlim = (209,211); ylim = (34,36); zlim = (2400,2600)
+#xlim = (125,240); ylim = (20,40); zlim = (1500,2500)
+
 # control volume
-cube = TMI.incube((125,240),(30,65),(2000,3000), γ)
-cube_up = TMI.above_cube((125,240),(30,65),(2000,3000), γ)
-cube_down = TMI.below_cube((125,240),(30,65),(2000,3000), γ)
-cube_east = TMI.east_of_cube((125,240),(30,65),(2000,3000), γ)
-cube_west = TMI.west_of_cube((125,240),(30,65),(2000,3000), γ)
-cube_north = TMI.north_of_cube((125,240),(30,65),(2000,3000), γ)
-cube_south = TMI.south_of_cube((125,240),(30,65),(2000,3000), γ)
+cube = TMI.incube(xlim,ylim,zlim, γ)
+cube_up = TMI.above_cube(xlim,ylim,zlim, γ)
+cube_down = TMI.below_cube(xlim,ylim,zlim, γ)
+cube_east = TMI.east_of_cube(xlim,ylim,zlim, γ)
+cube_west = TMI.west_of_cube(xlim,ylim,zlim, γ)
+cube_north = TMI.north_of_cube(xlim,ylim,zlim, γ)
+cube_south = TMI.south_of_cube(xlim,ylim,zlim, γ)
 
-cube = TMI.incube((209,211),(34,36),(2400,2600), γ)
-cube_up = TMI.above_cube((209,211),(34,36),(2400,2600), γ)
-cube_down = TMI.below_cube((209,211),(34,36),(2400,2600), γ)
-cube_east = TMI.east_of_cube((209,211),(34,36),(2400,2600), γ)
-cube_west = TMI.west_of_cube((209,211),(34,36),(2400,2600), γ)
-cube_north = TMI.north_of_cube((209,211),(34,36),(2400,2600), γ)
-cube_south = TMI.south_of_cube((209,211),(34,36),(2400,2600), γ)
+# get cube volume averaged temperature and total volume
+cubevec = cube[γ.wet]
+cubevol = 0.0
+θcube = 0.0
+cumvol = 0.0
+for i in eachindex(cubevec)
+    if cubevec[i]
+        global θcube += θ.tracer[γ.wet][i] * vol[i] / 1.0e12
+        global cumvol += vol[i]
+    end
+end
+θcube /= (cumvol / 1e12) 
 
-cube = TMI.incube((125,240),(20,40),(1500,2500), γ)
-cube_up = TMI.above_cube((125,240),(20,40),(1500,2500), γ)
-cube_down = TMI.below_cube((125,240),(20,40),(1500,2500), γ)
-cube_east = TMI.east_of_cube((125,240),(20,40),(1500,2500), γ)
-cube_west = TMI.west_of_cube((125,240),(20,40),(1500,2500), γ)
-cube_north = TMI.north_of_cube((125,240),(20,40),(1500,2500), γ)
-cube_south = TMI.south_of_cube((125,240),(20,40),(1500,2500), γ)
+# get flux across lower face into cube
 
-volnormed = cellvolume( γ)./1e12
-vol= cellvolume( γ)
+# Fli = flux lower face inward
+Fli = 0.0
+Fsi = 0.0
+Fui = 0.0
+Fo = 0.0 # flux out
+Flo = 0.0
+Fso = 0.0
+Fuo = 0.0
+θprime = θ.tracer[γ.wet] .- θcube
+for i in eachindex(cubevec)
+    if cubevec[i]
+        global Fli += sum(Lsv[i,:] .* (θprime.*cube_down[γ.wet]))
+        global Fsi += sum(Lsv[i,:] .* (θprime.*cube_south[γ.wet]))
+        global Fo += sum(Lsv[:,i] .* (θprime.*cubevec))
+        global Fui += sum(Lsv[i,:] .* (θprime.*cube_up[γ.wet]))
+    elseif cube_south[γ.wet][i]
+        global Fso += sum(Lsv[i,:] .* (θprime.*cubevec))    
+    elseif cube_up[γ.wet][i]
+        global Fuo += sum(Lsv[i,:] .* (θprime.*cubevec))    
+    elseif cube_down[γ.wet][i]
+        global Flo += sum(Lsv[i,:] .* (θprime.*cubevec))    
+    end
+end
 
-dTdt = 0.0
+# put flux in units of cK/century
+Fli *= 3.1e17/cumvol
+Flo *= 3.1e17/cumvol
+Fl = Fli -  Flo
+
+# this version gets the local heat budget and then sums itdTdt = 0.0
 dTdt_down = 0.0
 dTdt_up = 0.0
 dTdt_east = 0.0
@@ -72,7 +108,6 @@ dTdt_north = 0.0
 dTdt_south = 0.0
 dTdt_int = 0.0
 
-cubevec = cube[γ.wet]
 cubevec = cube[γ.wet]
 cumvol = 0.0
 for i in eachindex(cubevec)
@@ -131,9 +166,43 @@ dTdt_int /= cumvol
 
 dTdt_north + dTdt_south + dTdt_east + dTdt_west + dTdt_up + dTdt_down + dTdt_int
 
-# get A into Sv
-scaler = Diagonal(vol ./ 3.1e13)
-Lsv = L * scaler
+
+# check mass conservation at one point
+Inorthpac = nearestneighbor((210,35,2500), γ)
+row_northpac  = γ.R[Inorthpac]
+yprime = vec(θ)  .- θ.tracer[Inorthpac]
+Tflux = (L[row_northpac,:] .* yprime) * 1e4  # cK/century
+col_northpac = Tflux.nzind
+
+Fd = min.(Lsv[row_northpac,:].nzval,Lsv[:,row_northpac].nzval)
+Fa = Lsv[row_northpac,:].nzval - Fd 
+
+# split entire matrix into 2 components
+Ld = deepcopy(Lsv)
+La = deepcopy(Lsv)
+I, J, V = findnz(Lsv)
+
+for k in 1:length(Lsv.rowval)
+    i = I[k]
+    j = J[k]
+    if Lsv[i,j] > Lsv[j,i]
+        global La[i, j] = Lsv[i,j] - Lsv[j,i]
+        global Ld[i,j] = Lsv[j,i]
+    elseif Lsv[i,j] ≤ Lsv[j,i]
+        global La[i, j] = 0.0
+        # Ld[i, j] = Lsv[i, j] # doesn't need any change 
+    end
+end
+
+# make diff and advection individually conserve mass
+for r in 1:size(La,1)
+    La[r,r] -= sum(La[r,:])
+    Ld[r,r] -= sum(Ld[r,:])
+end
+
+
+
+
 ## end new work #########################################
 
 @time m̃ = massfractions(y,w);

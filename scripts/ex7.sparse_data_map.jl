@@ -52,12 +52,11 @@ b = (;surface = mean(y) * onesurfaceboundary(γ))
 Dg = gaussiandistancematrix(γ,σb,1000.0)
 Q⁻ = inv(cholesky(Dg))
 
-iters =5
-                
+iters = 5
 out, f, fg, fg! = TMI.sparsedatamap(Alu,b,u,y,W⁻,wis,locs,Q⁻,γ,iterations=iters)
 
 # reconstruct by hand to double-check.
-ũ = unvec(u,out.minimizer)
+ũ_θ = unvec(u,out.minimizer)
 b̃ = adjustboundarycondition(b,ũ)
 
 # reconstruct tracer map
