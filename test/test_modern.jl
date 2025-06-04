@@ -42,6 +42,10 @@
         #b₀ = zerosurfaceboundary(γ)
         b₀ = zerosurfaceboundary(γ)
 
+        # side check: onesurfaceboundary retains units
+        b_argon39 = onesurfaceboundary(γ,:Ar39,"argon-39","% modern")
+        @test b_argon39.name == :Ar39
+        
         # remineralized phosphate
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
 
