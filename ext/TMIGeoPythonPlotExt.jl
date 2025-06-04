@@ -82,10 +82,8 @@ end
 - `lims`: contour levels
 - `titlelabel`: optional title labeln
 """
-function sectionplot(field::Field{<:Real}, lon, lims;titlelabel="section plot",fname="figure.png",units=:none) 
-
+function sectionplot(field::Field{<:Real}, lon, lims;titlelabel="longitude= "*string(lon)*"°E",fname="figure.png",units=:none) 
     Psection = section(field,lon)
-
     GeoPythonPlot.sectionplot(Psection::Matrix, lon, field.γ.lat, field.γ.depth, lims;titlelabel=titlelabel,fname=fname,units=field.units) 
 end
 
