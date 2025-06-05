@@ -64,6 +64,9 @@
         yO₂ = readfield(TMIfile,"O₂",γ)
         bO₂ = getsurfaceboundary(yO₂)
         O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
+
+        ## radio-decay
+        Aradio = watermassmatrix(file, 5730) # like radiocarbon
     end
 
     ############################
