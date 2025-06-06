@@ -64,6 +64,15 @@
         yO₂ = readfield(TMIfile,"O₂",γ)
         bO₂ = getsurfaceboundary(yO₂)
         O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
+
+        ## radio-decay
+        Aradio = watermassmatrix(TMIfile, γ, 5730) # like radiocarbon
+        Oradio = steadyinversion(Aradio,bO₂,γ)
+
+        Aradio2 = watermassmatrix(TMIfile, γ, 269) # like radiocarbon
+        Oradio2 = steadyinversion(Aradio2,bO₂,γ)
+
+        @test minimum(Oradio) > minimum(Oradio2)
     end
 
     ############################
