@@ -242,17 +242,13 @@ preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Al
 function meanage(TMIversion,Alu,γ)
 
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
-
     if TMIfile[end-1:end] == "nc"
-
-        #F = ncread(file,"F")
         ## read age source
         F₀ = readfield(TMIfile,"F₀",γ)
         qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
 
         # better to define a Source type
         Iq = findall(x -> x > 0,qPO₄.tracer)
-
         qa = zeros(γ)
         qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
         # zero boundary condition
