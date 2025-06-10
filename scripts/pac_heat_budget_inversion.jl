@@ -39,8 +39,26 @@ cube_south_bc = TMI.get_south_of_cube_boundary_condition(xlim,ylim,zlim, γ)
 #         #  
 #         )
 
+function filter_A_cube_bc(cube_bc, A, γ)
+    rows = 1 * selectdim(γ.R, cube_bc.dim, Int(cube_bc.k))
+    rows = rows[cube_bc.tracer .> 0.0]
+    Abc = deepcopy(A)
+    for row in rows
+        Abc[row, :] .= 0.0
+        Abc[row, row] = 1.0
+    end
+    return dropzeros(Abc)
+end
+
 bcube = (; south = cube_south_bc, surface = zerosurfaceboundary(γ),)
-cube_bc_invert = steadyinversion(Alu,bcube,γ)
+Abc = filter_A_cube_bc(cube_south_bc, A, γ)
+Abclu = lu(Abc)
+
+cube_bc_invert = steadyinversion(Abclu,bcube,γ)
 #inversion of a 1 boundary condition in ocean interior has 
 #entries that are all less than zero, seems problematic
-sum(cube_bc_invert) 
+maximum(cube_bc_invert) 
+sum(cube_bc_invert)
+
+sum(A .- Abc)
+
