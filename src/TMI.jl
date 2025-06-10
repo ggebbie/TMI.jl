@@ -95,6 +95,7 @@ pkgutilsdir(args...) = joinpath(pkgutilsdir(), args...)
 
 include(pkgsrcdir("grid.jl"))
 include(pkgsrcdir("field.jl"))
+include(pkgsrcdir("cube.jl"))
 include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))

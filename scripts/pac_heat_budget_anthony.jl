@@ -13,17 +13,11 @@ using SparseArrays
 TMIversion = versionlist()[1] # G14 has no remote mass fractions
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
-vol= cellvolume( γ)
-
-# get A into m3 / s (previously 1 / years)
-scaler = Diagonal(vol ./ 3.154e+7)
-Lm3 = scaler * L
-
 # get observations at surface
 # set them as surface boundary condition
 y = (θ =  readfield(TMIfile, "θ", γ),
-#    S = readfield(TMIfile, "Sp", γ),
-    δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
+    # S = readfield(TMIfile, "Sp", γ),
+    # δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
 )
 
 ## get steady version of tracers₄
@@ -34,75 +28,40 @@ y = (θ =  readfield(TMIfile, "θ", γ),
 
 ## heat budget at one point
 Inorthpac = nearestneighbor((210,35,2500), γ)
+
 row_northpac  = γ.R[Inorthpac]
 yprime = vec(θ)  .- θ.tracer[Inorthpac]
 Tflux = (L[row_northpac,:] .* yprime) * 1e4  # cK/century
+dTdt_Inorthpac = sum(Tflux)
 col_northpac = Tflux.nzind
 γ.I[Tflux.nzind]
 
-## big control volume to stabilize results
-xlim = (125,240); ylim = (30,65); zlim = (2000,3000)
-#xlim = (209,211); ylim = (34,36); zlim = (2400,2600)
-#xlim = (125,240); ylim = (20,40); zlim = (1500,2500)
-
+L[row_northpac,:].nzval[1]
 # control volume
-cube = TMI.incube(xlim,ylim,zlim, γ)
-cube_up = TMI.above_cube(xlim,ylim,zlim, γ)
-cube_down = TMI.below_cube(xlim,ylim,zlim, γ)
-cube_east = TMI.east_of_cube(xlim,ylim,zlim, γ)
-cube_west = TMI.west_of_cube(xlim,ylim,zlim, γ)
-cube_north = TMI.north_of_cube(xlim,ylim,zlim, γ)
-cube_south = TMI.south_of_cube(xlim,ylim,zlim, γ)
-
-# get cube volume averaged temperature and total volume
-cubevec = cube[γ.wet]
-cubevol = 0.0
-θcube = 0.0
-cumvol = 0.0
-for i in eachindex(cubevec)
-    if cubevec[i]
-        global θcube += θ.tracer[γ.wet][i] * vol[i]
-        global cumvol += vol[i]
-    end
+function get_cube_geometry(xbounds, ybounds, zbounds)
+    cube = TMI.incube(xbounds,ybounds,zbounds, γ)
+    cube_up = TMI.above_cube(xbounds,ybounds,zbounds, γ)
+    cube_down = TMI.below_cube(xbounds,ybounds,zbounds, γ)
+    cube_east = TMI.east_of_cube(xbounds,ybounds,zbounds, γ)
+    cube_west = TMI.west_of_cube(xbounds,ybounds,zbounds, γ)
+    cube_north = TMI.north_of_cube(xbounds,ybounds,zbounds, γ)
+    cube_south = TMI.south_of_cube(xbounds,ybounds,zbounds, γ)
+    return cube, cube_up, cube_down, cube_east, cube_west, cube_north, cube_south
 end
 
-θcube /= cumvol
+xbounds, ybounds, zbounds = (209,211),(34,36),(2499,2501)
+xbounds = (125,240); ybounds = (30,65); zbounds = (2000,3000)
 
-# get flux across lower face into cube
+cube, cube_up, cube_down, cube_east, cube_west, cube_north, cube_south = get_cube_geometry(xbounds, ybounds, zbounds)
 
-# Fli = flux lower face inward
-Fli = 0.0
-Fsi = 0.0
-Fui = 0.0
-Fo = 0.0 # flux out
-Flo = 0.0
-Fso = 0.0
-Fuo = 0.0
-θprime = θ.tracer[γ.wet] .- θcube
-for i in eachindex(cubevec)
-    if cubevec[i]
-        global Fli += sum(Lm3[i,:] .* (θprime.*cube_down[γ.wet]))
-        global Fsi += sum(Lm3[i,:] .* (θprime.*cube_south[γ.wet]))
-        global Fo += sum(Lm3[:,i] .* (θprime.*cubevec))
-        global Fui += sum(Lm3[i,:] .* (θprime.*cube_up[γ.wet]))
-    elseif cube_south[γ.wet][i]
-        global Fso += sum(Lm3[i,:] .* (θprime.*cubevec))    
-    elseif cube_up[γ.wet][i]
-        global Fuo += sum(Lm3[i,:] .* (θprime.*cubevec))    
-    elseif cube_down[γ.wet][i]
-        global Flo += sum(Lm3[i,:] .* (θprime.*cubevec))    
-    end
-end
+# get L from 1/years into m^3/s
+scaler = Diagonal(vol ./ 3.154e+7)
+# scaler = Diagonal(vol ./ 3.154e+7)[γ.wet]
+Lm3 = scaler * L #order matters here
 
-(Fli -  Flo) + (Fui -  Fuo) + (Fsi -  Fso) 
+# diagm([1, 2, 3]) * ones(3, 3) 
+vol= cellvolume( γ)
 
-# put flux from m^3 C / s into cK/century
-Fli *= (3.154e+7 * 1e2 * 1e2 /cumvol)
-Flo *= (3.154e+7 * 1e2 * 1e2 /cumvol)
-Fl = Fli -  Flo
-
-
-# this version gets the local heat budget and then sums itdTdt = 0.0
 dTdt = 0.0
 dTdt_down = 0.0
 dTdt_up = 0.0
@@ -114,11 +73,14 @@ dTdt_int = 0.0
 
 cubevec = cube[γ.wet]
 cumvol = 0.0
+volume_average(x, mask, volume, γ) = sum(x .* mask .* volume .* γ.wet) / sum(mask .* volume .* γ.wet)
+θ.tracer[Inorthpac]
+cube_θ = volume_average(θ.tracer, cube, vol.tracer, γ)
+
 for i in eachindex(cubevec)
     if cubevec[i]
-        local ypr = θ.tracer[γ.wet]  .- θcube
-        # local ypr = θ.tracer[γ.wet]  .- θ.tracer[γ.wet][i]
-        global dTdt += sum(dropzeros(Lm3[i,:] .* ypr))
+        local ypr = θ.tracer[γ.wet]  .- cube_θ
+        global dTdt += sum(Lm3[i,:] .* ypr)
         global dTdt_down += sum(Lm3[i,:] .* (ypr.*cube_down[γ.wet]))
         global dTdt_up += sum(Lm3[i,:] .* (ypr.*cube_up[γ.wet]))
         global dTdt_east += sum(Lm3[i,:] .* (ypr.*cube_east[γ.wet]))
@@ -130,7 +92,10 @@ for i in eachindex(cubevec)
     end
 end
 
-fac = cumvol / (3.154e+7 * 1e4)
+cumvol
+vol.tracer[Inorthpac]
+
+fac = cumvol 
 dTdt /= fac
 dTdt_down /= fac
 dTdt_up /= fac
@@ -141,42 +106,44 @@ dTdt_south /= fac
 dTdt_int /= fac
 
 dTdt
+sum([dTdt_north, dTdt_south, dTdt_east, dTdt_west, dTdt_up, dTdt_down, dTdt_int])
+
+(Tflux ./ 3.154e+7) / 1e4 
+
+sum((Tflux ./ 1e4) / 3.154e+7)
+dTdt
+
+# for i in eachindex(cubevec)
+#     if cubevec[i]
+#         local ypr = θ.tracer[γ.wet]  .- θ.tracer[γ.wet][i]
+#         global dTdt += sum(dropzeros(L[i,:] .* ypr)) * 1e4 * vol[i]   # cK/century
+#         global dTdt_down += sum(L[i,:] .* (ypr.*cube_down[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_up += sum(L[i,:] .* (ypr.*cube_up[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_east += sum(L[i,:] .* (ypr.*cube_east[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_west += sum(L[i,:] .* (ypr.*cube_west[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_north += sum(L[i,:] .* (ypr.*cube_north[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_south += sum(L[i,:] .* (ypr.*cube_south[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global dTdt_int += sum(L[i,:] .* (ypr.*cube[γ.wet])) *
+#                             1e4 * vol[i]   # cK/century
+#         global cumvol += vol[i]
+#     end
+# end
+dTdt /= cumvol
+dTdt_down /= cumvol
+dTdt_up /= cumvol
+dTdt_east /= cumvol
+dTdt_west /= cumvol
+dTdt_north /= cumvol
+dTdt_south /= cumvol
+dTdt_int /= cumvol
+
 dTdt_north + dTdt_south + dTdt_east + dTdt_west + dTdt_up + dTdt_down + dTdt_int
-
-# check mass conservation at one point
-Inorthpac = nearestneighbor((210,35,2500), γ)
-row_northpac  = γ.R[Inorthpac]
-yprime = vec(θ)  .- θ.tracer[Inorthpac]
-Tflux = (L[row_northpac,:] .* yprime) * 1e4  # cK/century
-col_northpac = Tflux.nzind
-
-Fd = min.(Lsv[row_northpac,:].nzval,Lsv[:,row_northpac].nzval)
-Fa = Lsv[row_northpac,:].nzval - Fd 
-
-# split entire matrix into 2 components
-Ld = deepcopy(Lsv)
-La = deepcopy(Lsv)
-I, J, V = findnz(Lsv)
-
-for k in 1:length(Lsv.rowval)
-    i = I[k]
-    j = J[k]
-    if Lsv[i,j] > Lsv[j,i]
-        global La[i, j] = Lsv[i,j] - Lsv[j,i]
-        global Ld[i,j] = Lsv[j,i]
-    elseif Lsv[i,j] ≤ Lsv[j,i]
-        global La[i, j] = 0.0
-        # Ld[i, j] = Lsv[i, j] # doesn't need any change 
-    end
-end
-
-# make diff and advection individually conserve mass
-for r in 1:size(La,1)
-    La[r,r] -= sum(La[r,:])
-    Ld[r,r] -= sum(Ld[r,:])
-end
-
-
 
 
 ## end new work #########################################
