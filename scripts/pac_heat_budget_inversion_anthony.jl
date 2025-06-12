@@ -56,7 +56,7 @@ function apply_boundary_conditions_to_A_matrix(
 end
 
 
-function invert_for_interior_bc(bcube)
+function invert_for_interior_bc(A, bcube)
     Abc = apply_boundary_conditions_to_A_matrix(A, bcube, γ)
     Abclu = lu(Abc)
     cube_bc_invert = steadyinversion(Abclu,bcube,γ)
