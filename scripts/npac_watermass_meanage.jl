@@ -113,5 +113,17 @@ minimum(m_lower)
 
 msum = cube_mean(m_srf) + cube_mean(m_south) + cube_mean(m_lower) + cube_mean(m_upper)
 
+# get the control volume age (i.e., residence time)
+a_south = zeros(2,30,γ,:bc_south,"South Boundary","nondim")
+a_up = zeros(3,25,γ,:bc_upper,"Upper Boundary","nondim")
+a_lo = zeros(3,29,γ,:bc_lower,"Lower Boundary","nondim")
+a_surface = zeros(3,1,γ,:bc_surface,"Surface","nondim")
+
+a_boundary = (surface = a_surface,
+              south = a_south,
+              upper = a_up,
+              lower = a_lo)
+
+m_srf = steadyinversion(lu(Abc),a_srf,γ)
 
 

@@ -268,6 +268,40 @@ function meanage(TMIversion,Alu,γ)
     return a
 end
 
+function meanage(TMIfile, Alu, b, γ)
+
+    ## read age source
+    F₀ = readfield(TMIfile,"F₀",γ)
+    qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+
+    # better to define a Source type
+    Iq = findall(x -> x > 0,qPO₄.tracer)
+    
+    # qa = age source
+    qa = zeros(γ)
+    qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
+
+    bmask = zeros(γ)
+    setboundarycondition!(bmask, b)
+    # setboundarycondition!(bmask, b_south)
+    # setboundarycondition!(bmask, b_up)
+    # setboundarycondition!(bmask, b_lo)
+
+    Abc = deepcopy(A)
+    vbmask = vec(bmask)
+    for i in eachindex(vbmask)
+        println(i)
+        if vbmask[i] > 0.0
+            qa.tracer[γ.wet][i] .= 0.0
+        end
+    end
+
+    # zero boundary condition
+    a = steadyinversion(Alu,b,γ,q=qa)
+
+    return a
+end
+
 """ 
     function volumefilled(TMIversion)
     Find the ocean volume that has originated from each surface box.
