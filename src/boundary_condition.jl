@@ -592,3 +592,25 @@ function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::Nam
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
 end
+
+function watermassmatrix(A, b, γ)
+    
+    bmask = zeros(γ)
+    setboundarycondition!(bmask, b)
+
+    # setboundarycondition!(bmask, b_surface)
+    # setboundarycondition!(bmask, b_south)
+    # setboundarycondition!(bmask, b_up)
+    # setboundarycondition!(bmask, b_lo)
+
+    Abc = deepcopy(A)
+    #vbmask = vec(bmask)
+    for i in eachindex(vbmask)
+        println(i)
+        if vbmask[i] > 0.0
+            Abc[i,:] .= 0.0
+            Abc[i,i] = 1.0
+        end
+    end
+    return Abc
+end

@@ -34,11 +34,12 @@ b_ones = (surface = b_surface,
           lower = b_lo)
 
 bmask = zeros(γ)
+setboundarycondition!(bmask, b_ones)
 
-setboundarycondition!(bmask, b_surface)
-setboundarycondition!(bmask, b_south)
-setboundarycondition!(bmask, b_up)
-setboundarycondition!(bmask, b_lo)
+# setboundarycondition!(bmask, b_surface)
+# setboundarycondition!(bmask, b_south)
+# setboundarycondition!(bmask, b_up)
+# setboundarycondition!(bmask, b_lo)
 
 Abc = deepcopy(A)
 vbmask = vec(bmask)
