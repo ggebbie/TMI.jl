@@ -268,7 +268,7 @@ function meanage(TMIversion,Alu,γ)
     return a
 end
 
-function meanage(TMIfile, Alu, b, γ)
+function meanage(TMIfile, A, b0, b1, γ)
 
     ## read age source
     F₀ = readfield(TMIfile,"F₀",γ)
@@ -282,24 +282,40 @@ function meanage(TMIfile, Alu, b, γ)
     qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
 
     bmask = zeros(γ)
-    setboundarycondition!(bmask, b)
+    setboundarycondition!(bmask, b1)
     # setboundarycondition!(bmask, b_south)
     # setboundarycondition!(bmask, b_up)
     # setboundarycondition!(bmask, b_lo)
 
-    Abc = deepcopy(A)
     vbmask = vec(bmask)
+    sumA = sum(A, dims=2)
     for i in eachindex(vbmask)
-        println(i)
         if vbmask[i] > 0.0
-            qa.tracer[γ.wet][i] .= 0.0
+            println("i=",i)
+            println("sum(A)=",sumA[i])
+            (sumA[i] != 1.0) && error(" row should sum to one ")
+            qa.tracer[i] = 0.0
+            #qa.tracer[γ.wet][i] = 0.0
         end
     end
 
-    # zero boundary condition
-    a = steadyinversion(Alu,b,γ,q=qa)
+    # for i in eachindex(bmask)
+    #     if bmask[i] > 0.0
+    #         println("i=",i)
+    #         println("sum(A)=",sumA[i])
+    #         (sumA[i] != 1.0) && error(" row should sum to one ")
+    #         qa.tracer[i] = 0.0
+    #     end
+    # end
 
-    return a
+
+    println("max age source ", maximum(qa))
+    println("min age source ", minimum(qa))
+    # zero boundary condition
+    a = steadyinversion(lu(A),b0,γ,q=qa)
+#    a = steadyinversion(A,b0,γ,q=qa)
+
+    return a, qa
 end
 
 """ 

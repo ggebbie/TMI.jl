@@ -302,7 +302,8 @@ function incube(lonlims,latlims,depthlims,γ::Grid{R,3})::BitArray{3} where R
     # can you add a logical to a Float64? yes, it's 1.0
     [cube[i,j,k] +=  latlims[1] ≤ γ.lat[j] ≤ latlims[2] &&
                      lonlims[1] ≤ lon_shifted[i] ≤ lonlims[2] &&
-                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2]
+                     depthlims[1] ≤ γ.depth[k] ≤ depthlims[2] &&
+                     γ.wet[i,j,k]
     for i in eachindex(γ.lon)
     for j in eachindex(γ.lat)
     for k in eachindex(γ.depth)]

@@ -114,16 +114,42 @@ minimum(m_lower)
 msum = cube_mean(m_srf) + cube_mean(m_south) + cube_mean(m_lower) + cube_mean(m_upper)
 
 # get the control volume age (i.e., residence time)
-a_south = zeros(2,30,γ,:bc_south,"South Boundary","nondim")
-a_up = zeros(3,25,γ,:bc_upper,"Upper Boundary","nondim")
-a_lo = zeros(3,29,γ,:bc_lower,"Lower Boundary","nondim")
-a_surface = zeros(3,1,γ,:bc_surface,"Surface","nondim")
+a_south = ones(2,30,γ,:bc_south,"South Boundary","nondim")
+a_up = ones(3,25,γ,:bc_upper,"Upper Boundary","nondim")
+a_lo = ones(3,29,γ,:bc_lower,"Lower Boundary","nondim")
+a_surface = ones(3,1,γ,:bc_surface,"Surface","nondim")
 
-a_boundary = (surface = a_surface,
+a1_boundary = (surface = a_surface,
               south = a_south,
               upper = a_up,
               lower = a_lo)
 
-m_srf = steadyinversion(lu(Abc),a_srf,γ)
+amask = zeros(γ)
+setboundarycondition!(amask, a1_boundary)
+
+a0_boundary = (surface =zeros(3,1,γ,:bc_surface,"Surface","nondim"), 
+              south = zeros(2,30,γ,:bc_south,"South Boundary","nondim"),
+              upper = zeros(3,25,γ,:bc_upper,"Upper Boundary","nondim"),
+              lower = zeros(3,29,γ,:bc_lower,"Lower Boundary","nondim"))
+
+a_npac, qa_npac = meanage(TMIfile, Abc, a0_boundary, a1_boundary, γ)
+τ_npac = cube_mean( a_npac)
+V_npac = sum(vol.tracer[cube])
+F_npac = V_npac / (τ_npac * 3.1e13) # Sv
+
+minimum(a_npac)
+minimum(qa_npac)
+
+maximum(a_npac)
+maximum(qa_npac)
+
+# plot a section at 330 east longitude (i.e., 30 west)
+GeoPythonPlot.display(GeoPythonPlot.gcf())
+lon_section = 202.0 # only works if exact
+lon_section = 330 # only works if exact
+lims = -5:0
+lims = vcat(0,5,10:10:60,100)
+tlabel = "NPAC age [yr], "*string(360-lon_section)*"°W"
+sectionplot(a_npac,lon_section,lims,titlelabel = tlabel,fname=TMI.pkgplotsdir("aNPAC_"*string(360-lon_section)*"W.pdf")) # a
 
 
