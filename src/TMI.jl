@@ -268,36 +268,62 @@ function meanage(TMIversion,Alu,γ)
     return a
 end
 
-function meanage(TMIfile, A, b0, b1, γ)
+function local_residence_time(TMIfile, A, γ)
 
     ## read age source
     F₀ = readfield(TMIfile,"F₀",γ)
-    qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
 
-    # better to define a Source type
-    Iq = findall(x -> x > 0,qPO₄.tracer)
-    
     # qa = age source
     qa = zeros(γ)
-    qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
 
-    bmask = zeros(γ)
-    setboundarycondition!(bmask, b1)
-    # setboundarycondition!(bmask, b_south)
-    # setboundarycondition!(bmask, b_up)
-    # setboundarycondition!(bmask, b_lo)
+    # no source in mixed layer
+    mixedlayer = mixedlayermask( A, γ)
 
-    vbmask = vec(bmask)
-    sumA = sum(A, dims=2)
-    for i in eachindex(vbmask)
-        if vbmask[i] > 0.0
-            println("i=",i)
-            println("sum(A)=",sumA[i])
-            (sumA[i] != 1.0) && error(" row should sum to one ")
-            qa.tracer[i] = 0.0
-            #qa.tracer[γ.wet][i] = 0.0
+    # no source on boundary
+    boundary = (γ.wet .&&  .!γ.interior)
+
+#    qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+    # better to define a Source type
+ #   Iq = findall(x -> x > 0,qPO₄.tracer)
+
+    for i in eachindex(F₀.tracer)
+        if (!mixedlayer[i] && !boundary[i]) 
+            qa.tracer[i] = 1 / F₀.tracer[i]
         end
     end
+    return qa
+end
+
+function meanage(TMIfile, A, b, γ)
+
+    # ## read age source
+    # F₀ = readfield(TMIfile,"F₀",γ)
+    # qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+
+    # # better to define a Source type
+    # Iq = findall(x -> x > 0,qPO₄.tracer)
+    
+    # # qa = age source
+    # qa = zeros(γ)
+    # qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
+
+    # bmask = zeros(γ)
+    # setboundarycondition!(bmask, b1)
+    # # setboundarycondition!(bmask, b_south)
+    # # setboundarycondition!(bmask, b_up)
+    # # setboundarycondition!(bmask, b_lo)
+
+    # vbmask = vec(bmask)
+    # sumA = sum(A, dims=2)
+    # for i in eachindex(vbmask)
+    #     if vbmask[i] > 0.0
+    #         println("i=",i)
+    #         println("sum(A)=",sumA[i])
+    #         (sumA[i] != 1.0) && error(" row should sum to one ")
+    #         qa.tracer[i] = 0.0
+    #         #qa.tracer[γ.wet][i] = 0.0
+    #     end
+    # end
 
     # for i in eachindex(bmask)
     #     if bmask[i] > 0.0
@@ -308,14 +334,15 @@ function meanage(TMIfile, A, b0, b1, γ)
     #     end
     # end
 
+    qa = local_residence_time(TMIfile, A, γ)
 
     println("max age source ", maximum(qa))
     println("min age source ", minimum(qa))
     # zero boundary condition
-    a = steadyinversion(lu(A),b0,γ,q=qa)
+    a = steadyinversion(lu(A), b, γ, q=qa)
 #    a = steadyinversion(A,b0,γ,q=qa)
 
-    return a, qa
+    return a#, qa
 end
 
 """ 

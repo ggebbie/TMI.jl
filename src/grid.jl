@@ -207,7 +207,7 @@ function interiormask(A,wet,dimsize::NTuple)
 end
 
 """
-function mixedlayermask(A,wet,nx,ny,nz)
+function mixedlayermask(A,γ)
 """
 function mixedlayermask(A,γ::Grid)
     mixedlayer = falses(length.(γ.axes))

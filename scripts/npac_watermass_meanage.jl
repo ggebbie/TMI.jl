@@ -33,33 +33,23 @@ b_ones = (surface = b_surface,
           upper = b_up,
           lower = b_lo)
 
-bmask = zeros(γ)
-setboundarycondition!(bmask, b_ones)
-
-# setboundarycondition!(bmask, b_surface)
-# setboundarycondition!(bmask, b_south)
-# setboundarycondition!(bmask, b_up)
-# setboundarycondition!(bmask, b_lo)
-
-Abc = deepcopy(A)
-vbmask = vec(bmask)
-for i in eachindex(vbmask)
-    println(i)
-    if vbmask[i] > 0.0
-        Abc[i,:] .= 0.0
-        Abc[i,i] = 1.0
-    end
-end
-
+bmask_south = TMI.boundarymask(b_south, γ)
+bmask_up = TMI.boundarymask(b_up, γ)
+bmask = TMI.boundarymask(b_ones, γ)
 maximum(bmask)
 sum(bmask)
 
+γb = Grid(b_ones, γ)
+
+# update water-mass matrix to be consistent with boundary points and grid 
+Abc = watermassmatrix(A, γb)
+
 # case 1: get m_south 
-b_s  = (surface = false*b_surface,
+b_s  = (surface = 0.0*b_surface,
           south = true*b_south,
           upper = false*b_up,
           lower = false*b_lo)
-m_south = steadyinversion(lu(Abc),b_s,γ)
+m_south = steadyinversion(lu(Abc),b_s,γb)
 maximum(m_south)
 minimum(m_south)
 
@@ -80,34 +70,34 @@ function cube_mean(θ::Field, cube, vol, γ)
 end
 
 # capture fixed variables
-cube_mean(θ) = cube_mean(θ, cube, vol, γ)
-cube_mean(m_south) # 0.16
+cube_mean(θ) = cube_mean(θ, cube, vol, γb)
+cube_mean(m_south) # 0.17
 
 ## lower boundary
-b_l  = (surface = false*b_surface,
-          south = false*b_south,
-          upper = false*b_up,
-          lower = true*b_lo)
-m_lower = steadyinversion(lu(Abc),b_l,γ)
+b_l  = (surface = 0.0*b_surface,
+          south = 0.0*b_south,
+          upper = 0.0*b_up,
+          lower = 1.0*b_lo)
+m_lower = steadyinversion(lu(Abc),b_l,γb)
 maximum(m_lower)
 minimum(m_lower)
-cube_mean(m_lower)
+cube_mean(m_lower) # 0.51
 
 ## upper boundary
-b_u  = (surface = false*b_surface,
-          south = false*b_south,
-          upper = true*b_up,
-          lower = false*b_lo)
-m_upper = steadyinversion(lu(Abc),b_u,γ)
-cube_mean(m_upper)
+b_u  = (surface = 0.0*b_surface,
+          south = 0.0*b_south,
+          upper = 1.0*b_up,
+          lower = 0.0*b_lo)
+m_upper = steadyinversion(lu(Abc),b_u,γb)
+cube_mean(m_upper) # 0.32
 
 ##surface boundary (non-local)
-b_srf  = (surface = true*b_surface,
-          south = false*b_south,
-          upper = false*b_up,
-          lower = false*b_lo)
-m_srf = steadyinversion(lu(Abc),b_srf,γ)
-cube_mean(m_srf)
+b_srf  = (surface = 1.0*b_surface,
+          south = 0.0*b_south,
+          upper = 0.0*b_up,
+          lower = 0.0*b_lo)
+m_srf = steadyinversion(lu(Abc),b_srf,γb)
+cube_mean(m_srf) # 0.002
 
 maximum(m_lower)
 minimum(m_lower)
@@ -115,34 +105,28 @@ minimum(m_lower)
 msum = cube_mean(m_srf) + cube_mean(m_south) + cube_mean(m_lower) + cube_mean(m_upper)
 
 # get the control volume age (i.e., residence time)
-a_south = ones(2,30,γ,:bc_south,"South Boundary","nondim")
-a_up = ones(3,25,γ,:bc_upper,"Upper Boundary","nondim")
-a_lo = ones(3,29,γ,:bc_lower,"Lower Boundary","nondim")
-a_surface = ones(3,1,γ,:bc_surface,"Surface","nondim")
-
-a1_boundary = (surface = a_surface,
-              south = a_south,
-              upper = a_up,
-              lower = a_lo)
-
-amask = zeros(γ)
 setboundarycondition!(amask, a1_boundary)
 
-a0_boundary = (surface =zeros(3,1,γ,:bc_surface,"Surface","nondim"), 
-              south = zeros(2,30,γ,:bc_south,"South Boundary","nondim"),
-              upper = zeros(3,25,γ,:bc_upper,"Upper Boundary","nondim"),
-              lower = zeros(3,29,γ,:bc_lower,"Lower Boundary","nondim"))
+    F₀ = readfield(TMIfile,"F₀",γ)
+    qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
 
-a_npac, qa_npac = meanage(TMIfile, Abc, a0_boundary, a1_boundary, γ)
-τ_npac = cube_mean( a_npac)
+a_boundary = (surface =zeros(3,1,γb,:bc_surface,"Surface","nondim"), 
+              south = zeros(2,30,γb,:bc_south,"South Boundary","nondim"),
+              upper = zeros(3,25,γb,:bc_upper,"Upper Boundary","nondim"),
+              lower = zeros(3,29,γb,:bc_lower,"Lower Boundary","nondim"))
+
+qa = TMI.local_residence_time(TMIfile, Abc, γb)
+
+a_npac = meanage(TMIfile, Abc, a_boundary, γb)
+τ_npac = cube_mean( a_npac) # 38.3 years
 V_npac = sum(vol.tracer[cube])
-F_npac = V_npac / (τ_npac * 3.1e13) # Sv
+F_npac = V_npac / (τ_npac * 3.1e13) # 24.9 Sv (total flux)
 
 minimum(a_npac)
-minimum(qa_npac)
+minimum(qa)
 
 maximum(a_npac)
-maximum(qa_npac)
+maximum(qa)
 
 # plot a section at 330 east longitude (i.e., 30 west)
 GeoPythonPlot.display(GeoPythonPlot.gcf())

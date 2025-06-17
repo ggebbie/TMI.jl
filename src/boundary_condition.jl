@@ -593,24 +593,69 @@ function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::Nam
     return gu
 end
 
-function watermassmatrix(A, b, γ)
-    
-    bmask = zeros(γ)
-    setboundarycondition!(bmask, b)
-
-    # setboundarycondition!(bmask, b_surface)
-    # setboundarycondition!(bmask, b_south)
-    # setboundarycondition!(bmask, b_up)
-    # setboundarycondition!(bmask, b_lo)
-
+function watermassmatrix(A, b::Union{BoundaryCondition,NamedTuple}, γ::Grid)
+    bmask = boundarymask(b, γ)
     Abc = deepcopy(A)
-    #vbmask = vec(bmask)
-    for i in eachindex(vbmask)
-        println(i)
-        if vbmask[i] > 0.0
+    bmaskwet = bmask[γ.wet]
+    for i in eachindex(bmaskwet)
+        if bmaskwet[i] 
             Abc[i,:] .= 0.0
             Abc[i,i] = 1.0
         end
     end
     return Abc
+end
+
+"""
+update water-mass matrix to agree with new boundaries in γ
+"""
+function watermassmatrix(A::SparseMatrixCSC, γ::Grid)
+    bmask = (γ.wet .&&  .!γ.interior)
+    Abc = deepcopy(A)
+    bmaskwet = bmask[γ.wet]
+    for i in eachindex(bmaskwet)
+        if bmaskwet[i] 
+            Abc[i,:] .= 0.0
+            Abc[i,i] = 1.0
+        end
+    end
+    return Abc
+    
+end
+
+"""
+     function boundarymask(b, γ::Grid)
+"""
+function boundarymask(b::BoundaryCondition, γ::Grid)
+    boundary = falses(length.(γ.axes))
+    if b.dim == 1
+        boundary[b.dimval,:,:] += b.wet
+    elseif b.dim == 2
+        boundary[:,b.dimval,:] += b.wet 
+    elseif b.dim == 3
+        boundary[:,:,b.dimval] += b.wet
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return boundary 
+end
+
+function boundarymask(b::NamedTuple, γ::Grid)
+    boundary = falses(length.(γ.axes))
+    for b1 in b
+        boundary = (boundary .|| boundarymask(b1, γ))
+    end
+    return boundary 
+end
+
+# update Grid with newly-defined boundaries
+function Grid(b::Union{BoundaryCondition,NamedTuple}, γ::Grid)
+    boundary = boundarymask(b, γ)
+
+    return Grid(
+        γ.axes,
+        γ.wet,
+        (γ.wet .&&  .!boundary),
+        γ.wrap,
+        γ.Δ)
 end
