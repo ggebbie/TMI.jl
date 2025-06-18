@@ -313,24 +313,42 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
     return  ∂V∂b 
 end
 
-function effective_endmember(TMIversion,Alu,field,region,γ)
+"""
+     function effective_endmember(TMIversion,Alu,field,region,γ)
+
+Effective (i.e., importance-weighted) endmember tracer value
+calculated according to Gebbie and Huybers 2011.
+"""
+function effective_endmember(TMIversion,Alu,field::Field,region,γ::Grid)
     b = surfaceregion(TMIversion,region) # version 2 of this routine
-    v = cellvolume(γ)
-
-    # effectively take inverse of transpose A matrix.
-    #dVdd = zeros(γ) # pre-allocate array
-    dVdd = Alu'\v #[γ.wet]
-
-    # pick out the relevant part along the boundary
-    volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
-    bc = getboundarycondition(field,b.dim,b.dimval)
-
+    return effective_endmember(Alu,field,b,γ)
+end
+function effective_endmember(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+    volweight, bc = effective_endmember_sums(Alu,field,b,γ)
+    
     # caution: did not expicitly check that the wet masks matched up
     return sum(volweight.tracer[wet(volweight)].*
                bc.tracer[wet(bc)].*
                b.tracer[wet(b)])/
            sum(volweight.tracer[wet(volweight)].*
                b.tracer[wet(b)])
+end
+
+"""
+     function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+
+Intermediate quantities for computing effective endmembers
+"""
+function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+    v = cellvolume(γ)
+
+    # effectively take inverse of transpose A matrix.
+    dVdd = Alu'\v #[γ.wet]
+
+    # pick out the relevant part along the boundary
+    volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
+    bc = getboundarycondition(field,b.dim,b.dimval)
+    return volweight, bc
 end
 
 """ 
