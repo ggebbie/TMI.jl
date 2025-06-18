@@ -313,6 +313,26 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
     return  ∂V∂b 
 end
 
+function effective_endmember(TMIversion,Alu,field,region,γ)
+    b = surfaceregion(TMIversion,region) # version 2 of this routine
+    v = cellvolume(γ)
+
+    # effectively take inverse of transpose A matrix.
+    #dVdd = zeros(γ) # pre-allocate array
+    dVdd = Alu'\v #[γ.wet]
+
+    # pick out the relevant part along the boundary
+    volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
+    bc = getboundarycondition(field,b.dim,b.dimval)
+
+    # caution: did not expicitly check that the wet masks matched up
+    return sum(volweight.tracer[wet(volweight)].*
+               bc.tracer[wet(bc)].*
+               b.tracer[wet(b)])/
+           sum(volweight.tracer[wet(volweight)].*
+               b.tracer[wet(b)])
+end
+
 """ 
     function surfaceorigin(TMIversion,loc)
      Find the surface origin of water for some interior box 

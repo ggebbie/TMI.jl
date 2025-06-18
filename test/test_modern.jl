@@ -135,6 +135,16 @@
         # volumefill no smaller than smallest box?
         @test exp10(minimum(volume)) ≥ 4.9
     end
+
+    ####################################
+    ## example: effective endmembers
+    @testset "effective endmembers" begin
+        region = TMI.regionlist()[2]
+        θ = readfield(TMIfile,"θ",γ)
+
+        @test isapprox(TMI.effective_endmember(TMIversion,Alu,θ,"ANT",γ), -1.31, atol=0.2)
+        @test isapprox(TMI.effective_endmember(TMIversion,Alu,θ,"NATL",γ), 2.64, atol=0.2)
+    end
     
     ####################################
     ## example: surfaceorigin
