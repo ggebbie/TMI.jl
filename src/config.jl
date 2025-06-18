@@ -144,6 +144,25 @@ function watermassmatrix(file)
     return A
 end
 
+function watermassmatrix(file, γ, halflife)
+
+    !haskey(NCDataset(file),"F₀") && error("watermassmatrix: no rates included with this version")
+    Aradio = watermassmatrix(file) # placeholder
+    F₀ = ncread(file,"F₀")
+
+    # decay constant
+    λ = log(2)/halflife
+    diag_decay = (- λ ./ F₀)
+    ml = mixedlayermask(Aradio, γ)
+    bl = boundarymask(γ)
+    diag_decay[ml] .= 0.0
+    diag_decay[bl] .= 0.0
+    
+    # remove_inf = x -> (ml(x) ? 0.0 : x) # use pair substitution instead
+    # replace!(remove_inf, diag_decay)
+    return Aradio += Diagonal(diag_decay[γ.wet])
+end
+
 """
     function circulationmatrix(file,γ)
     Read and assemble the circulation matrix from NetCDF.

@@ -210,7 +210,7 @@ function ones(dim::I,dimval::I,γ::Grid,name::Symbol,longname::String,units::Str
     tracer = Array{Float64}(undef,size(wet))
     tracer[wet] .= ones(Float64)
     tracer[.!wet] .= zero(Float64)/zero(Float64)
-    return BoundaryCondition(tracer,baxes,k,dim,dimval,wet)
+    return BoundaryCondition(tracer,baxes,k,dim,dimval,wet,name,longname,units)
 end
 
 """

@@ -58,7 +58,7 @@ export config, download_file,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
     #maximum, minimum,
-    (+), (-), (*), dot,
+    +, -, *, dot,
     zerosource, onesource,
     adjustsource, adjustsource!,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
@@ -68,9 +68,9 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors
 
-import Base: zeros, one, oneunit, ones,  (\)
+import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
-import Base: (+), (-), (*), (/), vec
+import Base: +, -, *, /, vec
 import LinearAlgebra: dot
 
 # Credit to DrWatson.jl for these functions
@@ -389,6 +389,44 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
     ∂V∂b  = BoundaryCondition(volume,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
     
     return  ∂V∂b 
+end
+
+"""
+     function effective_endmember(TMIversion,Alu,field,region,γ)
+
+Effective (i.e., importance-weighted) endmember tracer value
+calculated according to Gebbie and Huybers 2011.
+"""
+function effective_endmember(TMIversion,Alu,field::Field,region,γ::Grid)
+    b = surfaceregion(TMIversion,region) # version 2 of this routine
+    return effective_endmember(Alu,field,b,γ)
+end
+function effective_endmember(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+    volweight, bc = effective_endmember_sums(Alu,field,b,γ)
+    
+    # caution: did not expicitly check that the wet masks matched up
+    return sum(volweight.tracer[wet(volweight)].*
+               bc.tracer[wet(bc)].*
+               b.tracer[wet(b)])/
+           sum(volweight.tracer[wet(volweight)].*
+               b.tracer[wet(b)])
+end
+
+"""
+     function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+
+Intermediate quantities for computing effective endmembers
+"""
+function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+    v = cellvolume(γ)
+
+    # effectively take inverse of transpose A matrix.
+    dVdd = Alu'\v #[γ.wet]
+
+    # pick out the relevant part along the boundary
+    volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
+    bc = getboundarycondition(field,b.dim,b.dimval)
+    return volweight, bc
 end
 
 """ 
