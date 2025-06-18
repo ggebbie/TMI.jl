@@ -58,7 +58,7 @@ export config, download_file,
     gsetboundarycondition, setsource!,
     zeros, one, oneunit, ones,
     #maximum, minimum,
-    (+), (-), (*), dot,
+    +, -, *, dot,
     zerosource, onesource,
     adjustsource, adjustsource!,
     Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
@@ -68,9 +68,9 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors
 
-import Base: zeros, one, oneunit, ones,  (\)
+import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
-import Base: (+), (-), (*), (/), vec
+import Base: +, -, *, /, vec
 import LinearAlgebra: dot
 
 # Credit to DrWatson.jl for these functions
