@@ -411,17 +411,40 @@ function effective_endmember(Alu,field::Field,b::BoundaryCondition,γ::Grid)
            sum(volweight.tracer[wet(volweight)].*
                b.tracer[wet(b)])
 end
+function effective_endmember(Alu,field::Field,b::NamedTuple,γ::Grid; control_volume=γ.wet)
+
+    numer = 0.0
+    denom = 0.0 
+    for bi in b 
+        volweight, bc = effective_endmember_sums(Alu,field,bi,γ; control_volume=control_volume)
+        numer += sum(volweight.tracer[wet(volweight)].*
+                     bc.tracer[wet(bc)].*
+                     bi.tracer[wet(bi)])
+
+        denom += sum(volweight.tracer[wet(volweight)].*
+                     bi.tracer[wet(bi)])
+    end
+    
+    # caution: did not expicitly check that the wet masks matched up
+    return numer/denom 
+end
 
 """
      function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
 
 Intermediate quantities for computing effective endmembers
 """
-function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid; control_volume = γ.wet)
     v = cellvolume(γ)
 
+    for i in eachindex(control_volume)
+        if !control_volume[i] 
+            v.tracer[i] = 0.0
+        end
+    end
+    
     # effectively take inverse of transpose A matrix.
-    dVdd = Alu'\v #[γ.wet]
+    dVdd = Alu'\v 
 
     # pick out the relevant part along the boundary
     volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
