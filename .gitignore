@@ -5,3 +5,8 @@
 /docs/build/
 *~
 *nc
+/scripts/.CondaPkg
+/scripts/.CondaPkg
+/scripts/.CondaPkg
+/.CondaPkg
+.DS_Store
