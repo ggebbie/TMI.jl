@@ -134,7 +134,6 @@ function cartesianindex(wet::BitArray{N}) where N
     end
 end
 
-
 """
     function linearindex(wet)
     Read and assemble the grid coordinates.
@@ -183,7 +182,7 @@ function wetmask(TMIfile::String,nx,ny,nz)
     # read Cartesian Index from file.
     I = cartesianindex(TMIfile)
     wet = falses(nx,ny,nz)
-    wet[I] .= 1
+    wet[I] .= true # formerly 1
     return wet
 end
 
@@ -208,7 +207,7 @@ function interiormask(A,wet,dimsize::NTuple)
 end
 
 """
-function mixedlayermask(A,wet,nx,ny,nz)
+function mixedlayermask(A,γ)
 """
 function mixedlayermask(A,γ::Grid)
     mixedlayer = falses(length.(γ.axes))

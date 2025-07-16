@@ -240,8 +240,8 @@ function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,�
 end
 
 """
-    function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
-   Get boundary condition by extracting from Field (i.e., 3D tracer)
+function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+Get boundary condition by extracting from Field (i.e., 3D tracer)
 # Arguments
 - `field::Field`: 3D tracer field with metadata and grid
 - `dim`: dimension number (1,2,3) that the boundary plane has constant value
@@ -453,4 +453,71 @@ end
 function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
+end
+
+function watermassmatrix(A, b::Union{BoundaryCondition,NamedTuple}, γ::Grid)
+    bmask = boundarymask(b, γ)
+    Abc = deepcopy(A)
+    bmaskwet = bmask[γ.wet]
+    for i in eachindex(bmaskwet)
+        if bmaskwet[i] 
+            Abc[i,:] .= 0.0
+            Abc[i,i] = 1.0
+        end
+    end
+    return Abc
+end
+
+"""
+update water-mass matrix to agree with new boundaries in γ
+"""
+function watermassmatrix(A::SparseMatrixCSC, γ::Grid)
+    bmask = (γ.wet .&&  .!γ.interior)
+    Abc = deepcopy(A)
+    bmaskwet = bmask[γ.wet]
+    for i in eachindex(bmaskwet)
+        if bmaskwet[i] 
+            Abc[i,:] .= 0.0
+            Abc[i,i] = 1.0
+        end
+    end
+    return Abc
+    
+end
+
+"""
+     function boundarymask(b, γ::Grid)
+"""
+function boundarymask(b::BoundaryCondition, γ::Grid)
+    boundary = falses(length.(γ.axes))
+    if b.dim == 1
+        boundary[b.dimval,:,:] += b.wet
+    elseif b.dim == 2
+        boundary[:,b.dimval,:] += b.wet 
+    elseif b.dim == 3
+        boundary[:,:,b.dimval] += b.wet
+    else
+        error("controls not implemented for 4+ dimensions")
+    end
+    return boundary 
+end
+
+function boundarymask(b::NamedTuple, γ::Grid)
+    boundary = falses(length.(γ.axes))
+    for b1 in b
+        boundary = (boundary .|| boundarymask(b1, γ))
+    end
+    return boundary 
+end
+
+# update Grid with newly-defined boundaries
+function Grid(b::Union{BoundaryCondition,NamedTuple}, γ::Grid)
+    boundary = boundarymask(b, γ)
+
+    return Grid(
+        γ.axes,
+        γ.wet,
+        (γ.wet .&&  .!boundary),
+        γ.wrap,
+        γ.Δ)
 end

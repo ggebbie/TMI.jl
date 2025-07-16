@@ -267,6 +267,83 @@ function meanage(TMIversion,Alu,γ)
     return a
 end
 
+function local_residence_time(TMIfile, A, γ)
+
+    ## read age source
+    F₀ = readfield(TMIfile,"F₀",γ)
+
+    # qa = age source
+    qa = zeros(γ)
+
+    # no source in mixed layer
+    mixedlayer = mixedlayermask( A, γ)
+
+    # no source on boundary
+    boundary = (γ.wet .&&  .!γ.interior)
+
+#    qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+    # better to define a Source type
+ #   Iq = findall(x -> x > 0,qPO₄.tracer)
+
+    for i in eachindex(F₀.tracer)
+        if (!mixedlayer[i] && !boundary[i]) 
+            qa.tracer[i] = 1 / F₀.tracer[i]
+        end
+    end
+    return qa
+end
+
+function meanage(TMIfile, A, b, γ)
+
+    # ## read age source
+    # F₀ = readfield(TMIfile,"F₀",γ)
+    # qPO₄ = readsource(TMIfile,"qPO₄",γ) # use this to define mixed-layer
+
+    # # better to define a Source type
+    # Iq = findall(x -> x > 0,qPO₄.tracer)
+    
+    # # qa = age source
+    # qa = zeros(γ)
+    # qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
+
+    # bmask = zeros(γ)
+    # setboundarycondition!(bmask, b1)
+    # # setboundarycondition!(bmask, b_south)
+    # # setboundarycondition!(bmask, b_up)
+    # # setboundarycondition!(bmask, b_lo)
+
+    # vbmask = vec(bmask)
+    # sumA = sum(A, dims=2)
+    # for i in eachindex(vbmask)
+    #     if vbmask[i] > 0.0
+    #         println("i=",i)
+    #         println("sum(A)=",sumA[i])
+    #         (sumA[i] != 1.0) && error(" row should sum to one ")
+    #         qa.tracer[i] = 0.0
+    #         #qa.tracer[γ.wet][i] = 0.0
+    #     end
+    # end
+
+    # for i in eachindex(bmask)
+    #     if bmask[i] > 0.0
+    #         println("i=",i)
+    #         println("sum(A)=",sumA[i])
+    #         (sumA[i] != 1.0) && error(" row should sum to one ")
+    #         qa.tracer[i] = 0.0
+    #     end
+    # end
+
+    qa = local_residence_time(TMIfile, A, γ)
+
+    println("max age source ", maximum(qa))
+    println("min age source ", minimum(qa))
+    # zero boundary condition
+    a = steadyinversion(lu(A), b, γ, q=qa)
+#    a = steadyinversion(A,b0,γ,q=qa)
+
+    return a#, qa
+end
+
 """ 
     function volumefilled(TMIversion)
     Find the ocean volume that has originated from each surface box.
@@ -333,17 +410,40 @@ function effective_endmember(Alu,field::Field,b::BoundaryCondition,γ::Grid)
            sum(volweight.tracer[wet(volweight)].*
                b.tracer[wet(b)])
 end
+function effective_endmember(Alu,field::Field,b::NamedTuple,γ::Grid; control_volume=γ.wet)
+
+    numer = 0.0
+    denom = 0.0 
+    for bi in b 
+        volweight, bc = effective_endmember_sums(Alu,field,bi,γ; control_volume=control_volume)
+        numer += sum(volweight.tracer[wet(volweight)].*
+                     bc.tracer[wet(bc)].*
+                     bi.tracer[wet(bi)])
+
+        denom += sum(volweight.tracer[wet(volweight)].*
+                     bi.tracer[wet(bi)])
+    end
+    
+    # caution: did not expicitly check that the wet masks matched up
+    return numer/denom 
+end
 
 """
      function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
 
 Intermediate quantities for computing effective endmembers
 """
-function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid)
+function effective_endmember_sums(Alu,field::Field,b::BoundaryCondition,γ::Grid; control_volume = γ.wet)
     v = cellvolume(γ)
 
+    for i in eachindex(control_volume)
+        if !control_volume[i] 
+            v.tracer[i] = 0.0
+        end
+    end
+    
     # effectively take inverse of transpose A matrix.
-    dVdd = Alu'\v #[γ.wet]
+    dVdd = Alu'\v 
 
     # pick out the relevant part along the boundary
     volweight = getboundarycondition(dVdd,b.dim,b.dimval) 
