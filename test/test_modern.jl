@@ -5,6 +5,27 @@
     
     A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
+    @testset "trim domain" begin
+
+        b_south = ones(2,45,γ,:bc_south,"South Boundary","nondim")
+        b_up = ones(3,25,γ,:bc_upper,"Upper Boundary","nondim")
+        b_lo = ones(3,29,γ,:bc_lower,"Lower Boundary","nondim")
+        b_surface = ones(3,1,γ,:bc_surface,"Surface","nondim")
+
+        # find all locations where boundary set to one
+        b_ones = (surface = b_surface,
+          south = b_south,
+          upper = b_up,
+          lower = b_lo)
+
+        # update grid to be consistent with boundary conditions
+        γb = Grid(b_ones, γ)
+        @test sum(γ.interior) > sum(γb.interior) # interior points replaced with boundaries
+        
+        # update water-mass matrix to be consistent with boundary points and grid 
+        Abc = watermassmatrix(A, γb) # add test here
+    end
+
     @testset "regions" begin
         # test that all global values sum to 1.
         Nr = length(TMI.regionlist())
