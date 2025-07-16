@@ -31,7 +31,8 @@ elseif versionno == 2
     vol= cellvolume(γ)
 
     # test one: get south water-mass fraction
-    b_south = ones(2,60,γ,:bc_south,"South Boundary","nondim")
+    #b_south = ones(2,60,γ,:bc_south,"South Boundary","nondim")
+    b_south = ones(2,45,γ,:bc_south,"South Boundary","nondim")
     b_up = ones(3,25,γ,:bc_upper,"Upper Boundary","nondim")
     b_lo = ones(3,29,γ,:bc_lower,"Lower Boundary","nondim")
     b_surface = ones(3,1,γ,:bc_surface,"Surface","nondim")
@@ -60,6 +61,7 @@ Abc_lu = Abc_lu
 ## get average over cube
 ## big control volume to stabilize results
 xlim = (125,240); ylim = (30,65); zlim = (2000,3000)
+xlim = (125,240); ylim = (0,65); zlim = (2000,3000)
 #xlim = (209,211); ylim = (34,36); zlim = (2400,2600)
 #xlim = (125,240); ylim = (20,40); zlim = (1500,2500)
 cube = TMI.incube(xlim,ylim,zlim, γ)
@@ -108,7 +110,7 @@ b_u  = (surface = 0.0*b_surface,
 m_upper = steadyinversion(Abc_lu,b_u,γb)
 mbar_upper = cube_mean(m_upper) # 0.32/0.32
 
-##surface boundary (non-local)
+## surface boundary (non-local)
 b_srf  = (surface = 1.0*b_surface,
           south = 0.0*b_south,
           upper = 0.0*b_up,
