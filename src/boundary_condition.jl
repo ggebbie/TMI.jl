@@ -240,8 +240,8 @@ function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,Î
 end
 
 """
-    function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
-   Get boundary condition by extracting from Field (i.e., 3D tracer)
+function getboundarycondition(field::Field,dim,dimval)::BoundaryCondition
+Get boundary condition by extracting from Field (i.e., 3D tracer)
 # Arguments
 - `field::Field`: 3D tracer field with metadata and grid
 - `dim`: dimension number (1,2,3) that the boundary plane has constant value
@@ -255,9 +255,9 @@ getboundarycondition(field::Field,dim::Integer,dimval::Integer) =
 vec(u::BoundaryCondition) = u.tracer[u.wet]
 
 """
-    function surfacepatch
-    Make a surface boundary condition
-    with a rectangular patch
+function surfacepatch
+Make a surface boundary condition
+with a rectangular patch
 # Arguments
 - `lonbox`: longitudes of box edges
 - `latbox`: latitudes of box edges
