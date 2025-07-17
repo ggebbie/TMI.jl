@@ -149,3 +149,27 @@ fieldnames() = ("Θ", "θ", "σθ",
                 "NO₃", "σNO₃",
                 "O₂", "σO₂",
                 "δ¹³C", "σδ¹³C")
+
+"""
+    function mat2ncfield
+
+    Rename MATLAB variables to NetCDF variables
+"""
+standardize_fieldnames() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
+    "Terr"=>"σθ",
+    "Sstar"=>"S⋆",
+    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
+    "Sp" => "Sₚ", # help for some out-of-date input files
+    "Serr"=>"σSₚ",
+    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
+    "O18err"=>"σδ¹⁸Ow",
+    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
+    "Perr" => "σPO₄",
+    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
+    "Nerr" => "σNO₃",
+    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
+    "Oerr"=>"σO₂",
+    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
+    "C13err" =>  "σδ¹³C")
+
+standardize_sourcenames() = Dict("dP"=>"qPO₄","q"=>"qPO₄")

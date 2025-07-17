@@ -3,7 +3,7 @@ import Pkg; Pkg.activate("..")
 # using LinearAlgebra
 using TMI
 # using SparseArrays
-# using NCDatasets
+using NCDatasets
 
 
 # get list of glacial inversions
@@ -38,15 +38,22 @@ for TMIversion in glacial_versions
     Aglacial = TMI.matrix_modern2glacial(Anewboundary, γmodern, γglacial)
     
     # update, save tracer fields
-    fnames = TMI.fieldnames()
+    # fnames = TMI.fieldnames()
 
     # update tracer fields
-    for n in fnames
-        if any(occursin.(n,keys(ds)))    
-            fglacial = readfield(TMIfile_orig, n, γglacial) # automatially updates to new grid
+    for (kk,vv) in TMI.standardize_fieldnames()
+        #if any(occursin.(kk,keys(ds)))    # kk in varnames || kk in xvarnames #haskey(vars,kk)
+        if kk in keys(ds)    # kk in varnames || kk in xvarnames #haskey(vars,kk)
+            fglacial = readfield(TMIfile_orig, kk, γglacial) # automatially updates to new grid
             writefield(TMIfile_new, fglacial)
         end
     end
+    
+    # for n in fnames
+    #     if any(occursin.(n,keys(ds)))    
+
+    #     end
+    # end
 
     # up date and rewrite source
     qglacial = readsource(TMIfile_orig, "qPO₄", γglacial) # automatially updates to new grid
