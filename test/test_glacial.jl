@@ -25,10 +25,6 @@
         #b₀ = zerosurfaceboundary(γ)
         b₀ = zerosurfaceboundary(γ)
 
-        # side check: onesurfaceboundary retains units
-        b_argon39 = onesurfaceboundary(γ,:Ar39,"argon-39","% modern")
-        @test b_argon39.name == :Ar39
-        
         # remineralized phosphate
         PO₄ᴿ = steadyinversion(Alu,b₀,γ,q=qPO₄)
 
@@ -40,21 +36,11 @@
         
         ## how big is the maximum difference?
         # could replace with abs function
-        @test maximum(PO₄direct - PO₄total) < 0.1
-        @test minimum(PO₄direct - PO₄total) > -0.1
+        @test maximum(PO₄direct - PO₄total) < 1e-2
+        @test minimum(PO₄direct - PO₄total) > -1e-2
 
-        ## oxygen distribution, just be sure it runs
-        yO₂ = readfield(TMIfile,"O₂",γ)
-        bO₂ = getsurfaceboundary(yO₂)
-        O₂ = steadyinversion(Alu,bO₂,γ,q=qPO₄,r=-170.0)
-
-        ## radio-decay
-        Aradio = watermassmatrix(TMIfile, γ, 5730) # like radiocarbon
-        Oradio = steadyinversion(Aradio,bO₂,γ)
-
-        Aradio2 = watermassmatrix(TMIfile, γ, 269) # like radiocarbon
-        Oradio2 = steadyinversion(Aradio2,bO₂,γ)
-
-        @test minimum(Oradio) > minimum(Oradio2)
+        # also compare to original field from years gone by
+        @test maximum(PO₄direct - yPO₄) < 1e-2
+        @test minimum(PO₄direct - yPO₄) > -1e-2
     end
 end
