@@ -14,28 +14,28 @@ function config(TMIversion; compute_lu = true)
 
     TMIfile = download_file(TMIversion)
 
-    println("A")
+    println("Form water-mass matrix A")
     @time A = watermassmatrix(TMIfile)
 
     # LU factorization for efficient matrix inversions
-    println("Alu")
     if compute_lu
+        println("LU factorization of A")
         @time Alu = lu(A)
     else
+        println("skip LU factorization of A")
         Alu = nothing
     end
 
     γ = Grid(TMIfile)
     
     # would be good to make this optional
-    println("L=")
+    println("circulation matrix L=")
     @time L = circulationmatrix(TMIfile,A,γ)
 
-    println("B=")
+    println("Boundary matrix B=")
     @time B = boundarymatrix(TMIfile,γ)
     
     return  A, Alu, γ, TMIfile, L, B
-
 end
 
 """
@@ -331,7 +331,6 @@ function ncurl(TMIname)
     end
 end
 
-
 """ 
 Save TMI configuration to NetCDF format for non-proprietary access
 """
@@ -456,7 +455,6 @@ function watermassmatrix2nc(TMIversion,A)
     nccreate(filenetcdf,varname,"A_element",1:nelements,elementatts,atts=sourceatts)
     println("write ",varname)
     ncwrite(j, filenetcdf,varname)
-
 end
 
 """
@@ -624,6 +622,7 @@ function tracerinit(vec,I,wet)
     [field[I[n]]=vec[n] for n ∈ eachindex(I)]
     return field
 end
+
 function sourceinit(vec,I,γ)
 
     # preallocate
@@ -656,3 +655,55 @@ versionlist() = ("modern_90x45x33_GH10_GH12",
     "LGM_90x45x33_GPLS2",				  
     "LGM_90x45x33_OG18",
     "nordic_201x115x46_B23")
+
+"""
+        function matrix_mod2glacial(Amodern,γmodern,γglacial)
+   
+    Transfer modern water-mass matrix Amod to glacial water-mass matrix Aglacial
+# Arguments
+- `Amodern`: modern water-mass matrix
+- `γmodern`: modern TMI grid
+- `γglacial`: glacial TMI grid
+# Output
+- `Aglacial`: glacial water-mass matrix
+"""
+function matrix_modern2glacial(Amodern,γmodern,γglacial)
+
+    # a less general but more practical way to do it
+    Δi = sum(γmodern.wet) - sum(γglacial.wet)
+
+    imodern, jmodern, mmodern = findnz(Amodern)
+    iglacial = imodern .- Δi
+    jglacial = jmodern .- Δi
+    mglacial = copy(mmodern)
+
+    # faces that connect to ocean that is dry during glacial times 
+    badface = []
+
+    # check whether newly dry points have direct interior connections
+    # store in weirdface
+    weirdface = []
+
+    for z in 1:length(iglacial)
+        if iglacial[z] < 1 
+            push!(badface,z)
+        elseif (iglacial[z] < 1) && (jglacial[z] < 1)
+            push!(badface,z)
+        elseif ((iglacial[z] < 1) ⊻ (jglacial[z] < 1)) && iszero(mmodern[z])
+            # can be removed because it's zero
+            push!(badface,z)
+        elseif (iglacial[z] < 1) ⊻ (jglacial[z] < 1)
+            push!(weirdface,z)
+        end
+    end
+    (length(weirdface) > 0) && error("interior to dry flow") 
+    
+    # remove unnecessary mass fractions
+    deleteat!(iglacial, badface)
+    deleteat!(jglacial, badface)
+    deleteat!(mglacial, badface)
+
+    # form new sparse matrix for glacial times
+    return sparse(iglacial, jglacial, mglacial)
+end
+

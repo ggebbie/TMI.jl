@@ -513,7 +513,6 @@ end
 # update Grid with newly-defined boundaries
 function Grid(b::Union{BoundaryCondition,NamedTuple}, γ::Grid)
     boundary = boundarymask(b, γ)
-
     return Grid(
         γ.axes,
         γ.wet,
