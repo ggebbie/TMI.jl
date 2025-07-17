@@ -140,3 +140,12 @@ end
 readmatfield(file,mattracername,γ::Grid,Izyx = cartesianindex(file)) = readfield(file,mattracername,γ,Izyx)
 
 writefield(file,c::Field) = write(file,c) 
+
+# complete list of TMI field names
+fieldnames() = ("Θ", "θ", "σθ",
+                "S⋆", "Sₚ", "σSₚ",
+                "δ¹⁸Ow", "σδ¹⁸Ow",
+                "PO₄", "σPO₄",
+                "NO₃", "σNO₃",
+                "O₂", "σO₂",
+                "δ¹³C", "σδ¹³C")
