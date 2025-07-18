@@ -1,7 +1,7 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
 authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
-version = "0.3.4"
+version = "0.3.5"
 
 [deps]
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
@@ -51,7 +51,7 @@ Interpolations = "0.15"
 JuMP = "1.25.0"
 LineSearches = "7"
 MAT = "0.10.7"
-#Optim = "=1.8"
+Optim = "1.13"
 OrderedCollections = "1.8"
 SparseArrays = "1.11"
 Statistics = "1"
