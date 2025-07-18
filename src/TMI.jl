@@ -371,21 +371,21 @@ function volumefilled(TMIversion,Alu,γ)::BoundaryCondition
     # effectively take inverse of transpose A matrix.
     #dVdd = zeros(γ) # pre-allocate array
     dVdd = Alu'\v #[γ.wet]
-
+    dimval = surfaceindex(γ)
     # scale the sensitivity value by surface area so that converging meridians are taken into account.
     I = γ.I
     #volume = zeros(Float64,length(γ.lon),length(γ.lat))
-    volume = zeros(γ.wet[:,:,1])
+    volume = zeros(γ.wet[:,:,dimval])
     # this step could use a function with γ.I argument
 
     for ii ∈ eachindex(I)
-        if I[ii][3] == 1
-            volume[I[ii][1],I[ii][2]] = dVdd.tracer[I[ii][1],I[ii][2],1]./area.tracer[I[ii][1],I[ii][2]]
+        if I[ii][3] == dimval
+            volume[I[ii][1],I[ii][2]] = dVdd.tracer[I[ii][1],I[ii][2],dimval]./area.tracer[I[ii][1],I[ii][2]]
         end
     end
              
     volume = log10.(volume)
-    ∂V∂b  = BoundaryCondition(volume,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
+    ∂V∂b  = BoundaryCondition(volume,(γ.lon,γ.lat),γ.depth[dimval],3,dimval,γ.wet[:,:,dimval],:V,"volume filled by surface gridcell","log₁₀(m³/m²)")
     
     return  ∂V∂b 
 end
@@ -473,15 +473,15 @@ function surfaceorigin(loc,Alu,γ::Grid)::BoundaryCondition
     δ = interpweights(loc,γ)
     dvlocdd = zeros(γ.wet); # pre-allocate c
     dvlocdd[γ.wet] = Alu'\δ[γ.wet]
-
+    dimval = surfaceindex(γ)
     # origin is defined at sea surface
     #origin = view(dvlocdd,:,:,1)
 
-    println(sum(dvlocdd[:,:,1][γ.wet[:,:,1]]))
-    dvlocdd = log10.(dvlocdd[:,:,1])
+    println(sum(dvlocdd[:,:,dimval][γ.wet[:,:,dimval]]))
+    dvlocdd = log10.(dvlocdd[:,:,dimval])
     small_cutoff = -10 # 1e-10
     replace!(x -> x < small_cutoff ? small_cutoff : x,dvlocdd) 
-    origin = BoundaryCondition(dvlocdd,(γ.lon,γ.lat),γ.depth[1],3,1,γ.wet[:,:,1],:origin,"surface origin","log₁₀(m³)")
+    origin = BoundaryCondition(dvlocdd,(γ.lon,γ.lat),γ.depth[dimval],3,dimval,γ.wet[:,:,dimval],:origin,"surface origin","log₁₀(m³)")
     
     return origin
 end
@@ -740,12 +740,13 @@ function cellarea(γ)
     # to calculate area everywhere
     #[area[i,j] = dx[j] * dy for i ∈ eachindex(γ.lon) for j ∈ eachindex(γ.lat)]
 
+    dimval = surfaceindex(γ) # surface
+
     # to calculate sea surface area
     I = γ.I
-    [area[I[ii][1],I[ii][2]] = dx[I[ii][2]] * dy for ii ∈ eachindex(I) if I[ii][3] == 1]
+    [area[I[ii][1],I[ii][2]] = dx[I[ii][2]] * dy for ii ∈ eachindex(I) if I[ii][3] == dimval]
 
     dim = 3 # 3rd dimension is fixed 
-    dimval = 1 # surface
 
     # is it really a Boundary Condition? (sorta, but more of a 2D Field)
     return BoundaryCondition(area,(γ.lon,γ.lat),γ.depth[dimval],dim,dimval,γ.wet[:,:,dimval],
@@ -763,7 +764,8 @@ end
 """
 function distancematrix(γ;surface = true)
     if surface
-        nsfc = sum(γ.wet[:,:,1])
+        dimval = surfaceindex(γ)
+        nsfc = sum(γ.wet[:,:,dimval])
         Dh = zeros(nsfc,nsfc)
         lonlist = [γ.lon[γ.I[ii][1]] for ii in 1:nsfc]
         latlist = [γ.lat[γ.I[ii][2]] for ii in 1:nsfc]
@@ -1228,6 +1230,13 @@ Base.getindex(c::Field,i::Int) = c.tracer[wet(c)][i]
     so that it doesn't use the slow iteration method
 """
 Base.sum(c::Field) = sum(c.tracer[wet(c)])
+
+# """
+#     Specialize Base.sum(c::BoundaryCondition)
+
+#     so that it doesn't use the slow iteration method
+# """
+# Base.sum(c::BoundaryCondition) = sum(c.tracer[wet(c)])
 
 """
     `function \\(A,d::Field)::Field`

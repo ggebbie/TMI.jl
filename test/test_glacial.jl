@@ -42,5 +42,12 @@
         # also compare to original field from years gone by
         @test maximum(PO₄direct - yPO₄) < 1e-2
         @test minimum(PO₄direct - yPO₄) > -1e-2
+
+        #calculate the volume of ocean filled by surface cells in m³
+        vsum = sum(10 .^ vec(volumefilled(TMIversion,Alu,γ)) .* vec(cellarea(γ)))
+
+        #compare the volume filled to actual ocean volume
+        @test isapprox(vsum, sum(cellvolume(γ)))
+
     end
 end
