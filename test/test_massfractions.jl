@@ -22,28 +22,24 @@
                 # get observations at surface
                 # set them as surface boundary condition
                 y = (θ =  readfield(TMIfile, "θ", γ),
-                    S = readfield(TMIfile, "Sp", γ),
-                    δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
-                    P★ = preformedphosphate(TMIversion,Alu,γ),
-                    δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
-                )
+                     S = readfield(TMIfile, "Sₚ", γ),
+                     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
+                     P★ = preformedphosphate(TMIversion,Alu,γ),
+                     δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ))
 
                 w = (θ =  0.01,
-                    S = 0.001,
-                    δ¹⁸O = 0.05,
-                    P★ = 0.05,
-                    δ¹³C★ = 0.05
-                )
+                     S = 0.001,
+                     δ¹⁸O = 0.05,
+                     P★ = 0.05,
+                     δ¹³C★ = 0.05)
 
             elseif scenario == "underdetermined"
             
                 y = (θ =  readfield(TMIfile, "θ", γ),
-                    S = readfield(TMIfile, "Sp", γ),
-                )
+                     S = readfield(TMIfile, "Sₚ", γ))
 
                 w = (θ =  0.01,
-                    S = 0.001
-                )
+                     S = 0.001)
 
             end
 

@@ -15,6 +15,8 @@ end
     include("test_nordic.jl")
 
     include("test_modern.jl")
+    
+    include("test_glacial.jl")
 
     include("test_mitgcm.jl")
 
