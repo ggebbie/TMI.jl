@@ -36,7 +36,7 @@
             elseif scenario == "underdetermined"
             
                 y = (θ =  readfield(TMIfile, "θ", γ),
-                     S = readfield(TMIfile, "Sp", γ))
+                     S = readfield(TMIfile, "Sₚ", γ))
 
                 w = (θ =  0.01,
                      S = 0.001)
