@@ -5,7 +5,6 @@ using TMI
 # using SparseArrays
 using NCDatasets
 
-
 # get list of glacial inversions
 glacial_versions = filter(v->occursin("LGM",v), versionlist())
 

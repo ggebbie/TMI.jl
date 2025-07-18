@@ -155,21 +155,21 @@ fieldnames() = ("Θ", "θ", "σθ",
 
     Rename MATLAB variables to NetCDF variables
 """
-standardize_fieldnames() = Dict("CT"=>"Θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
-    "Terr"=>"σθ",
-    "Sstar"=>"S⋆",
-    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ",
-    "Sp" => "Sₚ", # help for some out-of-date input files
-    "Serr"=>"σSₚ",
-    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow",
-    "O18err"=>"σδ¹⁸Ow",
-    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄",
-    "Perr" => "σPO₄",
-    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃",
-    "Nerr" => "σNO₃",
-    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂",
-    "Oerr"=>"σO₂",
-    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C",
-    "C13err" =>  "σδ¹³C")
+standardize_fieldnames() = Dict("CT"=>"Θ", "Θ"=>"Θ",
+    "θ"=>"θ","Tobs"=>"θ","Tmod"=>"θ","Tlgm"=>"θ",
+    "Terr"=>"σθ", "σθ"=>"σθ",
+    "Sstar"=>"S⋆", "S⋆"=>"S⋆",
+    "Sobs"=>"Sₚ","Smod"=>"Sₚ","Slgm"=>"Sₚ","Sₚ"=>"Sₚ", "Sp" => "Sₚ", 
+    "Serr"=>"σSₚ", "σSₚ"=>"σSₚ",
+    "O18obs"=>"δ¹⁸Ow","O18mod"=>"δ¹⁸Ow","O18lgm"=>"δ¹⁸Ow","δ¹⁸Ow"=>"δ¹⁸Ow",
+    "O18err"=>"σδ¹⁸Ow", "σδ¹⁸Ow"=>"σδ¹⁸Ow",
+    "Pobs"=>"PO₄","Pmod"=>"PO₄","Plgm"=>"PO₄","P"=>"PO₄", "PO₄"=>"PO₄",
+    "Perr" => "σPO₄", "σPO₄"=> "σPO₄",
+    "Nobs"=>"NO₃","Nmod"=>"NO₃","Nlgm"=>"NO₃","N"=>"NO₃","NO₃"=>"NO₃",
+    "Nerr" => "σNO₃","σNO₃" => "σNO₃",
+    "Oobs"=>"O₂","Omod"=>"O₂","Olgm"=>"O₂","O"=>"O₂","O₂"=>"O₂",
+    "Oerr"=>"σO₂", "σO₂"=>"σO₂",
+    "C13obs"=>"δ¹³C","C13mod"=>"δ¹³C","C13lgm"=>"δ¹³C","δ¹³C"=>"δ¹³C",
+    "C13err" =>  "σδ¹³C", "σδ¹³C" =>  "σδ¹³C")
 
-standardize_sourcenames() = Dict("dP"=>"qPO₄","q"=>"qPO₄")
+standardize_sourcenames() = Dict("dP"=>"qPO₄","q"=>"qPO₄","qPO₄"=>"qPO₄")
