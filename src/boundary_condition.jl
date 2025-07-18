@@ -291,31 +291,37 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
-zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,1,γ,name,longname,units)::BoundaryCondition
+zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
 
-zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
 
-zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
 
-zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,1,γ,name,longname,units)::BoundaryCondition
+zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
 
-zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,1,γ,name,longname,units)::BoundaryCondition
+zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
 
-onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,1,γ,name,longname,units)::BoundaryCondition
+onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
 
-onenorthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,maximum(latindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+onenorthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
 
-oneeastboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,maximum(lonindex(γ.I)),γ,name,longname,units)::BoundaryCondition
+oneeastboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
 
-onesouthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,1,γ,name,longname,units)::BoundaryCondition
+onesouthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
 
-onewestboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,1,γ,name,longname,units)::BoundaryCondition
+onewestboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
 
-getsurfaceboundary(c::Field) = getboundarycondition(c,3,1)::BoundaryCondition
-getnorthboundary(c::Field) = getboundarycondition(c,2,maximum(latindex(c.γ.I)))::BoundaryCondition
-geteastboundary(c::Field) = getboundarycondition(c,1,maximum(lonindex(c.γ.I)))::BoundaryCondition
-getsouthboundary(c::Field) = getboundarycondition(c,2,1)::BoundaryCondition
-getwestboundary(c::Field) = getboundarycondition(c,1,1)::BoundaryCondition
+getsurfaceboundary(c::Field) = getboundarycondition(c,3,surfaceindex(c.γ))::BoundaryCondition
+getnorthboundary(c::Field) = getboundarycondition(c,2,northindex(c.γ))::BoundaryCondition
+geteastboundary(c::Field) = getboundarycondition(c,1,eastindex(c.γ))::BoundaryCondition
+getsouthboundary(c::Field) = getboundarycondition(c,2,southindex(c.γ))::BoundaryCondition
+getwestboundary(c::Field) = getboundarycondition(c,1,westindex(c.γ))::BoundaryCondition
+
+surfaceindex(γ::Grid) = minimum(depthindex(γ.I))
+northindex(γ::Grid) = maximum(latindex(γ.I))
+southindex(γ::Grid) = minimum(latindex(γ.I))
+westindex(γ::Grid)  = minimum(lonindex(γ.I))
+eastindex(γ::Grid)  = maximum(lonindex(γ.I))
 
 """ 
     function setboundarycondition!(d::Field,b::BoundaryCondition)

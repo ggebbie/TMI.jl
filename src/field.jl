@@ -27,7 +27,7 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     print(io, "Field size ")
     println(io, size(x.tracer))
     println(io, "Surface view")
-    show(io,mime,heatmap(transpose(x.tracer[:,:,1]),zlabel=x.units,title=x.longname))
+    show(io,mime,heatmap(transpose(x.tracer[:,:,surfaceindex(x.γ)]),zlabel=x.units,title=x.longname))
 end
 
 """ 
