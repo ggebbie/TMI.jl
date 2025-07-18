@@ -12,4 +12,5 @@ function Statistics.mean(c::Field)
     return sum(vol.tracer[wet(c)].*c.tracer[wet(c)])/sum(vol.tracer[wet(c)])
 end
 
+
 end
