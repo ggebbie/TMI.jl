@@ -521,7 +521,7 @@ function steadyclimatology_optim(u₀,fg!,iterations)
 
     # out = optimize(Optim.only_fg!(fg!), u₀, BFGS(linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
     # define your lower/upper bounds (same length as u₀)
-    u_min = -2.2
+    u_min = -2.4
     lwr = fill(u_min, length(u₀))
     upr = fill(Inf, length(u₀))
 
@@ -530,7 +530,7 @@ function steadyclimatology_optim(u₀,fg!,iterations)
     outer_iterations = 4
 
     out = optimize(Optim.only_fg!(fg!), lwr, upr, u₀,
-                Fminbox(LBFGS(linesearch=LineSearches.HagerZhang())),
+                Fminbox(LBFGS(linesearch=LineSearches.BackTracking())),
                 Optim.Options(show_trace = true, iterations = iterations, show_every = iterations, outer_iterations = outer_iterations))
 
     return out    

@@ -6,6 +6,9 @@ using LinearAlgebra, Statistics, SparseArrays
 using Test
 
 get_nan_3dfield(x, γ) = Field(NaN * ones(size(γ.wet)),γ,x.name,x.longname,x.units)
+copy_attributes_3dfield(x, x_ref, γ) = Field(x.tracer,γ,x_ref.name,x_ref.longname,x_ref.units)
+rename_3dfield(x, γ, name::Symbol) = Field(x.tracer,γ,name,x.longname,x.units)
+
 get_z_faces(Δz) = cumsum([0, Δz...])
 get_z_centers(zf) = (zf[2:end] .+ zf[1:end-1]) ./ 2.
 function get_errors(θ̃_approx, θ̃_true, γ_compressed, depth_mask)
@@ -80,8 +83,15 @@ end
 
 Alu_comp = lu(A_comp)
 
-## Update tracer fields
-θtrue_on_compressed = readfield(TMIfile,"θ",γ_compressed) #read the old temperature field on the new grid
+## Update tracer fields by constraining to the non-compressed run ## 
+θtrue_on_compressed = readfield(TMIfile,"θ", γ_compressed) #read the old temperature field on the new grid
+
+sum(.!isnan.(getsurfaceboundary(θtrue_on_compressed).tracer))
+sum(γ_compressed.wet[:, :, 1])
+
+sum(.!isnan.(θtrue_on_compressed.tracer))
+sum(γ_compressed.wet)
+sum(γ_modern.wet)
 
 σepth = zero(γ_compressed.depth) #setup uncertainties in K  
 σepth[1000 .< γ_compressed.depth] .= 0.01
@@ -97,21 +107,28 @@ W⁻ = (1/sum(γ_compressed.wet)) .* Diagonal(1 ./LGM_theta_σ.tracer[γ_compres
 b = zerosurfaceboundary(γ_compressed) #initial adjustment  is zero 
 u = getsurfaceboundary(θtrue_on_compressed) #first guess field 
 
-out, f, fg, fg! = steadyclimatology(Alu_comp,b,u,θtrue_on_compressed,W⁻,γ_compressed; iterations = 100)
+out, f, fg, fg! = steadyclimatology(Alu_comp,b,u,θtrue_on_compressed,W⁻,γ_compressed; iterations = 500)
 
 ũ = out.minimizer
-θ̃_approx = steadyinversion(Alu_comp, unvec(u, ũ), γ_compressed)
+
+## Save tracer fields, grid and reference temperatures ## 
+
 θ̃_true = θtrue_on_compressed 
+θ̃_approx =  steadyinversion(Alu_comp, unvec(u, ũ), γ_compressed)
+
+θ̃_approx = copy_attributes_3dfield(θ̃_approx, θ̃_true, γ_compressed)
+θ̃_true = rename_3dfield(θ̃_true, γ_compressed, :θ_reference)
 
 TMIversion_compressed =  TMIversion*"_compressed.nc"
 TMIfile_compressed = TMI.pkgdatadir("TMI_" * TMIversion_compressed)
 
 isfile(TMIfile_compressed) && rm(TMIfile_compressed)
-
 writefield(TMIfile_compressed, θ̃_approx)
+writefield(TMIfile_compressed, θ̃_true)
 TMI.grid2nc(TMIversion*"_compressed", γ_compressed)
 TMI.watermassmatrix2nc(TMIversion*"_compressed", A_comp)
 
+##  Calculate Errors for different layers ## 
 compressed_depths = γ_compressed.depth
 err_dict = Dict()
 err_dict["surface"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, compressed_depths .< 3)
@@ -119,9 +136,22 @@ err_dict["0to1000"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, 3 .<  co
 err_dict["1000tobottom"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, 1000 .<  compressed_depths)
 err_dict
 
+##  Get Temperature Distriubtions ## 
+
 minimum(ũ)
 mean(θ̃_approx)
+mean(steadyinversion(Alu_comp, unvec(u, ũ), γ_compressed))
 mean(θ̃_true)
+
+minimum(θ̃_approx)
+minimum(θ̃_true)
+
+maximum(θ̃_approx)
+maximum(θ̃_true)
+
+minimum(vec(θ̃_approx - θ̃_true))
+maximum(vec(θ̃_approx - θ̃_true))
+
 
 # function get_v(Alu, γ)
 #     area = cellarea(γ)
