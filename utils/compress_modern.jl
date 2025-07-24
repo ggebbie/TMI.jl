@@ -5,6 +5,7 @@ using Revise
 using LinearAlgebra, Statistics, SparseArrays
 using Test
 
+#### HELPER FUNCTIONS #####
 get_nan_3dfield(x, γ) = Field(NaN * ones(size(γ.wet)),γ,x.name,x.longname,x.units)
 copy_attributes_3dfield(x, x_ref, γ) = Field(x.tracer,γ,x_ref.name,x_ref.longname,x_ref.units)
 rename_3dfield(x, γ, name::Symbol) = Field(x.tracer,γ,name,x.longname,x.units)
@@ -20,7 +21,9 @@ function get_errors(θ̃_approx, θ̃_true, γ_compressed, depth_mask)
 
     return (rms_err = rms(model, data), abs_err = abserr(model, data))
 end
+#### HELPER FUNCTIONS #####
 
+### BEGIN SCRIPT ####
 TMIversion = "LGM_90x45x33_G14" #load in G14 that is on a modern ocean grid
 Amodern, Alu, γ_modern, TMIfile, L, B = config(TMIversion * "_nosealeveldrop");
 
@@ -45,12 +48,12 @@ compression_scaling = (H_upper - drop_height) / H_upper
 zf_compressed = get_z_faces(Δz_compressed)
 zc_compressed = get_z_centers(zf_compressed)
 
-##generate a new wet mask by using modern ocean depth as a criteria##
+## generate a new wet mask by using modern ocean depth to set the criteria ##
 deptho_modern = sum((γ_modern.wet .* reshape(Δz_modern, 1, 1, nz_modern)), dims = 3)[:, :, 1] #calculate the ocean depth on modern grid
 drop_height_mask = (deptho_modern .>= drop_height) #find layers that cannot by compressed 
 wet_compressed = (drop_height_mask .* γ_modern.wet) #generate new wet mask 
 
-##generate a compressed grid##
+## generate a compressed grid ##
 b_surface_compressed = deepcopy(ones(3, 1, γ_modern, :bc_surface, "Surface", "nondim"))
 b_surface_compressed.tracer .= replace(x -> x == 1 ? 1.0 : NaN, 1.0 .* wet_compressed[:, :, 1]) #update the boundary conditions 
 b_surface_compressed.wet .= copy(wet_compressed[:, :, 1]) #update the wet mask for boundary condition 
@@ -59,7 +62,7 @@ b_surface_compressed.wet .= copy(wet_compressed[:, :, 1]) #update the wet mask f
 γ_compressed.depth .= copy(zc_compressed) #update z centers
 γ_compressed.wet .= copy(wet_compressed) #update wet mask
 
-## Modify A matrix to conform to new geometry 
+## Modify A matrix to conform to compressed geometry  ##
 rows_modern = γ_modern.R
 rows_compressed_in_modern = rows_modern[γ_compressed.wet]
 rows_modern = rows_modern[γ_modern.wet]
@@ -81,24 +84,16 @@ end
 @test isapprox(maximum(sum(A_comp,dims=2)),1.0)
 @test minimum(sum(A_comp,dims=2))> -1e-14
 
-Alu_comp = lu(A_comp)
 
 ## Update tracer fields by constraining to the non-compressed run ## 
 θtrue_on_compressed = readfield(TMIfile,"θ", γ_compressed) #read the old temperature field on the new grid
-
-sum(.!isnan.(getsurfaceboundary(θtrue_on_compressed).tracer))
-sum(γ_compressed.wet[:, :, 1])
-
-sum(.!isnan.(θtrue_on_compressed.tracer))
-sum(γ_compressed.wet)
-sum(γ_modern.wet)
 
 σepth = zero(γ_compressed.depth) #setup uncertainties in K  
 σepth[1000 .< γ_compressed.depth] .= 0.01
 σepth[γ_compressed.depth .<= 1000] .= 0.5
 σepth[1] = 5
 
-LGM_theta_σ = get_nan_3dfield(θtrue_on_compressed, γ_compressed)
+LGM_theta_σ = get_nan_3dfield(θtrue_on_compressed, γ_compressed) #setup uncertaity Field 
 for ii in γ_compressed.I
     LGM_theta_σ.tracer[ii] = σepth[ii[3]]
 end
@@ -106,8 +101,9 @@ W⁻ = (1/sum(γ_compressed.wet)) .* Diagonal(1 ./LGM_theta_σ.tracer[γ_compres
 
 b = zerosurfaceboundary(γ_compressed) #initial adjustment  is zero 
 u = getsurfaceboundary(θtrue_on_compressed) #first guess field 
+Alu_comp = lu(A_comp)
 
-out, f, fg, fg! = steadyclimatology(Alu_comp,b,u,θtrue_on_compressed,W⁻,γ_compressed; iterations = 500)
+out, f, fg, fg! = steadyclimatology(Alu_comp,b,u,θtrue_on_compressed,W⁻,γ_compressed; iterations = 500) #constrained line search
 
 ũ = out.minimizer
 
@@ -138,19 +134,19 @@ err_dict
 
 ##  Get Temperature Distriubtions ## 
 
-minimum(ũ)
-mean(θ̃_approx)
-mean(steadyinversion(Alu_comp, unvec(u, ũ), γ_compressed))
-mean(θ̃_true)
+# minimum(ũ)
+# mean(θ̃_approx)
+# mean(steadyinversion(Alu_comp, unvec(u, ũ), γ_compressed))
+# mean(θ̃_true)
 
-minimum(θ̃_approx)
-minimum(θ̃_true)
+# minimum(θ̃_approx)
+# minimum(θ̃_true)
 
-maximum(θ̃_approx)
-maximum(θ̃_true)
+# maximum(θ̃_approx)
+# maximum(θ̃_true)
 
-minimum(vec(θ̃_approx - θ̃_true))
-maximum(vec(θ̃_approx - θ̃_true))
+# minimum(vec(θ̃_approx - θ̃_true))
+# maximum(vec(θ̃_approx - θ̃_true))
 
 
 # function get_v(Alu, γ)
