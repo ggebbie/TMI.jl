@@ -505,17 +505,38 @@ function steadyclimatology_optim(u₀,fg!,iterations)
 """
 function steadyclimatology_optim(u₀,fg!,iterations)
 #function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
-
+    # u₀_rand = u₀ .+ 0.01*randn(length(u₀))
     # a first guess: observed surface boundary conditions are perfect.
     # set surface boundary condition to the observations.
+    # out = optimize(Optim.only_fg!(fg!), u₀_rand, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀_rand, LBFGS(linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀_rand, BFGS(linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀_rand, LBFGS(m = 20, linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
+
     #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
 
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(m = 20, linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
+
+
+    # out = optimize(Optim.only_fg!(fg!), u₀, BFGS(linesearch = LineSearches.HagerZhang()),Optim.Options(show_trace=true, iterations = iterations))
+    # define your lower/upper bounds (same length as u₀)
+    u_min = -2.2
+    lwr = fill(u_min, length(u₀))
+    upr = fill(Inf, length(u₀))
+
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+
+    outer_iterations = 4
+
+    out = optimize(Optim.only_fg!(fg!), lwr, upr, u₀,
+                Fminbox(LBFGS(linesearch=LineSearches.HagerZhang())),
+                Optim.Options(show_trace = true, iterations = iterations, show_every = iterations, outer_iterations = outer_iterations))
 
     return out    
 end
 
-function steadyclimatology(Alu,b,u,y,W⁻,γ)
+function steadyclimatology(Alu,b,u,y,W⁻,γ; iterations = 10)
     uvec = vec(u)
     F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
     fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
@@ -523,7 +544,7 @@ function steadyclimatology(Alu,b,u,y,W⁻,γ)
     f(x) = fg(x)[1]
 
     J₀,gJ₀ = fg(uvec)
-    iterations = 10
+    # iterations = 10
     out = steadyclimatology_optim(uvec,fg!,iterations)
     return out, f, fg, fg!
 end
@@ -825,9 +846,21 @@ function cellvolume(γ)
 end
 
 function layerthickness(γ::Grid)
-    zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
-    dz = ([zface[1] ; diff(zface); 500]);
-    return dz
+    if γ.depth[1] == 0.0 
+        zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
+        dz = ([zface[1] ; diff(zface); 500]);
+        return dz
+    else
+        zcenter = γ.depth; nz = length(zcenter)
+        zf = ones(nz + 1); zf[1] = 0.0
+        for i in 1:nz
+            dzhalf = Float64(zcenter[i] - zf[i])
+            zf[i+1] = zf[i] + (Float64(2.0)* dzhalf)
+        end
+        dz = Float64.((zf[2:end] .- zf[1:end-1]))
+        return Float64.(dz)
+
+    end
 end
 
 function zonalgriddist(γ::Grid)
