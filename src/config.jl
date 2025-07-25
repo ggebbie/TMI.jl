@@ -407,6 +407,7 @@ fieldsatts() =
 # help for reading foreign files, translate to TMI convention
 tracerdict() = 
     Dict("Θ" => :Θ,
+        "θ_reference" => :Θ,
         "CT" => :Θ,
         "θ" => :θ,
         "THETA" => :θ,

@@ -113,6 +113,7 @@ function readfield(file,tracername,γ::Grid{A,N}) where {A,N}
     T = eltype(tracer)
     checkgrid!(tracer,γ.wet)
     c = Field(tracer,γ,tracerdict()[tracername],longname,units)
+    # c = Field(tracer,γ,:θ,longname,units)
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) 
