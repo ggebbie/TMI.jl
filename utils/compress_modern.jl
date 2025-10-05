@@ -12,27 +12,19 @@ rename_3dfield(x, γ, name::Symbol) = Field(x.tracer,γ,name,x.longname,x.units)
 
 get_z_faces(Δz) = cumsum([0, Δz...])
 get_z_centers(zf) = (zf[2:end] .+ zf[1:end-1]) ./ 2.
-function get_errors(θ̃_approx, θ̃_true, γ_compressed, depth_mask)
-    rms(x, y) = sqrt(mean((x .- y).^2))
-    abserr(x, y) = mean(abs.(x .- y))
-    wet_points = γ_compressed.wet .* reshape(depth_mask, 1, 1, 33)
-    model = θ̃_approx.tracer[wet_points]
-    data = θ̃_true.tracer[wet_points]
 
-    return (rms_err = rms(model, data), abs_err = abserr(model, data))
-end
 #### HELPER FUNCTIONS #####
 
 ### BEGIN SCRIPT ####
 TMIversion = "LGM_90x45x33_G14" #load in G14 that is on a modern ocean grid
 
-versions = ["LGM_90x45x33_G14", "LGM_90x45x33_OG18", "LGM_90x45x33_GPLS2", "LGM_90x45x33_G14A"]
+drop_height = 120.0 #select the height that you would like to compress the ocean by
+compression_lower_boundary = Inf #select the lower boundary of compression
+
+
+versions = ["LGM_90x45x33_G14"] #, "LGM_90x45x33_OG18", "LGM_90x45x33_GPLS2", "LGM_90x45x33_G14A"]
 for TMIversion in versions
     Amodern, Alu, γ_modern, TMIfile, L, B = config(TMIversion * "_nosealeveldrop");
-
-    drop_height = 120.0 #select the height that you would like to compress the ocean by
-    compression_lower_boundary = 1000.0 #select the lower boundary of compression
-
 
     Δz_modern = layerthickness(γ_modern)
     zf_modern = get_z_faces(Δz_modern)
@@ -40,7 +32,7 @@ for TMIversion in versions
     nz_modern = length(zc_modern)
 
     ##calculate new z-centers based on compression parameters##
-    compression_boundary_index = Base.findfirst(zc_modern .>= compression_lower_boundary) - 1
+    compression_boundary_index = Base.findlast(zc_modern .<= compression_lower_boundary)
 
     H_upper = sum(Δz_modern[1:compression_boundary_index])
     compression_scaling = (H_upper - drop_height) / H_upper
@@ -92,8 +84,8 @@ for TMIversion in versions
     θtrue_on_compressed = readfield(TMIfile,"θ", γ_compressed) #read the old temperature field on the new grid
 
     σepth = zero(γ_compressed.depth) #setup uncertainties in K  
-    σepth[1000 .< γ_compressed.depth] .= 0.01
-    σepth[γ_compressed.depth .<= 1000] .= 0.5
+    σepth[1000 .< γ_compressed.depth] .= 0.02
+    σepth[γ_compressed.depth .<= 1000] .= 0.02
     σepth[1] = 5
 
     LGM_theta_σ = get_nan_3dfield(θtrue_on_compressed, γ_compressed) #setup uncertaity Field 
@@ -122,7 +114,7 @@ for TMIversion in versions
     TMIfile_compressed = TMI.pkgdatadir("TMI_" * TMIversion_compressed)
 
     isfile(TMIfile_compressed) && rm(TMIfile_compressed)
-    
+
     writefield(TMIfile_compressed, θ̃_approx)
     writefield(TMIfile_compressed, θ̃_true)
 
@@ -130,12 +122,6 @@ for TMIversion in versions
     TMI.watermassmatrix2nc(TMIversion*"_compressed", A_comp)
 
     ##  Calculate Errors for different layers ## 
-    compressed_depths = γ_compressed.depth
-    err_dict = Dict()
-    err_dict["surface"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, compressed_depths .< 3)
-    err_dict["0to1000"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, 3 .<  compressed_depths .<= 1000)
-    err_dict["1000tobottom"] = get_errors(θ̃_approx, θ̃_true, γ_compressed, 1000 .<  compressed_depths)
-    err_dict
 end
 ##  Get Temperature Distriubtions ## 
 

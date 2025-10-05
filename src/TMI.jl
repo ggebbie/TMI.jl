@@ -528,9 +528,11 @@ function steadyclimatology_optim(u₀,fg!,iterations)
     u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
 
     outer_iterations = 4
+    # linesearch_algo = LineSearches.HagerZhang(sigma = 0.8)
+    linesearch_algo = LineSearches.BackTracking(ρ_hi = 0.8)
 
     out = optimize(Optim.only_fg!(fg!), lwr, upr, u₀,
-                Fminbox(LBFGS(linesearch=LineSearches.BackTracking())),
+                Fminbox(LBFGS(linesearch=linesearch_algo)),
                 Optim.Options(show_trace = true, iterations = iterations, show_every = iterations, outer_iterations = outer_iterations))
 
     return out    
