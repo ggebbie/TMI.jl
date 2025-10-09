@@ -4,6 +4,7 @@ authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
 version = "0.3.5"
 
 [deps]
+BlackBoxOptim = "a134a8b2-14d6-55f6-9291-3336d3ab0209"
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
@@ -39,6 +40,7 @@ TMI_MAT_Ext = "MAT"
 TMI_Statistics_Ext = "Statistics"
 
 [compat]
+BlackBoxOptim = "0.6.3"
 COSMO = "0.8.9"
 CSV = "0.10"
 Distances = "0.10"

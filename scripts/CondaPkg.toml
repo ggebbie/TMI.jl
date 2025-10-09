@@ -1,0 +1,5 @@
+[deps]
+cartopy = ""
+
+[pip.deps]
+seaborn = ""

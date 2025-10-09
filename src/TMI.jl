@@ -15,6 +15,7 @@ using NCDatasets
 using UnicodePlots
 using OrderedCollections
 using Downloads
+using BlackBoxOptim
 
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
@@ -510,12 +511,112 @@ function steadyclimatology_optim(u₀,fg!,iterations)
     # set surface boundary condition to the observations.
     #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
 
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 30.0
+    lwr = fill(u_min, length(u₀))
+    upr = fill(u_max, length(u₀))
 
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+    u₀[u₀ .>= u_max] .= u_max .- 0.1 #replace minimums
+
+    outer_iterations = 10  # or higher for better constraint satisfaction
+    # linesearch_algo = LineSearches.HagerZhang()  # use defaults first
+    linesearch_algo = LineSearches.BackTracking()
+    out = optimize(
+        Optim.only_fg!(fg!), 
+        lwr, upr, u₀,
+        Fminbox(LBFGS(linesearch=linesearch_algo)),
+        Optim.Options(
+            show_trace = true,
+            iterations = iterations,
+            show_every = max(1, iterations ÷ 10),  # show more frequently
+            outer_iterations = outer_iterations,
+            g_tol = 1e-9,      # gradient tolerance
+            f_tol = 1e-9,      # function tolerance
+            x_tol = 1e-6       # parameter tolerance
+        )
+    )
     return out    
 end
 
-function steadyclimatology(Alu,b,u,y,W⁻,γ)
+function steadyclimatology_optim_hybrid(u₀,f, fg!,iterations)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 30.0
+    lwr = fill(u_min, length(u₀))
+    upr = fill(u_max, length(u₀))
+
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+    u₀[u₀ .>= u_max] .= u_max .- 0.1 #replace minimums
+
+    # Forward: θ ∈ ℝ → x ∈ (a, b)
+    @. scaled_sigmoid(θ, a, b) = a + (b - a) / (1 + exp(-θ))
+    scaled_sigmoid(θ) =  scaled_sigmoid(θ, u_min, u_max) 
+    # Inverse: x ∈ (a, b) → θ ∈ ℝ
+    @. scaled_logit(x, a, b) = log((x - a) / (b - x))
+    scaled_logit(x) =  scaled_logit(x, u_min, u_max) 
+    function fg_scaled!(F, G, θ)
+        x = scaled_sigmoid(θ)
+        fg!(F,G,x)
+    end
+    f_scaled(θ) = f(scaled_sigmoid(θ))
+    # Step 1: Global search with SA
+    println("Phase 1: Global search with Simulated Annealing...")
+    sa_result = optimize(
+        f_scaled, scaled_logit.(u₀),
+        SimulatedAnnealing(),
+        Optim.Options(
+            show_trace = true,
+            iterations = iterations
+        )
+    )
+
+    # Step 2: Local refinement with LBFGS
+    println("Phase 2: Local refinement with LBFGS...")
+    u_sa = scaled_sigmoid.(Optim.minimizer(sa_result))
+    out = optimize(
+        Optim.only_fg!(fg!),
+        lwr, upr, u_sa,  # start from SA solution
+        Fminbox(LBFGS()),
+        Optim.Options(
+            show_trace = true,
+            iterations = iterations,
+            outer_iterations = 15,
+            g_tol = 1e-6
+        )
+    )
+    return out    
+end
+
+function steadyclimatology_bboptim(u₀,f,iterations)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 35.0
+
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+    u₀[u₀ .>= u_max] .= u_max .- 0.1 #replace minimums
+
+    res = bboptimize(f, u₀; SearchRange = (u_min, u_max), 
+                     NumDimensions = length(u₀), 
+                     Method = :de_rand_1_bin_radiuslimited, 
+                     MaxSteps = iterations, 
+                     TraceMode=:verbose)
+
+    return res    
+end
+
+
+function steadyclimatology(Alu,b,u,y,W⁻,γ; iterations = 10, method = :gradient)
     uvec = vec(u)
     F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
     fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
@@ -523,9 +624,20 @@ function steadyclimatology(Alu,b,u,y,W⁻,γ)
     f(x) = fg(x)[1]
 
     J₀,gJ₀ = fg(uvec)
-    iterations = 10
-    out = steadyclimatology_optim(uvec,fg!,iterations)
-    return out, f, fg, fg!
+    # iterations = 10
+    if method == :gradient 
+        out = steadyclimatology_optim(uvec,fg!,iterations)
+        return out, f, fg, fg!
+    elseif method == :hybrid
+        out = steadyclimatology_optim_hybrid(uvec,f, fg!,iterations)
+        return out, f, fg, fg!
+    elseif method == :blackbox 
+        res = steadyclimatology_bboptim(uvec,f,iterations)
+        out = (minimizer = best_candidate(res), res = res)
+        return out, f, fg, fg!
+    else 
+        error("Method $method not yet implemented")
+    end
 end
 
 """
