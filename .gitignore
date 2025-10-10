@@ -6,3 +6,5 @@
 *~
 *nc
 .CondaPkg
+.DS_Store
+*.jld2

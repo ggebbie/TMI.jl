@@ -15,6 +15,7 @@ using NCDatasets
 using UnicodePlots
 using OrderedCollections
 using Downloads
+using BlackBoxOptim
 
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
@@ -510,32 +511,8 @@ function steadyclimatology_optim(u₀,fg!,iterations)
     # set surface boundary condition to the observations.
     #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
 
-    out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
-
-    return out    
-end
-
-
-"""
-function steadyclimatology_optim(u₀,fg!,iterations)
-     Find the distribution of a tracer given:
-     (a) the pathways described by A or its LU decomposition Alu,
-     (b) first-guess boundary conditions and interior sources given by d₀,
-     (c) perturbations to the surface boundary condition u₀
-    that best fits observations, y,
-    according to the cost function,
-    J = (ỹ - y)ᵀ W⁻¹ (ỹ - y)
-    subject to Aỹ = d₀ + Γ u₀.                 
-    W⁻ is a (sparse) weighting matrix.
-    See Supplementary Section 2, Gebbie & Huybers 2011.
-# Arguments
-- `u₀`:
-- `fg!`: compute cost function and gradient in place
-- `iterations`: number of optimization iterations
-"""
-function steadyclimatology_bounded_optim(u₀,fg!,iterations; u_min = -2.4, u_max = 32.0)
-#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
-
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 32.0
     lwr = fill(u_min, length(u₀))
     upr = fill(u_max, length(u₀))
 
@@ -554,24 +531,109 @@ function steadyclimatology_bounded_optim(u₀,fg!,iterations; u_min = -2.4, u_ma
             iterations = iterations,
             show_every = max(1, iterations ÷ 20),  # show more frequently
             outer_iterations = outer_iterations,
+            g_tol = 1e-12,      # gradient tolerance
+            f_tol = 1e-12,     # function tolerance
+            x_tol = 1e-12       # parameter tolerance
         )
     )
     return out    
 end
 
-function steadyclimatology(Alu,b,u,y,W⁻,γ; iterations = 10, method = :unbounded, u_min = nothing, u_max = nothing)
+function steadyclimatology_optim_hybrid(u₀,f, fg!,iterations)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 30.0
+    lwr = fill(u_min, length(u₀))
+    upr = fill(u_max, length(u₀))
+
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+    u₀[u₀ .>= u_max] .= u_max .- 0.1 #replace minimums
+
+    # Forward: θ ∈ ℝ → x ∈ (a, b)
+    @. scaled_sigmoid(θ, a, b) = a + (b - a) / (1 + exp(-θ))
+    scaled_sigmoid(θ) =  scaled_sigmoid(θ, u_min, u_max) 
+    # Inverse: x ∈ (a, b) → θ ∈ ℝ
+    @. scaled_logit(x, a, b) = log((x - a) / (b - x))
+    scaled_logit(x) =  scaled_logit(x, u_min, u_max) 
+    function fg_scaled!(F, G, θ)
+        x = scaled_sigmoid(θ)
+        fg!(F,G,x)
+    end
+    f_scaled(θ) = f(scaled_sigmoid(θ))
+    # Step 1: Global search with SA
+    println("Phase 1: Global search with Simulated Annealing...")
+    sa_result = optimize(
+        f_scaled, scaled_logit.(u₀),
+        SimulatedAnnealing(),
+        Optim.Options(
+            show_trace = true,
+            iterations = iterations
+        )
+    )
+
+    # Step 2: Local refinement with LBFGS
+    println("Phase 2: Local refinement with LBFGS...")
+    u_sa = scaled_sigmoid.(Optim.minimizer(sa_result))
+    out = optimize(
+        Optim.only_fg!(fg!),
+        lwr, upr, u_sa,  # start from SA solution
+        Fminbox(LBFGS()),
+        Optim.Options(
+            show_trace = true,
+            iterations = iterations,
+            outer_iterations = 15,
+            g_tol = 1e-6
+        )
+    )
+    return out    
+end
+
+function steadyclimatology_bboptim(u₀,f,iterations)
+#function steadyclimatology(u₀,Alu,d₀,y,W⁻,fg!,γ)
+
+    # a first guess: observed surface boundary conditions are perfect.
+    # set surface boundary condition to the observations.
+    #out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(),Optim.Options(show_trace=true, iterations = iterations))
+
+    # out = optimize(Optim.only_fg!(fg!), u₀, LBFGS(linesearch = LineSearches.BackTracking()),Optim.Options(show_trace=true, iterations = iterations))
+    u_min = -2.4; u_max = 35.0
+
+    u₀[u₀ .<= u_min] .= u_min .+ 0.1 #replace minimums
+    u₀[u₀ .>= u_max] .= u_max .- 0.1 #replace minimums
+
+    res = bboptimize(f, u₀; SearchRange = (u_min, u_max), 
+                     NumDimensions = length(u₀), 
+                     Method = :de_rand_1_bin_radiuslimited, 
+                     MaxSteps = iterations, 
+                     TraceMode=:verbose)
+
+    return res    
+end
+
+
+function steadyclimatology(Alu,b,u,y,W⁻,γ; iterations = 10, method = :gradient)
     uvec = vec(u)
     F,G = costfunction_gridded_obs(uvec,Alu,b,u,y,W⁻,γ)
     fg!(F,G,x) = costfunction_gridded_obs!(F,G,x,Alu,b,u,y,W⁻,γ)
     fg(x) = costfunction_gridded_obs(x,Alu,b,u,y,W⁻,γ)
     f(x) = fg(x)[1]
+
     J₀,gJ₀ = fg(uvec)
     # iterations = 10
-    if method == :unbounded
+    if method == :gradient 
         out = steadyclimatology_optim(uvec,fg!,iterations)
         return out, f, fg, fg!
-    elseif method == :bounded
-        out = steadyclimatology_bounded_optim(uvec,fg!,iterations; u_min = u_min, u_max = u_max)
+    elseif method == :hybrid
+        out = steadyclimatology_optim_hybrid(uvec,f, fg!,iterations)
+        return out, f, fg, fg!
+    elseif method == :blackbox 
+        res = steadyclimatology_bboptim(uvec,f,iterations)
+        out = (minimizer = best_candidate(res), res = res)
         return out, f, fg, fg!
     else 
         error("Method $method not yet implemented")
@@ -874,28 +936,10 @@ function cellvolume(γ)
     return Field(volume,γ,:vol,"cell volume","m³")
 end
 
-# function layerthickness(γ::Grid)
-#     zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
-#     dz = ([zface[1] ; diff(zface); 500]);
-#     return dz
-# end
-
 function layerthickness(γ::Grid)
-    if γ.depth[1] == 0.0  # a quick fix for when the surface is set to 0 meters (should be 5 meters)
-        zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
-        dz = ([zface[1] ; diff(zface); 500]);
-        return dz
-    else
-        zcenter = γ.depth; nz = length(zcenter)
-        zf = ones(nz + 1); zf[1] = 0.0
-        for i in 1:nz
-            dzhalf = Float64(zcenter[i] - zf[i])
-            zf[i+1] = zf[i] + (Float64(2.0)* dzhalf)
-        end
-        dz = Float64.((zf[2:end] .- zf[1:end-1]))
-        return Float64.(dz)
-
-    end
+    zface= (γ.depth[1:end-1].+γ.depth[2:end])./2;
+    dz = ([zface[1] ; diff(zface); 500]);
+    return dz
 end
 
 function zonalgriddist(γ::Grid)
