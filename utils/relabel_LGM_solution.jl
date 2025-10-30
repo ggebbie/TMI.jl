@@ -19,7 +19,7 @@ glacial_versions = filter(v->occursin("LGM",v), versionlist())
 
 # Configuration
 # TMI_VERSION = glacial_versions[2]
-for TMI_VERSION in glacial_versions[2:end]
+for TMI_VERSION in glacial_versions[1:end]
     println("Reprocessing $(TMI_VERSION)"); sleep(10.0)
     # Load grids and fields
     A_no_drop, _, γ_no_drop, TMIfile_no_drop, L, B = config(TMI_VERSION * "_nosealeveldrop")
