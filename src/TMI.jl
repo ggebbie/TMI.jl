@@ -1996,7 +1996,8 @@ end
 
     steady inversion for b::NamedTuple
 """
-function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},γ::Grid{T};q=nothing,r=1.0) where {T <: Real, tracer_names}
+function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
+                        γ::Grid{T};q::Union{Nothing, NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}}}=nothing,r=1.0) where {T <: Real, tracer_names}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
