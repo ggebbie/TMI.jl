@@ -1969,7 +1969,7 @@ end
 
 
 # function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q::Union{Nothing, Source}=nothing,r=1.0)::Field{T} where {T <: Real}
 
     # preallocate Field for equation constraints
     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
@@ -1997,7 +1997,7 @@ end
     steady inversion for b::NamedTuple
 """
 function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
-                        γ::Grid{T};q::Union{Nothing, NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}}}=nothing,r=1.0) where {T <: Real, tracer_names}
+                        γ::Grid{T};q::Union{Nothing, NamedTuple{source_names, <:Tuple{Q}}}=nothing,r=1.0) where {T <: Real, tracer_names, source_names, Q}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
