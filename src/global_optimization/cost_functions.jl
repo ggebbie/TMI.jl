@@ -78,7 +78,7 @@ function global_cost_function(control_vector::Vector{T},
                               Wⁱ::NamedTuple{cobs_names, <:Tuple{Vararg{Symmetric}}},
                               cobs::NamedTuple{cobs_names, <:Tuple{Vararg{Union{Vector, Matrix}}}},
                               γ::Grid, locs = nothing) where {T <: Real, u₀_names, q₀_names, m₀_names, cobs_names}
-    m, du, dq = unravel(control_vector_struct, control_vector)
+    du, dq, m = unravel(control_vector_struct, control_vector)
     mvec = vec(m)
     J, dJdcontrols = global_cost_function(mvec, du, dq, 
                                                  u₀, q₀, m₀,
@@ -119,6 +119,7 @@ function global_cost_function(mvec::Vector{T},
     Alu = lu(A)
 
     #need to check this works for named tuples
+    #it should now. 
     c = steadyinversion(Alu,b,γ,q=q,r=r) 
     n = steadyinversion_residual(c, cobs, locs, γ)
 
