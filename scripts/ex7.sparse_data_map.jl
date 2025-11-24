@@ -24,13 +24,13 @@ import Pkg; Pkg.activate(".")
 using Revise
 using TMI
 using Test
-using GeoPythonPlot
+# using GeoPythonPlot
 using Interpolations
 using Statistics
 using LinearAlgebra
 
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 # first guess of change to surface boundary conditions
 # how many randomly sampled observations?
@@ -43,6 +43,8 @@ uvec = vec(u)
 
 # take synthetic, noisy observations
 y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion,"θ",γ,N)
+
+y
 
 # make a silly first guess for surface
 b = (;surface = mean(y) * onesurfaceboundary(γ))

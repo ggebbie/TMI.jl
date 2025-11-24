@@ -66,7 +66,9 @@ export config, download_file,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors
+    massfractions, massfractions_isotropic, neighbors, 
+    massfractions_down, massfractions_east, massfractions_north, 
+    massfractions_south, massfractions_up, massfractions_west
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
@@ -1424,6 +1426,7 @@ function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T
         u.tracer[vv] = uvec[ii]
     end
 end
+
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
     nlo = 1
     nhi = 0

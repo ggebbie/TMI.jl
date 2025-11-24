@@ -229,6 +229,7 @@ function tracer_contribution!(mc::Field,c::Field,m::MassFraction)
             (c.tracer[Istep] - c.tracer[I])
     end
 end
+
 function tracer_contribution!(mc::Field,c::Field, m::NamedTuple)
     for m1 in m
         tracer_contribution!(mc,c,m1)
@@ -380,13 +381,15 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
 
     nfield = sum(γ.wet)
     nm = 0
+    types = []
     for m1 in m
         nm += length(m1)
+        push!(types, eltype(m1.fraction))
     end
 
     ilist = Array{Int64}(undef,nm+nfield)
     jlist = Array{Int64}(undef,nm+nfield)
-    mlist = Array{Float64}(undef,nm+nfield)
+    mlist = Array{types[1]}(undef,nm+nfield)
 
     # ones on diagonal
     for ii in 1:nfield
