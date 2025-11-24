@@ -68,6 +68,9 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors
 
+export Observations, 
+
+
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
 import Base: +, -, *, /, vec
@@ -100,6 +103,8 @@ include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
+include(pkgsrcdir("observations.jl"))
+include(pkgsrcdir("control_parameters.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -2004,7 +2009,14 @@ function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{Bounda
 
     for (i, name) in enumerate(tracer_names)
         b_i = get(bnt, name, nothing)
-        q_i = isnothing(q) ? nothing : get(q, name, nothing)
+        # Handle q being nothing, a Source, or a NamedTuple
+        if isnothing(q)
+            q_i = nothing
+        elseif q isa Source
+            q_i = q  # Use the same source for all tracers
+        else
+            q_i = get(q, name, nothing)  # q is a NamedTuple
+        end
         #maybe i should call steady inversion here
         d = zeros(γ,b_i.name,b_i.longname,b_i.units)
 
@@ -2067,7 +2079,14 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple
 
     for (i, name) in enumerate(tracer_names)  # Added enumerate
         b_i = get(bnt, name, nothing)
-        q_i = isnothing(qnt) ? nothing : get(qnt, name, nothing)
+        # Handle q being nothing, a Source, or a NamedTuple
+        if isnothing(q)
+            q_i = nothing
+        elseif q isa Source
+            q_i = q  # Use the same source for all tracers
+        else
+            q_i = get(q, name, nothing)  # q is a NamedTuple
+        end
 
         gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, γ; q=q_i, r=r)
         gb_results[i] = gb_i
