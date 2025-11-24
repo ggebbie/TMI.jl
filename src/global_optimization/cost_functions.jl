@@ -1,28 +1,52 @@
+"""
+    prior_boundary_cost(duvec, u₀, Qⁱᵤ) -> Real
 
+Compute the quadratic cost of boundary condition perturbations relative to the prior.
+"""
 function prior_boundary_cost(duvec::Vector,u₀::Union{BoundaryCondition,NamedTuple},Qⁱᵤ::Symmetric)
     #calculate the cost with respect to a prior boundary condition 
     # ((u₀ + du) - u₀)' S ((u₀ + u) - u₀)
     return duvec' * Qⁱᵤ * duvec #a shortcut since (u₀ + u) - u₀ = u
 end
 
+"""
+    gprior_boundary_cost(duvec, u₀, Qⁱᵤ) -> Vector
+
+Compute the gradient of the boundary condition prior cost with respect to `duvec`.
+"""
 function gprior_boundary_cost(duvec::Vector,u₀::Union{BoundaryCondition,NamedTuple},Qⁱᵤ::Symmetric)
     gJ = 1 #should always be 1
     gduvec = 2 * Qⁱᵤ * duvec * gJ 
     return gduvec
 end
 
+"""
+    prior_source_cost(dqvec, q₀, Qⁱₛ) -> Real
+
+Compute the quadratic cost of source perturbations relative to the prior.
+"""
 function prior_source_cost(dqvec::Vector,q₀::Union{Source,NamedTuple},Qⁱₛ::Symmetric)
     #calculate the cost with respect to a prior boundary condition 
     # ((u₀ + u) - u₀)' S ((u₀ + u) - u₀)
     return dqvec' * Qⁱₛ * dqvec #a shortcut since (u₀ + u) - u₀ = u
 end
 
+"""
+    gprior_source_cost(dqvec, q₀, Qⁱₛ) -> Vector
+
+Compute the gradient of the source prior cost with respect to `dqvec`.
+"""
 function gprior_source_cost(dqvec::Vector,q₀::Union{Source,NamedTuple},Qⁱₛ::Symmetric)
     gJ = 1 #should always be 1
     gqvec = 2 * Qⁱₛ * dqvec * gJ 
     return gqvec
 end
 
+"""
+    model_observation_cost(n, Wⁱ) -> Real
+
+Compute the weighted observation misfit cost given residual `n` and weight matrix `Wⁱ`.
+"""
 function model_observation_cost(n::Union{Vector, Field},Wⁱ::Symmetric)
     #calculate the cost with respect to a prior boundary condition 
     # ((u₀ + u) - u₀)' S ((u₀ + u) - u₀)
@@ -30,14 +54,24 @@ function model_observation_cost(n::Union{Vector, Field},Wⁱ::Symmetric)
 
 end
 
+"""
+    gmodel_observation_cost(n, Wⁱ) -> Vector
+
+Compute the gradient of the observation cost with respect to the residual `n`.
+"""
 function gmodel_observation_cost(n::Vector,Wⁱ::Symmetric)
     gJ = 1 #should always be 1
     gnvec = 2 * Wⁱ * n * gJ 
     return gnvec
 end
 
-function steadyinversion_residual(c::Field, c_obs::Union{Vector, Field}, 
-                                  locs::{Nothing, Vector{Tuple{T,T,T}}}, 
+"""
+    steadyinversion_residual(c, c_obs, locs, γ) -> Vector
+
+Compute the residual between modeled tracer field `c` and observations `c_obs`.
+"""
+function steadyinversion_residual(c::Field, c_obs::Union{Vector, Field},
+                                  locs::{Nothing, Vector{Tuple{T,T,T}}},
                                   γ::Grid)::Vector{T} where T <: Real
     # n = (c - c_obs)
     if c_obs isa Field
@@ -54,9 +88,14 @@ function steadyinversion_residual(c::Field, c_obs::Union{Vector, Field},
     end
 end
 
+"""
+    gsteadyinversion_residual(dn, c, locs, γ) -> Vector
+
+Compute the gradient of the residual with respect to the tracer field `c`.
+"""
 function gsteadyinversion_residual(dn::Union{Vector, Field},
                                     c::Field,
-                                  locs::Vector{Tuple{T,T,T}}, 
+                                  locs::Vector{Tuple{T,T,T}},
                                   γ::Grid)::Vector{T} where T <: Real
     if dn isa Field
         gc = dn
@@ -68,10 +107,15 @@ function gsteadyinversion_residual(dn::Union{Vector, Field},
     end
 end
 
-function global_cost_function(control_vector::Vector{T}, 
-                              control_vector_struct::ControlParameters, 
-                              u₀::NamedTuple{u₀_names, <:Tuple{Vararg{BoundaryCondition}}}, 
-                              q₀::NamedTuple{q₀_names, <:Tuple{Vararg{Source}}}, 
+"""
+    global_cost_function(control_vector, control_vector_struct, u₀, q₀, m₀, Qⁱᵤ, Qⁱₛ, Wⁱ, cobs, γ, locs) -> (J, gradient)
+
+Evaluate total cost and gradient from a flat control vector; wrapper that unravels controls first.
+"""
+function global_cost_function(control_vector::Vector{T},
+                              control_vector_struct::ControlParameters,
+                              u₀::NamedTuple{u₀_names, <:Tuple{Vararg{BoundaryCondition}}},
+                              q₀::NamedTuple{q₀_names, <:Tuple{Vararg{Source}}},
                               m₀::NamedTuple{m₀_names, <:Tuple{Vararg{MassFraction}}},
                               Qⁱᵤ::NamedTuple{u₀_names, <:Tuple{Vararg{Symmetric}}},
                               Qⁱₛ::NamedTuple{q₀_names, <:Tuple{Vararg{Symmetric}}},
@@ -89,11 +133,16 @@ function global_cost_function(control_vector::Vector{T},
 end
 
 
-function global_cost_function(mvec::Vector{T}, 
-                              du::NamedTuple{du_names, <:Tuple{Vararg{BoundaryCondition}}}, 
-                              dq::NamedTuple{dq_names, <:Tuple{Vararg{Source}}}, 
-                              u₀::NamedTuple{u₀_names, <:Tuple{Vararg{BoundaryCondition}}}, 
-                              q₀::NamedTuple{q₀_names, <:Tuple{Vararg{Source}}}, 
+"""
+    global_cost_function(mvec, du, dq, u₀, q₀, m₀, Qⁱᵤ, Qⁱₛ, Wⁱ, cobs, γ, locs) -> (J, ControlParameters)
+
+Compute the total cost J (observation + prior terms) and its gradient with respect to all controls.
+"""
+function global_cost_function(mvec::Vector{T},
+                              du::NamedTuple{du_names, <:Tuple{Vararg{BoundaryCondition}}},
+                              dq::NamedTuple{dq_names, <:Tuple{Vararg{Source}}},
+                              u₀::NamedTuple{u₀_names, <:Tuple{Vararg{BoundaryCondition}}},
+                              q₀::NamedTuple{q₀_names, <:Tuple{Vararg{Source}}},
                               m₀::NamedTuple{m₀_names, <:Tuple{Vararg{MassFraction}}},
                               Qⁱᵤ::NamedTuple{u₀_names, <:Tuple{Vararg{Symmetric}}},
                               Qⁱₛ::NamedTuple{q₀_names, <:Tuple{Vararg{Symmetric}}},
@@ -127,8 +176,7 @@ function global_cost_function(mvec::Vector{T},
     Ju = prior_boundary_cost(duvec,u₀, Qⁱᵤ)
     Jq = prior_boundary_cost(dqvec,u₀, Qⁱₛ)
 
-    #cost function need to add the lagrangrian mulitpliers as well 
-    # i think this is partially given by tracer contribution 
+    #TO DO: add mass fraction prior cost and lagrange multiplier step
     J = Jn + Ju + Jq
 
     #need to loop and accumulate here

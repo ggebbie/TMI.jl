@@ -1,4 +1,8 @@
-# A struct that stores and vectorizes control parameters
+"""
+    ControlParameters{u_names, q_names, m_names}
+
+Container for optimization control variables (boundary conditions, sources, mass fractions) with vectorization support.
+"""
 struct ControlParameters{u_names, q_names, m_names}
     du::Union{NamedTuple{u_names, <:Tuple{Vararg{BoundaryCondition}}}, Nothing}
     dq::Union{NamedTuple{q_names, <:Tuple{Vararg{Source}}}, Nothing}
@@ -29,9 +33,14 @@ struct ControlParameters{u_names, q_names, m_names}
     end
 end
 
+"""
+    unravel_field(field, lengths, vector) -> NamedTuple
+
+Reconstruct a NamedTuple of typed fields from a flat vector using stored lengths.
+"""
 function unravel_field(
-    field::NamedTuple{names, <:Tuple{Vararg{T}}}, 
-    lengths::Union{Dict{Symbol,Int}, Nothing}, 
+    field::NamedTuple{names, <:Tuple{Vararg{T}}},
+    lengths::Union{Dict{Symbol,Int}, Nothing},
     vector::Vector) where {names, T}
     
     isnothing(lengths) && error("Lengths not stored. Create ControlParameters with store_lengths=true")
@@ -49,6 +58,11 @@ function unravel_field(
     return NamedTuple{names}(Tuple(vals))
 end
 
+"""
+    unravel(cp, vector) -> (du, dq, m)
+
+Reconstruct boundary condition, source, and mass fraction NamedTuples from a flat control vector.
+"""
 function unravel(cp::ControlParameters, vector::Vector)
     # Calculate section boundaries
     du_len = total_length(cp.du_lengths)
