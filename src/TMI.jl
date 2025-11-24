@@ -1996,15 +1996,15 @@ end
 
     steady inversion for b::NamedTuple
 """
-function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},γ::Grid{T};qnt=nothing,r=1.0) where {T <: Real, tracer_names}
+function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},γ::Grid{T};q=nothing,r=1.0) where {T <: Real, tracer_names}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)
         b_i = get(bnt, name, nothing)
-        q_i = isnothing(qnt) ? nothing : get(qnt, name, nothing)
-
+        q_i = isnothing(q) ? nothing : get(q, name, nothing)
+        #maybe i should call steady inversion here 
         d = zeros(γ,b_i.name,b_i.longname,b_i.units)
 
         # update d with the boundary condition b
