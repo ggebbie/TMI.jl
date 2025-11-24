@@ -63,10 +63,67 @@ function MassFraction(A,
 end
 
 
+
 Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
 Base.length(m::MassFraction) = sum(m.γ.wet)
 Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
 Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
+
+wet(m::MassFraction) = m.γ.wet
+
+function Base.vec(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    T = eltype(values(u)[1].fraction)
+    #T = eltype(u)
+    uvec = Vector{T}(undef,0)
+    for v in u
+        #append!(uvec,v.tracer[v.wet])
+        append!(uvec,vec(v))
+    end
+    return uvec
+end
+
+function unvec!(u::MassFraction,uvec::Vector{T}) where T <: Real
+    I = findall(wet(u)) # findall seems slow
+    for (ii,vv) in enumerate(I)
+        u.fraction[vv] = uvec[ii]
+    end
+end
+
+function unvec!(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names
+    nlo = 1
+    nhi = 0
+    for v in u
+        nhi += sum(wet(v))
+        unvec!(v,uvec[nlo:nhi])
+        nlo = nhi + 1
+    end
+end
+
+function unvec(u₀::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names
+    u = deepcopy(u₀)
+    unvec!(u,uvec)
+    return u
+end
+
+function Base.similar(v::Vector{<:MassFraction})
+    # return MassFraction[similar(mf) for mf in v]
+    return map(similar, v)
+end
+
+function Base.similar(nt::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    return map(similar, nt)
+end
+
+function Base.similar(mf::MassFraction) where T
+    return MassFraction(
+        similar(mf.fraction),
+        mf.γ,
+        mf.name,
+        mf.longname,
+        mf.units,
+        mf.position
+    )
+end
 
 """
 function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)
@@ -424,6 +481,41 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
         end
     end
     return sparse(ilist,jlist,mlist)
+end
+
+function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
+
+    nfield = sum(γ.wet)
+
+    # for bounds checking
+    Rfull = CartesianIndices(γ.wet)
+    Ifirst, Ilast = first(Rfull), last(Rfull)
+
+    # loop over interior points (dirichlet bc at surface)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    # allocate water mass matrix
+    nfield = sum(γ.wet)
+    # Note, flipped sign of interior points
+    #A = spdiagm(nfield,nfield,ones(nfield))
+    gm = similar(m)
+    [gm1.fraction .= NaN for gm1 in gm]
+
+    counter = nfield
+    for I in Iint
+        for gm1 in gm
+        #for I in Iint
+            nrow = R[I]
+            if gm1.γ.wet[I]
+                Istep, _ = step_cartesian(I, gm1.position, γ)
+                counter += 1
+                gm1.fraction[I] = -gA[nrow,R[Istep]]
+            end
+        end
+    end
+
+    return gm
 end
 
 

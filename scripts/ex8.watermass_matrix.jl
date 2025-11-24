@@ -10,25 +10,25 @@ Details of algorithm:
 2. Use least-squares to find smallest deviation that perfectly fits tracers and conserves mass.
 3. If non-negativity is violated, use quadratic programming to invert locally.
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% =#
-import Pkg; Pkg.activate("..")
+import Pkg; Pkg.activate(".")
 
 using Revise
 using LinearAlgebra
 using TMI
-using GeoPythonPlot # will load optional extension
+# using GeoPythonPlot # will load optional extension
 using COSMO # will load optional extension
 using JuMP # will load optional extension
 
-TMIversion = versionlist()[6] # G14 has no remote mass fractions
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+TMIversion = versionlist()[7] # G14 has no remote mass fractions
+A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 # get observations at surface
 # set them as surface boundary condition
 y = (θ =  readfield(TMIfile, "θ", γ),
-    S = readfield(TMIfile, "Sp", γ),
+    # S = readfield(TMIfile, "Sp", γ),
     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
     P★ = preformedphosphate(TMIversion,Alu,γ),
-    δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
+    # δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
 w = (θ =  0.01,
@@ -45,8 +45,14 @@ Ã = watermassmatrix(m̃, γ)
 # set surface boundary condition to the observations.
 bθ = getsurfaceboundary(y.θ)
 
+
+tmp = (a = bθ, b = bθ)
+Alu \ bθ
+
+c = Alu \ bθ
+
 ## reconstruct temperature
-Ãlu = lu(Ã)
+Ãlu = lu(A)
 θ̃ = steadyinversion(Ãlu,bθ,γ)
 
 # compare to c.θ

@@ -1937,6 +1937,7 @@ function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::
     return c
 end
 
+
 """ 
     function gsteadyinversion(gc,Alu,b;q=nothing,r=1.0)
 
@@ -1993,6 +1994,67 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
     c = Alu \ d
 
     return c
+end
+
+
+function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
+    #println("running adjoint steady inversion")
+    gd = Alu' \ gc
+
+    #ga = gd * c', but some A entries are fixed (1 or 0)
+    #we just need to consider the entries that propogate into the adjoint
+    rows, cols, _ = findnz(A) 
+
+    # only consider the off-diagonal entries
+    rows_offdiag = rows[offdiag_mask]
+    offdiag_mask = rows .!= cols 
+    cols_offdiag = cols[offdiag_mask]
+    vals_offdiag = -vec(dbar)[rows_offdiag] .* vec(c)[cols_offdiag]
+    gA = sparse(rows_offdiag, cols_offdiag, vals_offdiag, size(A,1), size(A,2))
+
+    gb = gsetboundarycondition(gd,b)  #update bc based on preexisitng object
+
+    if !isnothing(q)
+        gq = gsetsource(gd,q,r) #update source based on preexisitng object
+        return gb,gq, gA
+    else
+        return gb, nothing, gA
+    end
+end
+
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, b::NamedTuple, γ::Grid; q=nothing, r=1.0)
+    
+    tracer_names = keys(gc)
+    gA_total = spzeros(size(A,1), size(A,2))
+    
+    #should i preallocate here? 
+    gA_rows = Int[]
+    gA_cols = Int[]
+    gA_vals = Float64[]
+
+    gb_results = []
+    gq_results = []
+
+    for name in tracer_names
+        b_i = b[name]
+        q_i = isnothing(q) ? nothing : q[name]
+        
+        gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, γ; q=q_i, r=r)
+        push!(gb_results, gb_i)
+        push!(gq_results, gq_i)
+
+        # appending will be equivalent to gA_total += gA_i
+        rows, cols, vals = findnz(gA_i)
+        append!(all_rows, rows)
+        append!(all_cols, cols)
+        append!(all_vals, vals)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+    
+    gb = NamedTuple{tracer_names}(Tuple(gb_results))
+    gq = isnothing(q) ? nothing : NamedTuple{tracer_names}(Tuple(gq_results))
+    return gb, gq, gA_total
 end
 
 # """
