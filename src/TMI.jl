@@ -1919,7 +1919,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q::Union{Nothing, Source}=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)
@@ -1953,7 +1953,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
+function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q::Union{Nothing, Source}=nothing,r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
     gd = Alu' \ gc
     gb = gsetboundarycondition(gd,b)
@@ -1997,7 +1997,7 @@ end
     steady inversion for b::NamedTuple
 """
 function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
-                        γ::Grid{T};q::NamedTuple{source_names, <:Tuple{Q}},r=1.0) where {T <: Real, tracer_names, source_names, Q}
+                        γ::Grid{T}; q=nothing,r=1.0) where {T <: Real, tracer_names}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
