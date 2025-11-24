@@ -1997,14 +1997,14 @@ end
     steady inversion for b::NamedTuple
 """
 function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
-                        γ::Grid{T};q::Union{Nothing, NamedTuple{source_names, <:Tuple{Q}}}=nothing,r=1.0) where {T <: Real, tracer_names, source_names, Q}
+                        γ::Grid{T};q::NamedTuple{source_names, <:Tuple{Q}},r=1.0) where {T <: Real, tracer_names, source_names, Q}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)
         b_i = get(bnt, name, nothing)
-        q_i = isnothing(q) ? nothing : get(q, name, nothing)
+        q_i = get(q, name, nothing)
         #maybe i should call steady inversion here 
         d = zeros(γ,b_i.name,b_i.longname,b_i.units)
 
