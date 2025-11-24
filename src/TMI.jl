@@ -1968,35 +1968,35 @@ function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},�
 end
 
 
-#function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-# function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+# function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
 
-#     # preallocate Field for equation constraints
-#     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
+    # preallocate Field for equation constraints
+    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
 
-#     # update d with the boundary condition b
-#     setboundarycondition!(d,b)
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
 
-#     if !isnothing(q)
-#         # apply interior sources
-#         # negative because of equation arrangement
-#         setsource!(d,q,r)
-#     end
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
 
-#     # Warning: doesn't this need to loop over the NamedTuple?
+    # Warning: doesn't this need to loop over the NamedTuple?
 
-#     # define ldiv with fields
-#     #c = zeros(d.γ,b.name,b.longname,b.units)
-#     c = Alu \ d
+    # define ldiv with fields
+    #c = zeros(d.γ,b.name,b.longname,b.units)
+    c = Alu \ d
 
-#     return c
-# end
+    return c
+end
 """
     function steadyinversion(Alu,b::NamedTuple{NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     steady inversion for b::NamedTuple
 """
-function steadyinversion(Alu,bnt::NamedTuple,γ::Grid{T};qnt=nothing,r=1.0) where {T <: Real}
+function steadyinversion(Alu,bnt::NamedTuple{du_names, <:Tuple{Vararg{BoundaryCondition}}},γ::Grid{T};qnt=nothing,r=1.0) where {T <: Real}
     tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
@@ -2050,7 +2050,7 @@ function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,
     end
 end
 
-function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, b::NamedTuple, γ::Grid; q=nothing, r=1.0)
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple, γ::Grid; q=nothing, r=1.0)
     
     tracer_names = keys(gc)
     gA_total = spzeros(size(A,1), size(A,2))

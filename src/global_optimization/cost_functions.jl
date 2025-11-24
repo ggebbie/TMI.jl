@@ -1,67 +1,81 @@
 """
+    prior_mass_fraction_cost(mvec, m₀, Qⁱₘ) -> Real
+
+Compute the quadratic cost of mass fraction deviations from the prior: `(m - m₀)' Qⁱₘ (m - m₀)`.
+"""
+function prior_mass_fraction_cost(mvec::Vector,m₀::NamedTuple,Qⁱₘ::Symmetric)
+    m₀_vec = vec(m₀)
+    Δm = (mvec .- m₀_vec)
+    return Δm' * Qⁱₘ * Δm
+end
+
+"""
+    gprior_mass_fraction_cost(mvec, m₀, Qⁱₘ) -> Vector
+
+Compute the gradient of the mass fraction prior cost: `∂/∂m = 2 Qⁱₘ (m - m₀)`.
+"""
+function gprior_mass_fraction_cost(mvec::Vector,m₀::NamedTuple,Qⁱₘ::Symmetric)
+    m₀_vec = vec(m₀)
+    Δm = (mvec .- m₀_vec)
+    gmvec = 2 * Qⁱₘ * Δm
+    return gmvec
+end
+
+
+"""
     prior_boundary_cost(duvec, u₀, Qⁱᵤ) -> Real
 
-Compute the quadratic cost of boundary condition perturbations relative to the prior.
+Compute the quadratic cost of boundary condition perturbations: `du' Qⁱᵤ du`.
 """
 function prior_boundary_cost(duvec::Vector,u₀::Union{BoundaryCondition,NamedTuple},Qⁱᵤ::Symmetric)
-    #calculate the cost with respect to a prior boundary condition 
-    # ((u₀ + du) - u₀)' S ((u₀ + u) - u₀)
-    return duvec' * Qⁱᵤ * duvec #a shortcut since (u₀ + u) - u₀ = u
+    return duvec' * Qⁱᵤ * duvec
 end
 
 """
     gprior_boundary_cost(duvec, u₀, Qⁱᵤ) -> Vector
 
-Compute the gradient of the boundary condition prior cost with respect to `duvec`.
+Compute the gradient of the boundary condition prior cost: `∂/∂du = 2 Qⁱᵤ du`.
 """
 function gprior_boundary_cost(duvec::Vector,u₀::Union{BoundaryCondition,NamedTuple},Qⁱᵤ::Symmetric)
-    gJ = 1 #should always be 1
-    gduvec = 2 * Qⁱᵤ * duvec * gJ 
+    gduvec = 2 * Qⁱᵤ * duvec
     return gduvec
 end
 
 """
     prior_source_cost(dqvec, q₀, Qⁱₛ) -> Real
 
-Compute the quadratic cost of source perturbations relative to the prior.
+Compute the quadratic cost of source perturbations: `dq' Qⁱₛ dq`.
 """
 function prior_source_cost(dqvec::Vector,q₀::Union{Source,NamedTuple},Qⁱₛ::Symmetric)
-    #calculate the cost with respect to a prior boundary condition 
-    # ((u₀ + u) - u₀)' S ((u₀ + u) - u₀)
-    return dqvec' * Qⁱₛ * dqvec #a shortcut since (u₀ + u) - u₀ = u
+    return dqvec' * Qⁱₛ * dqvec
 end
 
 """
     gprior_source_cost(dqvec, q₀, Qⁱₛ) -> Vector
 
-Compute the gradient of the source prior cost with respect to `dqvec`.
+Compute the gradient of the source prior cost: `∂/∂dq = 2 Qⁱₛ dq`.
 """
 function gprior_source_cost(dqvec::Vector,q₀::Union{Source,NamedTuple},Qⁱₛ::Symmetric)
-    gJ = 1 #should always be 1
-    gqvec = 2 * Qⁱₛ * dqvec * gJ 
+    gqvec = 2 * Qⁱₛ * dqvec
     return gqvec
 end
 
 """
     model_observation_cost(n, Wⁱ) -> Real
 
-Compute the weighted observation misfit cost given residual `n` and weight matrix `Wⁱ`.
+Compute the weighted observation misfit cost: `n' Wⁱ n`.
 """
 function model_observation_cost(n::Union{Vector, Field},Wⁱ::Symmetric)
-    #calculate the cost with respect to a prior boundary condition 
-    # ((u₀ + u) - u₀)' S ((u₀ + u) - u₀)
-    return n ⋅ (Wⁱ * n) # dot product, gives total misfit
-
+    return n ⋅ (Wⁱ * n)
 end
 
 """
     gmodel_observation_cost(n, Wⁱ) -> Vector
 
-Compute the gradient of the observation cost with respect to the residual `n`.
+Compute the gradient of the observation cost: `∂/∂n = 2 Wⁱ n`.
 """
 function gmodel_observation_cost(n::Vector,Wⁱ::Symmetric)
-    gJ = 1 #should always be 1
-    gnvec = 2 * Wⁱ * n * gJ 
+    gnvec = 2 * Wⁱ * n
     return gnvec
 end
 
@@ -85,6 +99,10 @@ function steadyinversion_residual(c::Field, c_obs::Union{Vector, Field},
         y = observe(c, locs, γ)
         n = y .- c_obs
         return n
+    # elseif c_obs isa Observations
+        # y = observe(c, c_obs.wis, γ)
+        # n = y .- c_obs.values
+        # return n
     end
 end
 
@@ -147,15 +165,17 @@ function global_cost_function(mvec::Vector{T},
                               Qⁱᵤ::NamedTuple{u₀_names, <:Tuple{Vararg{Symmetric}}},
                               Qⁱₛ::NamedTuple{q₀_names, <:Tuple{Vararg{Symmetric}}},
                               Wⁱ::NamedTuple{cobs_names, <:Tuple{Vararg{Symmetric}}},
-                              cobs::NamedTuple{cobs_names, <:Tuple{Vararg{Union{Vector, Matrix}}}},
+                              cobs::NamedTuple{cobs_names, <:Tuple{Vararg{Union{Vector, Field}}}},
                               γ::Grid, locs = nothing) where {T <: Real, du_names, u₀_names, dq_names, q₀_names, m₀_names, cobs_names}
 
     m = unvec(m₀, mvec)
-    duvec = vec(du)
-    dqvec = vec(dq)
+    duvec = vec(du) #vectorize boundary condition adjustments u = u_0 + du
+    dqvec = vec(dq) #vectorize source adjustments q = q_0 + dq
 
     b = deepcopy(u₀)
     q = deepcopy(q₀)
+
+    #might already exist! 
     for key in du_names #only update if in the control vector 
         adjustboundarycondition!(b[key],du[key]) #b += u # easy case where u and b are on the same boundary
     end
@@ -174,14 +194,17 @@ function global_cost_function(mvec::Vector{T},
 
     Jn = model_observation_cost(n,Wⁱ)
     Ju = prior_boundary_cost(duvec,u₀, Qⁱᵤ)
-    Jq = prior_boundary_cost(dqvec,u₀, Qⁱₛ)
+    Jq = prior_source_cost(dqvec,q₀, Qⁱₛ)
+    # Jm = prior_mass_fraction_cost(mvec,m₀,Qⁱₘ)
+    #Jλ = λ^Τ * F . I think F is tracer_contributions - q. need to double checl
 
-    #TO DO: add mass fraction prior cost and lagrange multiplier step
-    J = Jn + Ju + Jq
+    #TO DO: add mass fraction prior cost, lagrange multiplier cost 
+    #and tracer constraints (i.e., freezing point of seawater, gravitational stability)
+    J = Jn + Ju + Jq #+ (λ^Τ * F)
 
     #need to loop and accumulate here
     gduvec = gprior_boundary_cost(duvec,u₀,Qⁱᵤ)
-    gdqvec = gprior_source_cost(dqvec,u₀,Qⁱₛ)
+    gdqvec = gprior_source_cost(dqvec,q₀,Qⁱₛ)
 
     gn = gmodel_observation_cost(n,Wⁱ)
     gc = gsteadyinversion_residual(gn, c, locs, γ)
@@ -194,6 +217,8 @@ function global_cost_function(mvec::Vector{T},
 
     gm = gwatermassmatrix(gA, m, γ)
 
+    # 
+    
     dJdcontrols = ControlParameters(; du = unvec(du, gduvec), dq = unvec(dq, gdqvec), m = gm)
 
     return J, dJdcontrols
