@@ -1923,7 +1923,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q::Union{Nothing, Source}=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)
@@ -1957,7 +1957,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q::Union{Nothing, Source}=nothing,r=1.0) #where T <: Real
+function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
     gd = Alu' \ gc
     gb = gsetboundarycondition(gd,b)
@@ -1973,7 +1973,7 @@ end
 
 
 # function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q::Union{Nothing, Source}=nothing,r=1.0)::Field{T} where {T <: Real}
+function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
 
     # preallocate Field for equation constraints
     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
