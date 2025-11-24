@@ -1998,24 +1998,17 @@ end
 """
     function steadyinversion(Alu,b::NamedTuple{NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
-    steady inversion for b::NamedTuple
+    steady inversion for b::NamedTuple with q as required positional argument
 """
 function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
-                        γ::Grid{T}; q=nothing,r=1.0) where {T <: Real, tracer_names}
+                        γ::Grid{T}, q::NamedTuple; r=1.0) where {T <: Real, tracer_names}
     # tracer_names = keys(bnt)
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)
         b_i = get(bnt, name, nothing)
-        # Handle q being nothing, a Source, or a NamedTuple
-        if isnothing(q)
-            q_i = nothing
-        elseif q isa Source
-            q_i = q  # Use the same source for all tracers
-        else
-            q_i = get(q, name, nothing)  # q is a NamedTuple
-        end
+        q_i = get(q, name, nothing)  # q is a NamedTuple
         #maybe i should call steady inversion here
         d = zeros(γ,b_i.name,b_i.longname,b_i.units)
 
@@ -2037,7 +2030,7 @@ function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{Bounda
 
 end
 
-function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
+function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple},γ::Grid, q; r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
     gd = Alu' \ gc
 
@@ -2062,12 +2055,12 @@ function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,
     end
 end
 
-function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple, γ::Grid; q=nothing, r=1.0)
-    
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple, γ::Grid, q::NamedTuple; r=1.0)
+
     tracer_names = keys(gc)
     gA_total = spzeros(size(A,1), size(A,2))
-    
-    #should i preallocate here? 
+
+    #should i preallocate here?
     gA_rows = Int[]
     gA_cols = Int[]
     gA_vals = Float64[]
@@ -2078,14 +2071,7 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple
 
     for (i, name) in enumerate(tracer_names)  # Added enumerate
         b_i = get(bnt, name, nothing)
-        # Handle q being nothing, a Source, or a NamedTuple
-        if isnothing(q)
-            q_i = nothing
-        elseif q isa Source
-            q_i = q  # Use the same source for all tracers
-        else
-            q_i = get(q, name, nothing)  # q is a NamedTuple
-        end
+        q_i = get(q, name, nothing)  # q is a NamedTuple
 
         gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, γ; q=q_i, r=r)
         gb_results[i] = gb_i
@@ -2100,7 +2086,7 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple
 
     gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
     gb = NamedTuple{tracer_names}(Tuple(gb_results))
-    gq = isnothing(q) ? nothing : NamedTuple{tracer_names}(Tuple(gq_results))
+    gq = NamedTuple{tracer_names}(Tuple(gq_results))
     return gb, gq, gA_total
 end
 
