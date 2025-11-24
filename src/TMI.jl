@@ -1967,35 +1967,63 @@ function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},�
 
 end
 
+
+#function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+# function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+
+#     # preallocate Field for equation constraints
+#     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
+
+#     # update d with the boundary condition b
+#     setboundarycondition!(d,b)
+
+#     if !isnothing(q)
+#         # apply interior sources
+#         # negative because of equation arrangement
+#         setsource!(d,q,r)
+#     end
+
+#     # Warning: doesn't this need to loop over the NamedTuple?
+
+#     # define ldiv with fields
+#     #c = zeros(d.γ,b.name,b.longname,b.units)
+#     c = Alu \ d
+
+#     return c
+# end
 """
-    function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+    function steadyinversion(Alu,b::NamedTuple{NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     steady inversion for b::NamedTuple
 """
-#function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+function steadyinversion(Alu,bnt::NamedTuple,γ::Grid{T};qnt=nothing,r=1.0) where {T <: Real}
+    tracer_names = keys(bnt)
+    n_tracers = length(tracer_names)
+    c_results = Vector{Field}(undef, n_tracers)
 
-    # preallocate Field for equation constraints
-    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
+    for (i, name) in enumerate(tracer_names)
+        b_i = get(bnt, name, nothing)
+        q_i = isnothing(qnt) ? nothing : get(qnt, name, nothing)
 
-    # update d with the boundary condition b
-    setboundarycondition!(d,b)
+        d = zeros(γ,b_i.name,b_i.longname,b_i.units)
 
-    if !isnothing(q)
-        # apply interior sources
-        # negative because of equation arrangement
-        setsource!(d,q,r)
+        # update d with the boundary condition b
+        setboundarycondition!(d,b_i)
+
+        if !isnothing(q_i)
+            # apply interior sources
+            # negative because of equation arrangement
+            setsource!(d,q_i,r)
+        end
+
+        # define ldiv with fields
+        #c = zeros(d.γ,b.name,b.longname,b.units)
+        c_results[i] = Alu \ d
     end
+    c_nt = NamedTuple{tracer_names}(Tuple(c_results))
+    return c_nt
 
-    # Warning: doesn't this need to loop over the NamedTuple?
-
-    # define ldiv with fields
-    #c = zeros(d.γ,b.name,b.longname,b.units)
-    c = Alu \ d
-
-    return c
 end
-
 
 function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple},γ::Grid;q=nothing,r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
@@ -2032,26 +2060,26 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, b::NamedTuple, 
     gA_cols = Int[]
     gA_vals = Float64[]
 
-    gb_results = []
-    gq_results = []
+    n_tracers = length(tracer_names)
+    gb_results = Vector{BoundaryCondition}(undef, n_tracers)
+    gq_results = Vector{Union{Source, Nothing}}(undef, n_tracers)
 
-    for name in tracer_names
-        b_i = b[name]
-        q_i = isnothing(q) ? nothing : q[name]
-        
+    for (i, name) in enumerate(tracer_names)  # Added enumerate
+        b_i = get(bnt, name, nothing)
+        q_i = isnothing(qnt) ? nothing : get(qnt, name, nothing)
+
         gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, γ; q=q_i, r=r)
-        push!(gb_results, gb_i)
-        push!(gq_results, gq_i)
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
 
         # appending will be equivalent to gA_total += gA_i
         rows, cols, vals = findnz(gA_i)
-        append!(all_rows, rows)
-        append!(all_cols, cols)
-        append!(all_vals, vals)
+        append!(gA_rows, rows)
+        append!(gA_cols, cols)
+        append!(gA_vals, vals)
     end
 
     gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
-    
     gb = NamedTuple{tracer_names}(Tuple(gb_results))
     gq = isnothing(q) ? nothing : NamedTuple{tracer_names}(Tuple(gq_results))
     return gb, gq, gA_total
