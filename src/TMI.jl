@@ -68,10 +68,9 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors
 
-# export Observations
+# export Observations, 
 
-
-import Base: zeros, one, oneunit, ones, 
+import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
 import Base: +, -, *, /, vec
 import LinearAlgebra: dot
