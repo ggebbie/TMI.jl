@@ -1,7 +1,7 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
 version = "0.3.6"
+authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
 
 [deps]
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
@@ -62,4 +62,4 @@ julia = "1.12"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "COSMO", "JuMP", "MAT", "Statistics"]
+test = ["Test"]

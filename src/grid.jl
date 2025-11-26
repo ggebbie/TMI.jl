@@ -72,7 +72,10 @@ function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S
     
     # make ocean mask
     ds = Dataset(foreign_file)
-    wet = Bool.(ds[maskname])::BitArray # very slow! (couple of secs), use `convert` instead?
+    # very slow! (couple of secs), use `convert` instead?
+    #wet = Bool.(ds[maskname])#::BitArray (causing Issue #188)
+
+    wet = convert(BitArray,ds[maskname])
 
     T = eltype(ds[lonname][1]) # not sure that this will always work
     

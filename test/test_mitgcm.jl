@@ -6,7 +6,7 @@
     url = "https://docs.google.com/uc?export=download&id=16-F3V-MUi3cIOqgJiJ4x4JD0sGlHGQ1y"
     fname = google_download(url,TMI.pkgdatadir())
     println(fname)
-    γ =  Grid(fname, "maskC", "XC", "YC", "Z")
+    γ =  TMI.Grid(fname, "maskC", "XC", "YC", "Z")
 
     # Add a more stringest test here, like a `checkgrid!`
 
