@@ -355,7 +355,12 @@ function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: R
     #gb = 0.0 * b # initialize to zero
     if b.dim == 1
         #gb.tracer = gd.tracer[b.dimval,:,:]
-        gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.axes,b.k,b.dim,b.dimval,b.wet)
+        if length(b) > 1
+            gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.axes,b.k,b.dim,b.dimval,b.wet)
+        elseif length(b) == 1
+            gb = deepcopy(b) # a hacky fix. in the 1-d case b.axes returns () 
+            gb.tracer .= [gd.tracer[b.dimval]]
+        end
     elseif b.dim == 2
         #gb.tracer = gd.tracer[:,b.dimval,:]
         gb = BoundaryCondition(gd.tracer[:,b.dimval,:],b.axes,b.k,b.dim,b.dimval,b.wet)
@@ -368,6 +373,30 @@ function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: R
     return gb
 end
 
+""" 
+    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    ADJOINT: apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function gsetboundarycondition(gd::Field{T},b::NamedTuple{names, S}) where {T <: Real, names, S}
+    E = Union{S.parameters...} # element type = union of all field types
+    gb1 = Vector{E}(undef, length(names))
+    
+    for (ii,vv) in enumerate(b)
+        println(typeof(vv))
+        gb1[ii] = gsetboundarycondition(gd,vv)
+    end
+
+    # https://discourse.julialang.org/t/construct-namedtuple-dynamically/15394/7
+    gb = (;zip(keys(b), gb1)...)
+                                       
+    return gb
+end
+
+
 """
     function setboundarycondition!(d::Field{T},b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
 
@@ -379,26 +408,14 @@ function setboundarycondition!(d::Field,b::NamedTuple)
     end
 end
 
-""" 
-    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
-
-    ADJOINT: apply boundary condition to the equation constraints
-# Arguments
-- `d`::Field, equation constraints (i.e., right hand side)
-- `b`::BoundaryCondition
-"""
-function gsetboundarycondition(gd::Field{T},b::NamedTuple) where T <: Real
-
-    gb1 = Vector{BoundaryCondition{T}}(undef,length(keys(b)))
-    for (ii,vv) in enumerate(b)
-        gb1[ii] = gsetboundarycondition(gd,vv)
+function setboundarycondition(d::Field,b::NamedTuple)
+    bnew = deepcopy(b)
+    for b1 in bnew
+        setboundarycondition!(d,b1)
     end
-
-    # https://discourse.julialang.org/t/construct-namedtuple-dynamically/15394/7
-    gb = (;zip(keys(b), gb1)...)
-                                       
-    return gb
+    bnew
 end
+
 
 """
     function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})

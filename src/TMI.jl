@@ -66,7 +66,12 @@ export config, download_file,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors
+    massfractions, massfractions_isotropic, neighbors, 
+    Observations, ControlParameters, vectorize_controls,
+    zero, 
+    gsteadyinversion, gwatermassmatrix, gadjustboundarycondition, 
+    gadjustboundarycondition!, gadjustsource!
+    
 
 # export Observations, 
 
@@ -102,8 +107,8 @@ include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
-# include(pkgsrcdir("observations.jl"))
-# include(pkgsrcdir("control_parameters.jl"))
+include(pkgsrcdir("observations.jl"))
+include(pkgsrcdir("control_parameters.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -1391,12 +1396,23 @@ vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
 function vec(u::NamedTuple) 
 
-    T = eltype(values(u)[1].tracer)
+    ufirst = first(filter(!isnothing, values(u)))
+
+    if ufirst isa Union{Field, BoundaryCondition, Source}
+        T = eltype(ufirst.tracer)
+    elseif ufirst isa NamedTuple 
+        #handling the case of tuples of tuples
+        uufirst = first(filter(!isnothing, values(ufirst)))
+        T = eltype(uufirst.tracer)
+    end
+
     #T = eltype(u)
     uvec = Vector{T}(undef,0)
     for v in u
+        if !isnothing(v)
         #append!(uvec,v.tracer[v.wet])
-        append!(uvec,vec(v))
+            append!(uvec,vec(v))
+        end
     end
     return uvec
 end
@@ -1416,11 +1432,28 @@ function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #wh
 end
 
 """
+    wet(u::NamedTuple) -> Vector{Bool}
+
+Return a concatenated boolean vector indicating wet points for all fields in a NamedTuple.
+Recursively handles nested NamedTuples.
+"""
+function wet(u::NamedTuple)
+    result = Bool[]
+    for v in u
+        if !isnothing(v)
+            append!(result, wet(v))
+        end
+    end
+    return result
+end
+
+"""
     function unvec!(u,uvec)
 
     Undo the operations by vec(u)
-    Needs to update u because attributes of 
+    Needs to update u because attributes of
     u need to be known at runtime.
+    Supports nested NamedTuples.
 """
 function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
     I = findall(wet(u)) # findall seems slow
@@ -1428,15 +1461,72 @@ function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T
         u.tracer[vv] = uvec[ii]
     end
 end
+
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
     nlo = 1
     nhi = 0
     for v in u
-        nhi += sum(wet(v))
-        unvec!(v,uvec[nlo:nhi])
-        nlo = nhi + 1
+        if !isnothing(v)
+            nhi += sum(wet(v))
+            unvec!(v,uvec[nlo:nhi])
+            nlo = nhi + 1
+        end
     end
 end
+
+function one!(u::NamedTuple) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            one!(v)
+        end          
+    end
+end
+
+function one!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
+    if length(u) > 1
+       u.tracer[u.γ.wet] .= 1.0
+    else 
+        u.tracer .= 1.0
+    end
+end
+
+
+function Base.one(u::NamedTuple) #where {N, T <: Real}
+    uz = deepcopy(u)
+    for v in uz
+        if !isnothing(v)
+            one!(v)  
+        end          
+    end
+    return uz
+end
+
+function zero!(u::NamedTuple) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            zero!(v)
+        end          
+    end
+end
+
+function zero!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
+    if length(u) > 1
+       u.tracer[u.γ.wet] .= 0.0
+    else 
+        u.tracer .= 0.0
+    end
+end
+
+function Base.zero(u::NamedTuple) #where {N, T <: Real}
+    uz = deepcopy(u)
+    for v in uz
+        if !isnothing(v)
+            zero!(v)  
+        end          
+    end
+    return uz
+end
+
 
 """ 
     function synthetic_observations(TMIversion,variable)
@@ -1995,67 +2085,57 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
 
     return c
 end
+
 """
     function steadyinversion(Alu,b::NamedTuple{NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
     steady inversion for b::NamedTuple with q as required positional argument
 """
-function steadyinversion(Alu,bnt::NamedTuple{tracer_names, <:Tuple{Vararg{BoundaryCondition}}},
-                        γ::Grid{T}, q::NamedTuple; r=1.0) where {T <: Real, tracer_names}
-    # tracer_names = keys(bnt)
+function steadyinversion(Alu,b::NamedTuple{tracer_names, S}, q::NamedTuple,
+                        γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
     n_tracers = length(tracer_names)
     c_results = Vector{Field}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)
-        b_i = get(bnt, name, nothing)
+        b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)  # q is a NamedTuple
-        #maybe i should call steady inversion here
-        d = zeros(γ,b_i.name,b_i.longname,b_i.units)
-
-        # update d with the boundary condition b
-        setboundarycondition!(d,b_i)
-
-        if !isnothing(q_i)
-            # apply interior sources
-            # negative because of equation arrangement
-            setsource!(d,q_i,r)
-        end
-
-        # define ldiv with fields
-        #c = zeros(d.γ,b.name,b.longname,b.units)
-        c_results[i] = Alu \ d
+        c_results[i] = steadyinversion(Alu,b_i,γ;q=q_i, r = r) #Alu \ d
     end
     c_nt = NamedTuple{tracer_names}(Tuple(c_results))
     return c_nt
 
 end
 
-function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple},γ::Grid, q; r=1.0) #where T <: Real
+function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple}, q::Union{Nothing,Source},γ::Grid; r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
     gd = Alu' \ gc
 
     #ga = gd * c', but some A entries are fixed (1 or 0)
     #we just need to consider the entries that propogate into the adjoint
     rows, cols, _ = findnz(A) 
-
+    offdiag_mask = rows .!= cols 
+    #may need to call the other steady inversion
     # only consider the off-diagonal entries
     rows_offdiag = rows[offdiag_mask]
-    offdiag_mask = rows .!= cols 
     cols_offdiag = cols[offdiag_mask]
-    vals_offdiag = -vec(dbar)[rows_offdiag] .* vec(c)[cols_offdiag]
+
+    vals_offdiag = -vec(gd)[rows_offdiag] .* vec(c)[cols_offdiag]
     gA = sparse(rows_offdiag, cols_offdiag, vals_offdiag, size(A,1), size(A,2))
 
-    gb = gsetboundarycondition(gd,b)  #update bc based on preexisitng object
+    gb = gsetboundarycondition(gd,b)  #update bc based on preexisting object
 
     if !isnothing(q)
-        gq = gsetsource(gd,q,r) #update source based on preexisitng object
+        println(typeof(q))
+        gq = gsetsource(gd,q,r) #update source based on preexisting object
         return gb,gq, gA
     else
         return gb, nothing, gA
     end
 end
 
-function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple, γ::Grid, q::NamedTuple; r=1.0)
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, 
+                          b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, 
+                          γ::Grid; r=1.0) where {b_names, B, q_names, Q}
 
     tracer_names = keys(gc)
     gA_total = spzeros(size(A,1), size(A,2))
@@ -2066,14 +2146,14 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple
     gA_vals = Float64[]
 
     n_tracers = length(tracer_names)
-    gb_results = Vector{BoundaryCondition}(undef, n_tracers)
-    gq_results = Vector{Union{Source, Nothing}}(undef, n_tracers)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)  # Added enumerate
-        b_i = get(bnt, name, nothing)
+        b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)  # q is a NamedTuple
 
-        gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, γ; q=q_i, r=r)
+        gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, q_i, γ; r=r)
         gb_results[i] = gb_i
         gq_results[i] = gq_i
 
@@ -2085,8 +2165,11 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, bnt::NamedTuple
     end
 
     gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
-    gb = NamedTuple{tracer_names}(Tuple(gb_results))
-    gq = NamedTuple{tracer_names}(Tuple(gq_results))
+
+    # gb = NamedTuple{tracer_names}(Tuple(gb_results))
+    # gq = NamedTuple{tracer_names}(Tuple(gq_results))
+    gb = (;zip(tracer_names, gb_results)...)
+    gq = (;zip(tracer_names, gq_results)...)
     return gb, gq, gA_total
 end
 

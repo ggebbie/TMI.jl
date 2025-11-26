@@ -51,7 +51,7 @@ struct Observations{T, V, WI}
     values::Vector{T}
     locs::Vector{V}
     wis::Vector{WI}
-    W::Union{Symmetric, Nothing}
+    W::Union{Symmetric, Diagonal, Nothing}
 end
 
 """
@@ -60,7 +60,7 @@ end
 Construct Observations from values, locations, and grid; precomputes interpolation weights.
 Optional weighting matrix W can be provided.
 """
-function Observations(values::Vector{T}, locs::Vector{V}, γ::Grid; W::Union{Symmetric, Nothing} = nothing) where {T, V}
+function Observations(values::Vector{T}, locs::Vector{V}, γ::Grid; W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
     length(values) == length(locs) || error("values and locs must have the same length")
 
     # Validate weighting matrix dimensions if provided

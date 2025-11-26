@@ -27,7 +27,14 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, x::Field)
     print(io, "Field size ")
     println(io, size(x.tracer))
     println(io, "Surface view")
-    show(io,mime,heatmap(transpose(x.tracer[:,:,surfaceindex(x.γ)]),zlabel=x.units,title=x.longname))
+    naxes = length(x.γ.axes)
+    if  naxes == 3
+        show(io,mime,heatmap(transpose(x.tracer[:,:,surfaceindex(x.γ)]),zlabel=x.units,title=x.longname))
+    elseif naxes == 1
+        show(io,mime,heatmap(transpose(x.tracer[:]),zlabel=x.units,title=x.longname))
+    else 
+        println("heatmap not supported for Field with axes length $naxes")
+    end
 end
 
 """ 
