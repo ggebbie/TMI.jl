@@ -47,7 +47,7 @@ export config, download_file,
     surfacecontrol2field, surfacecontrol2field!,
     sparsedatamap, config2nc, axislabels,
     matrix_zyx2xyz,
-    surface_oxygensaturation, oxygen, location_obs,
+    location_obs,
     zerosurfaceboundary,
     onesurfaceboundary,
     getsurfaceboundary,getnorthboundary,geteastboundary,
@@ -1585,6 +1585,9 @@ function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
     return gc
 end
 
+"""
+    function location_obs(field, locs, γ)
+"""
 function location_obs(field, locs, γ)
 
     tlength = length(size(field)) > 3 ? size(field)[1] : 1
@@ -1636,11 +1639,6 @@ end
 - `Wⁱ`: inverse of W weighting matrix for observations
 - `γ`: grid
 """
-#function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition,NamedTuple{<:Any, NTuple{N1,BoundaryCondition}}},u₀::Union{BoundaryCondition,NamedTuple{<:Any, NTuple{N2,BoundaryCondition}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
-
-# works with Boundary Conditions, not with NamedTuples
-#function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition{T,R,N1,B},NamedTuple},u₀::Union{BoundaryCondition{T,R,N2,B},NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {N1, N2, R <: Real, T <: Real, B <: AbstractMatrix{T}}
-
 function costfunction_gridded_obs(uvec,Alu,b₀::Union{BoundaryCondition,NamedTuple},u₀::Union{BoundaryCondition,NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {T <: Real}
 
     # turn uvec into a boundary condition
@@ -1662,7 +1660,6 @@ end
 """
     function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 """
-#function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}}},u₀::Union{BoundaryCondition{T},NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid) where {N1, N2, T <: Real}
 function costfunction_gridded_obs!(J,guvec,uvec::Vector{T},Alu,b₀::Union{BoundaryCondition{T},NamedTuple},u₀::Union{BoundaryCondition{T},NamedTuple},y::Field{T},Wⁱ::Diagonal{T, Vector{T}},γ::Grid{T}) where {T <: Real}
 
     # turn uvec into a boundary condition
@@ -2041,7 +2038,19 @@ function wetlocation(γ)
         println("dry point, try again")
     end # if not, then start over.
 end
-    
+
+"""
+    function iswet(loc, γ, neighbors)
+    Get (lon,lat,depth) tuples of wet locations.
+    Allow a location to be wet if at least one out of 8 nearby gridpoints is wet.
+    Certainly "wet" gridpoints could be defined more strictly.
+# Arguments
+- `loc`: lon,lat,depth
+- `γ`
+- `neighbors`
+# Output
+- Boolean (true for ocean point)
+"""
 function iswet(loc,γ,neighbors)
     # two approaches
     # approach 2

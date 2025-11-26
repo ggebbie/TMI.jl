@@ -7,7 +7,6 @@ CurrentModule = TMI
 Boundary conditions for [TMI](https://github.com/ggebbie/TMI.jl).
 
 ```@docs
-TMI.BoundaryCondition
 TMI.getboundarycondition
 TMI.zerosurfaceboundary
 TMI.zeronorthboundary

@@ -18,13 +18,31 @@ struct Grid{R,N}
 end
 
 """
-function Grid(TMIfile)
+    function Grid(TMIfile)
 
-    Construct the Grid given a file name
+Construct the Grid given a file name
 
 # Arguments
 - `TMIfile::String`: NetCDF file name for TMI version
 
+# Output
+- `γ::Grid`: TMI grid struct
+
+    function Grid(foreign_file, maskname, lonname, latname, depthname)
+
+Construct the Grid from a non-TMI file given the names of relevant fields.
+
+Assumes that an ocean mask is available.
+Assumes an input NetCDF file.
+Assumes everything below the top layer is part of the interior. 
+Tested for Float32 fields (should work for other types).
+
+# Arguments
+- `foreign_file::String`
+- `maskname::String`
+- `lonname::String`
+- `latname::String`
+- `depthname::String`
 # Output
 - `γ::Grid`: TMI grid struct
 """
@@ -48,26 +66,6 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
     Δ = neighbor_indices(6)
     return Grid(labels,wet,interior,wrap,Δ)
 end
-
-"""
-function Grid(foreign_file, maskname, lonname, latname, depthname)
-
-    Construct the Grid from a non-TMI file given the names of relevant fields.
-
-    Assumes that an ocean mask is available.
-    Assumes an input NetCDF file.
-    Assumes everything below the top layer is part of the interior. 
-    Tested for Float32 fields (should work for other types).
-
-# Arguments
-- `foreign_file::String`
-- `maskname::String`
-- `lonname::String`
-- `latname::String`
-- `depthname::String`
-# Output
-- `γ::Grid`: TMI grid struct
-"""
 function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S) where S <: String
     
     # make ocean mask
