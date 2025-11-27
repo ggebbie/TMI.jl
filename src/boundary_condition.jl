@@ -291,30 +291,79 @@ end
 
 # define the correct dimension and index for each control plane
 # maybe someday find a way to hide γ
+"""
+zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 zerosurfaceboundary(γ::Grid,name=:none,longname="unknown",units="unknown") = zeros(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 zeronorthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 zeroeastboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 zerosouthboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 zerowestboundary(γ,name=:none,longname="unknown",units="unknown") = zeros(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 onesurfaceboundary(γ,name=:none,longname="unknown",units="unknown") = ones(3,surfaceindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+onenorthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 onenorthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,northindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+oneeastboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 oneeastboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,eastindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+onesouthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 onesouthboundary(γ,name=:none,longname="unknown",units="unknown") = ones(2,southindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
+onewestboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
+"""
 onewestboundary(γ,name=:none,longname="unknown",units="unknown") = ones(1,westindex(γ),γ,name,longname,units)::BoundaryCondition
 
+"""
 getsurfaceboundary(c::Field) = getboundarycondition(c,3,surfaceindex(c.γ))::BoundaryCondition
+"""
+getsurfaceboundary(c::Field) = getboundarycondition(c,3,surfaceindex(c.γ))::BoundaryCondition
+
+"""
 getnorthboundary(c::Field) = getboundarycondition(c,2,northindex(c.γ))::BoundaryCondition
+"""
+getnorthboundary(c::Field) = getboundarycondition(c,2,northindex(c.γ))::BoundaryCondition
+
+"""
 geteastboundary(c::Field) = getboundarycondition(c,1,eastindex(c.γ))::BoundaryCondition
+"""
+geteastboundary(c::Field) = getboundarycondition(c,1,eastindex(c.γ))::BoundaryCondition
+
+"""
 getsouthboundary(c::Field) = getboundarycondition(c,2,southindex(c.γ))::BoundaryCondition
+"""
+getsouthboundary(c::Field) = getboundarycondition(c,2,southindex(c.γ))::BoundaryCondition
+
+"""
+getwestboundary(c::Field) = getboundarycondition(c,1,westindex(c.γ))::BoundaryCondition
+"""
 getwestboundary(c::Field) = getboundarycondition(c,1,westindex(c.γ))::BoundaryCondition
 
 surfaceindex(γ::Grid) = minimum(depthindex(γ.I))
@@ -432,6 +481,9 @@ function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
 end
 
 # Seems not to be general because gu overwritten.
+"""
+    function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
+"""
 function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
     gu  = gb
     return gu
