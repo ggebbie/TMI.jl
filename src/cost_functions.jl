@@ -57,14 +57,14 @@ function prior_boundary_cost(
 end
 
 
-# function prior_boundary_cost(du::NamedTuple,u₀::NamedTuple,Qᵤ::NamedTuple)
-#     tracer_names = keys(du)
-#     J = 0
-#     for (i, name) in enumerate(tracer_names)
-#         J += prior_boundary_cost(du[name], u₀[name], Qᵤ[name])
-#     end
-#     return J
-# end
+function prior_boundary_cost(du::NamedTuple,u₀::NamedTuple,Qᵤ::NamedTuple)
+    tracer_names = keys(du)
+    J = 0
+    for (i, name) in enumerate(tracer_names)
+        J += prior_boundary_cost(vec(du[name]), u₀[name], Qᵤ[name])
+    end
+    return J
+end
 
 
 
@@ -140,12 +140,12 @@ function prior_source_cost(
     return J
 end
 
-function prior_boundary_cost(dq::NamedTuple,q₀::NamedTuple,Qₛ::NamedTuple)
+function prior_source_cost(dq::NamedTuple,q₀::NamedTuple,Qₛ::NamedTuple)
     tracer_names = keys(dq)
     J = 0
     for (i, name) in enumerate(tracer_names)
         if !isnothing(q₀[name])
-            J += prior_source_cost(dq[name], q₀[name], Qₛ[name])
+            J += prior_source_cost(vec(dq[name]), q₀[name], Qₛ[name])
         end
     end
     return J

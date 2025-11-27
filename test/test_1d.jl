@@ -57,5 +57,17 @@
     gwest = steadyinversion(A,bwest,γ) # fraction from west boundary
     @test maximum(gwest) ≤ 1.0
     @test minimum(gwest) ≥ 0.0
+
+    @testset "1D interpolation helpers" begin
+        locvec = [lon[10]]
+
+        δ = interpweights(locvec, γ)
+        @test δ !== nothing
+        @test isapprox(sum(δ), 1.0)
+        @test isapprox(sum(δ .* lon), locvec[1]; atol = 1e-12)
+
+        @test_throws ArgumentError interpweights([lon[1], lon[2]], γ)
+        @test_throws ErrorException shiftloc([-1.0], γ)
+    end
     
 end 

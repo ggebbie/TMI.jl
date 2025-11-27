@@ -954,7 +954,25 @@ function interpindex(loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function interpindex(loc,γ)
+function interpindex(loc::T, γ::Grid{R,1}) where {T,R}
+    loc_on_grid = shiftloc(loc, γ)
+    nodes = (γ.axes[1],)
+    return Interpolations.weightedindexes(
+        (Interpolations.value_weights,),
+        (Gridded(Linear()),),
+        nodes,
+        (loc_on_grid,),
+    )
+end
+
+function interpindex(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("interpindex 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return interpindex(loc[1], γ)
+end
+
+function interpindex(loc::Tuple{T, T, T},γ) where T
 
     # Handle a grid mismatch.
     loc_on_grid = shiftloc(loc,γ)
@@ -979,7 +997,32 @@ function  shiftloc(loc)
     sometimes loc longitudes are outside of grid due to different conventions
     assumption: 360° shift is enough to get back on grid
 """
-function shiftloc(loc,γ)
+function shiftloc(loc::T, γ::Grid{R,1}) where {T,R}
+    x = γ.axes[1]
+
+    if length(x) == 1
+        if !isapprox(loc, x[1]; atol = zero(T))
+            error("location not on grid")
+        end
+        return loc
+    end
+
+    xmin, xmax = extrema(x)
+    if loc < xmin || loc > xmax
+        error("location not on grid")
+    end
+
+    return loc
+end
+
+function shiftloc(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("shiftloc 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return shiftloc(loc[1], γ)
+end
+
+function shiftloc(loc::Tuple{T, T, T},γ) where T
     # accounts for a half grid cell of overlap space
     newlon = loc[1]
     westlon = (3/2)*γ.lon[1] - (1/2)*γ.lon[2]
@@ -1011,7 +1054,33 @@ function interpweights(loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function interpweights(loc,γ; wis = nothing)
+function interpweights(loc::T, γ::Grid{R,1}; wis = nothing) where {T,R}
+    if isnothing(wis)
+        wis = interpindex(loc, γ)
+    end
+
+    δ = zeros(γ.wet)
+    for ii in 1:length(wis[1].weights)
+        δ[wis[1].istart + ii - 1] += wis[1].weights[ii]
+    end
+
+    if iszero(sum(filter(!isnan,δ)))
+        δ = nothing
+    elseif sum(filter(!isnan,δ)) < 1.0
+        δ ./= sum(filter(!isnan,δ))
+    end
+    
+    return δ
+end
+
+function interpweights(loc::AbstractVector{T}, γ::Grid{R,1}; wis = nothing) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("interpweights 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return interpweights(loc[1], γ; wis)
+end
+
+function interpweights(loc::Tuple{T, T, T},γ; wis = nothing) where T
 
     # handle wraparound
     # repeated (unnecessarily?) in interpindex

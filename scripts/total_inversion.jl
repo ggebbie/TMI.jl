@@ -7,7 +7,7 @@ using Statistics
 using FiniteDiff
 
 ngrid = (10) # number of grid cells
-xmax = 1000.0 # domain size 
+xmax = 10.0 # domain size 
 lon = collect(range(0.0,1000.0,length=ngrid[1]))
 tracer = collect(1.0.-lon./xmax)
 
@@ -16,6 +16,7 @@ wet = trues(ngrid)
 interior = copy(wet)
 interior[begin] = false
 interior[end] = false
+
 
 wrap = (false,)
 Δ = [CartesianIndex(1,),CartesianIndex(-1,)]
@@ -28,6 +29,18 @@ c = Field(tracer,
     :c,
     "linear equilibrated tracer",
     "μmol/kg")
+
+loc = 2.5
+δ = interpweights(loc, γ)
+@show sum(δ)               # ≈ 1.0
+@show sum(δ .* γ.axes[1])       # ≈ loc
+
+sum(δ .* γ.axes)
+
+δ
+loc = [2.5]
+δ = interpweights(loc, γ)
+γ
 
 A = watermassmatrix(m0, γ)
 Alu = lu(A)
@@ -45,15 +58,31 @@ q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)
 c_noncons = steadyinversion(A,b,γ; q = q)
 Δc = c_noncons - c
 
-function objective(control_vector, controls, c_obs, γ; return_gradients = false)
-    # Unpack control vector
+
+function unconstrained_global_costfunction(control_vector::Vector, 
+                                           controls::ControlParameters, c_obs, γ; 
+                                           locs = nothing, return_gradients = false)
     du, dq, m = unvec(controls, control_vector)
+    if !return_gradients
+        J = unconstrained_global_costfunction(du, dq, m, controls, c_obs, γ; 
+                                              locs = locs, return_gradients = return_gradients)
+        return J
+    else
+        J, gdu, gdq, gm = unconstrained_global_costfunction(du, dq, m, controls, c_obs, γ; 
+                                              locs = locs, return_gradients = return_gradients)
+        gcontrols = vcat(vec.([gdu, gdq, gm])...)
+
+        return J, gcontrols
+    end
+    
+end
+
+function unconstrained_global_costfunction(du, dq, m, controls::ControlParameters, 
+                                           c_obs, γ; locs = nothing, return_gradients = false)
+    # Unpack control vector
+    # du, dq, m = unvec(controls, control_vector)
     du_names = keys(du)
     dq_names = keys(dq)
-
-    #does this make sense to vectorize? 
-    duvec = vec(du)
-    dqvec = vec(dq)
 
     # Forward pass: compute state at current control vector
     b = deepcopy(controls.u₀)
@@ -74,18 +103,19 @@ function objective(control_vector, controls, c_obs, γ; return_gradients = false
 
     # Solve for each tracer
     c = steadyinversion(Alu,b, q, γ)
-    n = model_data_misfit(c, c_obs, γ; locs=nothing)
+    n = model_data_misfit(c, c_obs, γ; locs=locs)
     J = model_observation_cost(n,c_obs) + 
-        prior_source_cost(dqvec, controls.q₀, controls.Qₛ) + 
-        prior_boundary_cost(duvec, controls.u₀, controls.Qᵤ) + 
+        prior_source_cost(dq, controls.q₀, controls.Qₛ) + 
+        prior_boundary_cost(du, controls.u₀, controls.Qᵤ) + 
         prior_mass_fraction_cost(m,controls.m₀,controls.Qₘ)
         
     if !return_gradients 
-        return J
+        return J #just return cost
     else
         # Propagate gradients through adjust operations
         gdu = zero(du)
         gdq = zero(dq)
+        gm = similar(m0)
 
         gdu_1 = gprior_boundary_cost(du,controls.u₀, controls.Qᵤ)
         gdq_1 = gprior_source_cost(dq,controls.q₀, controls.Qₛ)
@@ -93,7 +123,7 @@ function objective(control_vector, controls, c_obs, γ; return_gradients = false
 
         # # Adjoint pass: gradient seed is all ones (gradient of sum)
         gn = gmodel_observation_cost(n, c_obs)
-        gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=nothing)
+        gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=locs)
         # # Compute adjoint gradients
         gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q, γ)
         gm_2 = gwatermassmatrix(gA_total, m, γ)
@@ -110,11 +140,11 @@ function objective(control_vector, controls, c_obs, γ; return_gradients = false
             end
         end
 
-        gduvec = vec(gdu)
-        gdqvec = vec(gdq)
-        gmvec = vec(gm_1) + vec(gm_2)
-        
-        return J, vcat([gduvec, gdqvec, gmvec]...)
+        for key in keys(gm)
+            gm[key].fraction .= gm_1[key].fraction .+ gm_2[key].fraction
+        end
+
+        return J, gdu, gdq, gm
     end
 end
 
@@ -136,26 +166,25 @@ Qᵤ = (; (k => diag_from_v(v) for (k,v) in pairs(du))...)
 Qₛ = (; (k => diag_from_v(v) for (k,v) in pairs(dq))...)
 Qₘ = Diagonal(one.(vec(m0)))
 
-
-n = model_data_misfit(c0, c_obs, γ; locs=nothing)
-model_observation_cost(n,c_obs)
-
-c_obs
-
 controls = ControlParameters(; du = du, dq = dq, m = m0,
                                 u₀ = u₀, q₀ = q₀, m₀ = m0, 
                                 Qᵤ = Qᵤ, Qₛ = Qₛ, Qₘ = Qₘ)
 
                                 model_data_misfit
 
-objective(x) = objective(x, controls, c_obs, γ)
+objective(x) = unconstrained_global_costfunction(x, controls, c_obs, γ)
 
 control_vector = randn(length(vec(controls)))
 x = randn(length(control_vector))
-# objective(x, controls, c_obs, γ; return_gradients = true)
 
 Jg_finite = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
-J, Jg = objective(control_vector, controls, c_obs, γ; return_gradients = true)
+J, Jg = unconstrained_global_costfunction(control_vector, controls, c_obs, γ; return_gradients = true)
 
 @. percent_difference(x, y) = 100 * (x - y) / y
 all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
+
+# using Plots
+# scatter(1:length(Jg), Jg)
+# scatter!(1:length(Jg), Jg_finite)
+
+
