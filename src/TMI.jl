@@ -70,7 +70,11 @@ export config, download_file,
     Observations, ControlParameters, vectorize_controls,
     zero, 
     gsteadyinversion, gwatermassmatrix, gadjustboundarycondition, 
-    gadjustboundarycondition!, gadjustsource!
+    gadjustboundarycondition!, gadjustsource!, 
+    model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
+    prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
+    gprior_source_cost, gmodel_observation_cost, 
+    gmodel_data_misfit, gprior_mass_fraction_cost
     
 
 # export Observations, 
@@ -109,6 +113,7 @@ include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("observations.jl"))
 include(pkgsrcdir("control_parameters.jl"))
+include(pkgsrcdir("cost_functions.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -1006,14 +1011,15 @@ function interpweights(loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function interpweights(loc,γ)
+function interpweights(loc,γ; wis = nothing)
 
     # handle wraparound
     # repeated (unnecessarily?) in interpindex
     lon = vcat(copy(γ.lon),γ.lon[1]+360)
     list = vcat(1:length(γ.lon),1)
-
-    wis = interpindex(loc,γ)
+    if isnothing(wis)
+        wis = interpindex(loc,γ)
+    end
 
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
@@ -1425,11 +1431,19 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition, Source},uvec::Vector) #where T <: Real
     u = deepcopy(u₀)
     unvec!(u,uvec)
     return u
 end
+
+function unvec(u₀::Source,uvec::Vector) #where T <: Real
+    u = deepcopy(u₀)
+    u.tracer .= 0.0
+    unvec!(u,uvec)
+    return u
+end
+
 
 """
     wet(u::NamedTuple) -> Vector{Bool}
@@ -2125,7 +2139,6 @@ function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,
     gb = gsetboundarycondition(gd,b)  #update bc based on preexisting object
 
     if !isnothing(q)
-        println(typeof(q))
         gq = gsetsource(gd,q,r) #update source based on preexisting object
         return gb,gq, gA
     else

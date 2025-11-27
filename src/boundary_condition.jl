@@ -386,7 +386,7 @@ function gsetboundarycondition(gd::Field{T},b::NamedTuple{names, S}) where {T <:
     gb1 = Vector{E}(undef, length(names))
     
     for (ii,vv) in enumerate(b)
-        println(typeof(vv))
+        # println(typeof(vv))
         gb1[ii] = gsetboundarycondition(gd,vv)
     end
 

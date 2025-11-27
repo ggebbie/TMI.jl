@@ -45,45 +45,15 @@ q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)
 c_noncons = steadyinversion(A,b,γ; q = q)
 Δc = c_noncons - c
 
-# Alu \ setsource q
-function forward_model(control_vector, controls, γ)
-
-    du, dq, m = unvec(controls, control_vector)
-    du_names = keys(du)
-    dq_names = keys(dq)
-
-    b = deepcopy(controls.u₀)
-    q = deepcopy(controls.q₀)
-
-    #might already exist!
-    for key in du_names #only update if in the control vector
-        adjustboundarycondition!(b[key],du[key]) #b += u # easy case where u and b are on the same boundary
-    end
-
-    for key in dq_names
-        if !isnothing(dq[key])
-            adjustsource!(q[key],dq[key]) #b += u # easy case where u and b are on the same boundary
-        end
-    end
-
-    A = watermassmatrix(m, γ)
-    Alu = lu(A)
-
-    c = steadyinversion(Alu,b, q, γ)
-
-    return sum(vec(c))
-    # return c
-end
-
-function adjoint_gradient(control_vector, controls, γ)
-    """
-    Compute adjoint gradient by first running forward model to get state,
-    then running adjoint code.
-    """
+function objective(control_vector, controls, c_obs, γ; return_gradients = false)
     # Unpack control vector
     du, dq, m = unvec(controls, control_vector)
     du_names = keys(du)
     dq_names = keys(dq)
+
+    #does this make sense to vectorize? 
+    duvec = vec(du)
+    dqvec = vec(dq)
 
     # Forward pass: compute state at current control vector
     b = deepcopy(controls.u₀)
@@ -104,29 +74,48 @@ function adjoint_gradient(control_vector, controls, γ)
 
     # Solve for each tracer
     c = steadyinversion(Alu,b, q, γ)
+    n = model_data_misfit(c, c_obs, γ; locs=nothing)
+    J = model_observation_cost(n,c_obs) + 
+        prior_source_cost(dqvec, controls.q₀, controls.Qₛ) + 
+        prior_boundary_cost(duvec, controls.u₀, controls.Qᵤ) + 
+        prior_mass_fraction_cost(m,controls.m₀,controls.Qₘ)
+        
+    if !return_gradients 
+        return J
+    else
+        # Propagate gradients through adjust operations
+        gdu = zero(du)
+        gdq = zero(dq)
 
-    # Adjoint pass: gradient seed is all ones (gradient of sum)
-    gc =one(c)
+        gdu_1 = gprior_boundary_cost(du,controls.u₀, controls.Qᵤ)
+        gdq_1 = gprior_source_cost(dq,controls.q₀, controls.Qₛ)
+        gm_1 = gprior_mass_fraction_cost(m, controls.m₀, controls.Qₘ)
 
-    # Compute adjoint gradients
-    gb, gq, gA_total = gsteadyinversion(gc, c, A, Alu, b, q, γ)
-    gm = gwatermassmatrix(gA_total, m, γ)
+        # # Adjoint pass: gradient seed is all ones (gradient of sum)
+        gn = gmodel_observation_cost(n, c_obs)
+        gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=nothing)
+        # # Compute adjoint gradients
+        gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q, γ)
+        gm_2 = gwatermassmatrix(gA_total, m, γ)
 
-    # # Propagate gradients through adjust operations
-    # gub = zero(gb)
-    # guq = zero(gq)
+        for key in du_names
+            gadjustboundarycondition!(gdu[key], gdu_1[key])
+            gadjustboundarycondition!(gdu[key], gdu_2[key])
+        end
 
-    # for key in du_names
-    #     gadjustboundarycondition!(gub[key], gb[key])
-    # end
+        for key in dq_names
+            if !isnothing(q[key])
+                gadjustsource!(gdq[key], gdq_1[key], controls.q₀[key])
+                gadjustsource!(gdq[key], gdq_2[key], controls.q₀[key])
+            end
+        end
 
-    # for key in dq_names
-    #     if !isnothing(q[key])
-    #         gadjustsource!(guq[key], gq[key])
-    #     end
-    # end
-
-    return gb, gq, gm
+        gduvec = vec(gdu)
+        gdqvec = vec(gdq)
+        gmvec = vec(gm_1) + vec(gm_2)
+        
+        return J, vcat([gduvec, gdqvec, gmvec]...)
+    end
 end
 
 
@@ -136,20 +125,37 @@ q₀ = (c = nothing, c_q = deepcopy(q),)
 c0 = steadyinversion(Alu,u₀, q₀, γ)
 Alu = lu(A)
 
+W = (; (k => Diagonal(one.(vec(v))) for (k,v) in pairs(c0))...)
+c_obs = (; (k => Observations(1 * v, W[k]) for (k,v) in pairs(c0))...)
 
 du = zero(u₀)
 dq = zero(q₀)
-Qⁱᵤ = Diagonal(one.(vec(du)))
-Qⁱₛ = Diagonal(one.(vec(dq)))
-Qⁱₘ = Diagonal(one.(vec(m0)))
 
+diag_from_v(v) = isnothing(v) ? nothing : Diagonal(one.(vec(v)))
+Qᵤ = (; (k => diag_from_v(v) for (k,v) in pairs(du))...)
+Qₛ = (; (k => diag_from_v(v) for (k,v) in pairs(dq))...)
+Qₘ = Diagonal(one.(vec(m0)))
+
+
+n = model_data_misfit(c0, c_obs, γ; locs=nothing)
+model_observation_cost(n,c_obs)
+
+c_obs
 
 controls = ControlParameters(; du = du, dq = dq, m = m0,
-                                u₀ = u₀, q₀ = q₀, m₀ = m0)
+                                u₀ = u₀, q₀ = q₀, m₀ = m0, 
+                                Qᵤ = Qᵤ, Qₛ = Qₛ, Qₘ = Qₘ)
 
-objective(x) = forward_model(x, controls, γ)
-control_vector = vcat(vec.([du,dq, m0])...)
-g = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
-gub, guq, gm = adjoint_gradient(control_vector, controls, γ)
-g_adjoint = vectorize_controls(gub, guq, gm) #boundary condition
-all(g_adjoint .≈ g)
+                                model_data_misfit
+
+objective(x) = objective(x, controls, c_obs, γ)
+
+control_vector = randn(length(vec(controls)))
+x = randn(length(control_vector))
+# objective(x, controls, c_obs, γ; return_gradients = true)
+
+Jg_finite = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
+J, Jg = objective(control_vector, controls, c_obs, γ; return_gradients = true)
+
+@. percent_difference(x, y) = 100 * (x - y) / y
+all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 

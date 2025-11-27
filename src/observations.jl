@@ -1,74 +1,61 @@
 """
     Observations{T, V, WI}
+    Observations(values, locs, γ; W=nothing)
+    Observations(values; W=nothing)
+    Observations(values, W)
 
-Container for observation data with precomputed interpolation weights and optional weighting matrix.
-Stores observational data along with their spatial locations and interpolation information for efficient
-comparison with model fields. Multiple Observations can be organized in a NamedTuple for multi-tracer problems.
+Container for observation data with optional locations and weighting. If locations are provided,
+interpolation weights are precomputed via `interpindex(loc, γ)`.
 
-# Type Parameters
-- `T`: Type of observation values (typically Float64)
-- `V`: Type of location data (e.g., Tuple of coordinates)
-- `WI`: Type of interpolation weight indices
-
-# Fields
-- `values`: Vector of observed values
-- `locs`: Vector of spatial locations corresponding to each observation
-- `wis`: Vector of precomputed interpolation indices/weights for efficient model-data comparison
-- `W`: Optional inverse covariance matrix (Symmetric) for observation errors
-
-# Constructor
-```julia
-Observations(values::Vector, locs::Vector, γ::Grid; W = nothing)
-```
-
-Constructs an Observations object from observation values, their locations, and a computational grid.
-Automatically precomputes interpolation weights for efficient model-data interpolation.
-
-# Arguments
-- `values`: Vector of observation values
-- `locs`: Vector of observation locations (must have same length as `values`)
-- `γ`: Grid object defining the computational domain
-- `W`: Optional inverse covariance matrix (Symmetric) for observation uncertainties
-
-# Examples
-```julia
-# Basic usage without weighting
-obs = Observations([1.0, 2.0, 3.0], [loc1, loc2, loc3], γ)
-
-# With inverse covariance matrix for uncertainty weighting
-W_matrix = Symmetric(inv(cov_matrix))
-obs_θ = Observations(θ_values, θ_locs, γ; W = W_matrix)
-
-# Multiple tracers organized in a NamedTuple
-obs = (θ = obs_θ, S = obs_S)
-```
-
-# Notes
-The interpolation weights (`wis`) are computed at construction time using `interpindex(loc, γ)` for
-each location, enabling efficient repeated interpolation operations during optimization.
+- `values::Union{Vector, Field}`: observation values (vector or grid Field)
+- `locs::Union{Vector, Nothing}`: observation locations (or `nothing`)
+- `γ::Grid`: grid used for interpolation (required when `locs` are given)
+- `W::Union{Symmetric, Diagonal, Nothing}`: optional weighting matrix
 """
 struct Observations{T, V, WI}
-    values::Vector{T}
-    locs::Vector{V}
-    wis::Vector{WI}
+    values::Union{Vector{T}, Field{T}}
+    locs::Union{Vector{V}, Nothing}
+    wis::Union{Vector{WI}, Nothing}
     W::Union{Symmetric, Diagonal, Nothing}
 end
 
 """
     Observations(values, locs, γ; W = nothing) -> Observations
+    Observations(values; W = nothing) -> Observations
 
-Construct Observations from values, locations, and grid; precomputes interpolation weights.
-Optional weighting matrix W can be provided.
+Construct Observations from values, optional locations, and grid; precomputes interpolation weights
+when locations are provided. Optional weighting matrix W can be supplied; `Observations(values, W)`
+is a convenience for the keyword form when no locations are given.
 """
-function Observations(values::Vector{T}, locs::Vector{V}, γ::Grid; W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
-    length(values) == length(locs) || error("values and locs must have the same length")
-
-    # Validate weighting matrix dimensions if provided
+function Observations(values::Union{Vector{T}, Field{T}},
+                      locs::Union{Vector{V}, Nothing},
+                      γ::Union{Grid, Nothing} = nothing;
+                      W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
     if !isnothing(W)
-        n = length(values)
+        n = values isa Vector ? length(values) : length(values.tracer)
         size(W) == (n, n) || error("W must have dimensions ($n, $n) to match the length of values")
     end
 
-    wis = [interpindex(loc, γ) for loc in locs]
-    return Observations{T, V, typeof(first(wis))}(values, locs, wis, W)
+    if isnothing(locs)
+        wis = nothing
+        VType = Nothing
+        WIType = Nothing
+    else
+        values isa Field && error("locs should be `nothing` when values is a Field")
+        length(values) == length(locs) || error("values and locs must have the same length")
+        isnothing(γ) && error("γ must be provided when locs are given")
+        wis = [interpindex(loc, γ) for loc in locs]
+        VType = V
+        WIType = eltype(wis)
+    end
+
+    return Observations{T, VType, WIType}(values, locs, wis, W)
+end
+
+function Observations(values::Union{Vector{T}, Field{T}}; W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T}
+    return Observations(values, nothing, nothing; W = W)
+end
+
+function Observations(values::Union{Vector{T}, Field{T}}, W::Union{Symmetric, Diagonal}) where {T}
+    return Observations(values; W = W)
 end

@@ -51,9 +51,9 @@ Includes optional first guess values and weighting matrices for inverse problems
 - `u₀`: NamedTuple of first guess boundary conditions
 - `q₀`: NamedTuple of first guess sources
 - `m₀`: NamedTuple of first guess mass fractions
-- `Qⁱᵤ`: NamedTuple of inverse covariance matrices (Symmetric or Diagonal) for boundary condition errors
-- `Qⁱₛ`: NamedTuple of inverse covariance matrices (Symmetric or Diagonal) for source errors
-- `Qⁱₘ`: Single inverse covariance matrix (Symmetric or Diagonal) for mass fraction errors
+- `Qᵤ`: NamedTuple of inverse covariance matrices (Symmetric or Diagonal) for boundary condition errors
+- `Qₛ`: NamedTuple of inverse covariance matrices (Symmetric or Diagonal) for source errors
+- `Qₘ`: Single inverse covariance matrix (Symmetric or Diagonal) for mass fraction errors
 - `vector`: Flattened vector representation of all control parameters (if store_vector=true)
 - `du_length`: Total length of vectorized `du` (if store_lengths=true)
 - `dq_length`: Total length of vectorized `dq` (if store_lengths=true)
@@ -63,33 +63,9 @@ Includes optional first guess values and weighting matrices for inverse problems
 ```julia
 ControlParameters(; du = nothing, dq = nothing, m = nothing,
                    u₀ = nothing, q₀ = nothing, m₀ = nothing,
-                   Qⁱᵤ = nothing, Qⁱₛ = nothing, Qⁱₘ = nothing,
+                   Qᵤ = nothing, Qₛ = nothing, Qₘ = nothing,
                    store_vector = true, store_lengths = true)
 ```
-
-All parameters are optional and default to `nothing`. By default, `store_vector=true` stores
-a flattened vector representation of the control parameters. By default, `store_lengths=true`
-enables unraveling vectors back to structured NamedTuples using the `unravel` function.
-Set either to `false` to reduce memory usage if not needed.
-
-# Examples
-```julia
-# Minimal usage with only boundary conditions
-cp = ControlParameters(du = (θ = bc1, S = bc2))
-
-# With first guesses and weighting matrices
-cp = ControlParameters(
-    du = (θ = bc_pert,),
-    u₀ = (θ = bc_guess,),
-    Qⁱᵤ = (θ = inv_cov_matrix,),
-    store_lengths = true
-)
-
-# Unravel control vector back to structured form
-du_new, dq_new, m_new = unravel(cp, optimized_vector)
-```
-
-See also: [`unravel`](@ref), [`unravel_field`](@ref)
 """
 struct ControlParameters
     du::Union{NamedTuple, Nothing}
@@ -98,9 +74,9 @@ struct ControlParameters
     u₀::Union{NamedTuple, Nothing}
     q₀::Union{NamedTuple, Nothing}
     m₀::Union{NamedTuple, Nothing}
-    Qⁱᵤ::Union{NamedTuple, Nothing}
-    Qⁱₛ::Union{NamedTuple, Nothing}
-    Qⁱₘ::Union{Symmetric, Diagonal, Nothing}
+    Qᵤ::Union{NamedTuple, Nothing}
+    Qₛ::Union{NamedTuple, Nothing}
+    Qₘ::Union{Symmetric, Diagonal, Nothing}
     vector::Union{Vector, Nothing}
     du_length::Union{Int, Nothing}
     dq_length::Union{Int, Nothing}
@@ -108,7 +84,7 @@ struct ControlParameters
 
     function ControlParameters(; du = nothing, dq = nothing, m = nothing,
                                 u₀ = nothing, q₀ = nothing, m₀ = nothing,
-                                Qⁱᵤ = nothing, Qⁱₛ = nothing, Qⁱₘ = nothing,
+                                Qᵤ = nothing, Qₛ = nothing, Qₘ = nothing,
                                 store_vector = true, store_lengths = true)
         # Check for aliasing issues - fields should not share memory
         check_shared_references(du, "du")
@@ -117,8 +93,8 @@ struct ControlParameters
         check_shared_references(u₀, "u₀")
         check_shared_references(q₀, "q₀")
         check_shared_references(m₀, "m₀")
-        check_shared_references(Qⁱᵤ, "Qⁱᵤ")
-        check_shared_references(Qⁱₛ, "Qⁱₛ")
+        check_shared_references(Qᵤ, "Qᵤ")
+        check_shared_references(Qₛ, "Qₛ")
 
         if store_vector
             vector = vectorize_controls(du, dq, m)
@@ -136,7 +112,7 @@ struct ControlParameters
             m_length = nothing
         end
 
-        new(du, dq, m, u₀, q₀, m₀, Qⁱᵤ, Qⁱₛ, Qⁱₘ, vector, du_length, dq_length, m_length)
+        new(du, dq, m, u₀, q₀, m₀, Qᵤ, Qₛ, Qₘ, vector, du_length, dq_length, m_length)
     end
 end
 
