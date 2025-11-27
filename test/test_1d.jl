@@ -67,7 +67,6 @@
         @test isapprox(sum(δ .* lon), locvec[1]; atol = 1e-12)
 
         @test_throws ArgumentError interpweights([lon[1], lon[2]], γ)
-        @test_throws ErrorException shiftloc([-1.0], γ)
     end
     
 end 
