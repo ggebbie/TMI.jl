@@ -6,8 +6,8 @@ using TMI
 using Statistics
 using FiniteDiff
 
-ngrid = (10) # number of grid cells
-xmax = 10.0 # domain size 
+ngrid = (50) # number of grid cells
+xmax = 1000.0 # domain size 
 lon = collect(range(0.0,1000.0,length=ngrid[1]))
 tracer = collect(1.0.-lon./xmax)
 
@@ -30,14 +30,32 @@ c = Field(tracer,
     "linear equilibrated tracer",
     "μmol/kg")
 
-loc = 2.5
+loc = 10
 δ = interpweights(loc, γ)
 @show sum(δ)               # ≈ 1.0
 @show sum(δ .* γ.axes[1])       # ≈ loc
 
 sum(δ .* γ.axes)
 
-δ
+locs = [lon[1], lon[25], lon[end]]
+y = observe(c, locs, γ)
+
+@show y
+@show 1 .- locs ./ xmax
+
+wis = [interpindex(l, γ) for l in locs]
+y_wis = observe(c, wis, γ)
+y_wis ≈ y
+
+
+locs = sort(rand(0:0.1:xmax, 10000))
+gy = ones(length(locs))
+gc = gobserve(gy, c, locs)
+
+gc.tracer
+
+abs(sum(gc.tracer[γ.wet]) - sum(gy))
+
 loc = [2.5]
 δ = interpweights(loc, γ)
 γ

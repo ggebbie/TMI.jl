@@ -74,7 +74,7 @@ export config, download_file,
     model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
     prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
     gprior_source_cost, gmodel_observation_cost, 
-    gmodel_data_misfit, gprior_mass_fraction_cost
+    gmodel_data_misfit, gprior_mass_fraction_cost, gobserve
     
 
 # export Observations, 
@@ -1742,6 +1742,25 @@ function observe(c::Field{T},loc::Vector{Tuple{T,T,T}},γ::Grid) where T <: Real
     y = observe(c,wis,γ)
 
     return y
+end
+
+function observe(c::Field{T}, wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}}}, γ::Grid{R,1})::Vector{T} where {T <: Real,R}
+
+    sumwis = Vector{Float64}(undef,length(wis))
+    [sumwis[i] = Interpolations.InterpGetindex(γ.wet)[wis[i]...] for i in eachindex(wis)]
+
+    y = Vector{Float64}(undef,length(wis))
+    replace!(c.tracer,NaN=>0.0)
+    [y[i] = Interpolations.InterpGetindex(c.tracer)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+
+    return y
+end
+
+function observe(c::Field{T}, loc::Vector{T}, γ::Grid{R,1}) where {T <: Real,R}
+    N = length(loc)
+    wis = Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}}}(undef,N)
+    [wis[i] = interpindex(loc[i],γ) for i in 1:N]
+    return observe(c,wis,γ)
 end
 
 """

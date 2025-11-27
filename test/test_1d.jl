@@ -67,6 +67,19 @@
         @test isapprox(sum(δ .* lon), locvec[1]; atol = 1e-12)
 
         @test_throws ArgumentError interpweights([lon[1], lon[2]], γ)
+        @test_throws ErrorException shiftloc([-1.0], γ)
+    end
+
+    @testset "1D observe" begin
+        iloc = [1, 25, ngrid]
+        locs = lon[iloc]
+        y = observe(c, locs, γ)
+        expected = c.tracer[iloc]
+        @test y ≈ expected
+
+        wis = [interpindex(l, γ) for l in locs]
+        y_wis = observe(c, wis, γ)
+        @test y_wis ≈ y
     end
     
 end 
