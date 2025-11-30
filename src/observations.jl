@@ -1,8 +1,6 @@
 """
     Observations{T, V, WI}
-    Observations(values, locs, γ; W=nothing)
-    Observations(values; W=nothing)
-    Observations(values, W)
+    Observations(values; locs=nothing, γ=nothing, W=nothing)
 
 Container for observation data with optional locations and weighting. If locations are provided,
 interpolation weights are precomputed via `interpindex(loc, γ)`.
@@ -20,18 +18,17 @@ struct Observations{T, V, WI}
 end
 
 """
-    Observations(values, locs, γ; W = nothing) -> Observations
-    Observations(values; W = nothing) -> Observations
+    Observations(values; locs = nothing, γ = nothing, W = nothing) -> Observations
 
-Construct Observations from values, optional locations, and grid; precomputes interpolation weights
-when locations are provided. Optional weighting matrix W can be supplied; `Observations(values, W)`
-is a convenience for the keyword form when no locations are given.
+Construct Observations from values with optional locations, grid, and weighting matrix.
+If locations are provided, interpolation weights are precomputed.
 """
-function Observations(values::Union{Vector{T}, Field{T}},
-                      locs::Union{Vector{V}, Nothing},
-                      γ::Union{Grid, Nothing} = nothing;
+function Observations(values::Union{Vector{T}, Field{T}};
+                      locs::Union{Vector{V}, Nothing} = nothing,
+                      γ::Union{Grid, Nothing} = nothing,
                       W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
     if !isnothing(W)
+        # Keep a quick sanity check that weights match the observation count.
         n = values isa Vector ? length(values) : length(values.tracer)
         size(W) == (n, n) || error("W must have dimensions ($n, $n) to match the length of values")
     end
@@ -44,18 +41,11 @@ function Observations(values::Union{Vector{T}, Field{T}},
         values isa Field && error("locs should be `nothing` when values is a Field")
         length(values) == length(locs) || error("values and locs must have the same length")
         isnothing(γ) && error("γ must be provided when locs are given")
+        # Precompute interpolation weights once; reused by observe/gobserve.
         wis = [interpindex(loc, γ) for loc in locs]
         VType = V
         WIType = eltype(wis)
     end
 
     return Observations{T, VType, WIType}(values, locs, wis, W)
-end
-
-function Observations(values::Union{Vector{T}, Field{T}}; W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T}
-    return Observations(values, nothing, nothing; W = W)
-end
-
-function Observations(values::Union{Vector{T}, Field{T}}, W::Union{Symmetric, Diagonal}) where {T}
-    return Observations(values; W = W)
 end

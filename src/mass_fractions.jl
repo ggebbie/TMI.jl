@@ -115,8 +115,11 @@ function Base.similar(nt::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) wher
 end
 
 function Base.similar(mf::MassFraction) where T
+    similar_m_fraction = similar(mf.fraction)
+    similar_m_fraction[.!(mf.γ.interior)] .= NaN
+
     return MassFraction(
-        similar(mf.fraction),
+        similar_m_fraction,
         mf.γ,
         mf.name,
         mf.longname,

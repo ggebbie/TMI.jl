@@ -74,7 +74,8 @@ export config, download_file,
     model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
     prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
     gprior_source_cost, gmodel_observation_cost, 
-    gmodel_data_misfit, gprior_mass_fraction_cost, gobserve
+    gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
+    unconstrained_global_costfunction
     
 
 # export Observations, 
@@ -1594,6 +1595,7 @@ end
 
 function zero!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
     if length(u) > 1
+       u.tracer .= NaN
        u.tracer[u.γ.wet] .= 0.0
     else 
         u.tracer .= 0.0
@@ -1769,13 +1771,13 @@ end
     ADJOINT Take a observation at location given by weights wis
     Arguments not symmetric with `observe` due to splat operator
 """
-function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
+function gobserve(gy::Vector{T},c::Field{T},locs; wis =nothing) where T <: Real
 
     #initialize gc this sneaky way
     gc = 0.0 * c
     for ii in eachindex(gy)
         # interpweights repeats some calculations
-        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ)[c.γ.wet]
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ; wis = nothing)[c.γ.wet]
     end
 
     return gc

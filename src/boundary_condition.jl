@@ -408,6 +408,20 @@ function setboundarycondition!(d::Field,b::NamedTuple)
     end
 end
 
+# Overwrite/augment an existing boundary condition with another boundary condition.
+function setboundarycondition!(b::BoundaryCondition, u::BoundaryCondition)
+    b.tracer[b.wet] .= u.tracer[u.wet]
+    return b
+end
+
+# Apply a collection of boundary conditions to a collection of boundaries.
+function setboundarycondition!(b::NamedTuple, u::NamedTuple)
+    for key in keys(u)
+        haskey(b, key) && setboundarycondition!(b[key], u[key])
+    end
+    return b
+end
+
 function setboundarycondition(d::Field,b::NamedTuple)
     bnew = deepcopy(b)
     for b1 in bnew
@@ -422,10 +436,14 @@ end
 
     adjust all boundary conditions b that are described in u
 """
-adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
-function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple}) 
+function adjustboundarycondition(b::BoundaryCondition, u::BoundaryCondition; r::Real = 1.0)
     bnew = deepcopy(b)
-    adjustboundarycondition!(bnew,u)
+    adjustboundarycondition!(bnew, u; r = r)
+    return bnew
+end
+function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple}, u::Union{BoundaryCondition,NamedTuple}; r::Real = 1.0) 
+    bnew = deepcopy(b)
+    adjustboundarycondition!(bnew, u; r = r)
     return bnew
 end
 
@@ -437,20 +455,21 @@ end
     warning: if u doesn't contain any boundary condition adjustments,
     nothing will change.
 """
-function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
+function adjustboundarycondition!(b::BoundaryCondition, u::BoundaryCondition; r::Real = 1.0)
     # write it out so b changes when returned
-    b.tracer[b.wet] += u.tracer[u.wet] 
+    b.tracer[b.wet] += r .* u.tracer[u.wet] 
 end
-function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
+function adjustboundarycondition!(b::NamedTuple, u::NamedTuple; r::Real = 1.0)
     # only the bkeys are certain to be type BoundaryCondition
     for bkey in keys(b)
-        haskey(u,bkey) && adjustboundarycondition!(b[bkey],u[bkey]) 
+        haskey(u,bkey) && adjustboundarycondition!(b[bkey], u[bkey]; r = r) 
     end
 end
 
 # Seems not to be general because gu overwritten.
-function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    gu  = gb
+function gadjustboundarycondition(gb::BoundaryCondition{T}, u::BoundaryCondition{T}; r::Real = 1.0) where T <: Real
+    gu = gb
+    gadjustboundarycondition!(gu, u; r = r)
     return gu
 end
 
@@ -462,19 +481,20 @@ end
     Keep this function so that calling functions can look alike.
     Could probably combine with lower function, use Union type
 """
-function gadjustboundarycondition!(gu::BoundaryCondition,gb::BoundaryCondition) 
-    gu.tracer[gu.wet] += gb.tracer[gb.wet]
+function gadjustboundarycondition!(gu::BoundaryCondition, gb::BoundaryCondition; r::Real = 1.0)
+    gu.tracer[gu.wet] += r .* gb.tracer[gb.wet]
 end
-function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
+function gadjustboundarycondition!(gu::NamedTuple, gb::NamedTuple; r::Real = 1.0)
     for bkey in keys(gb)
         #gadjustboundarycondition!(gu,gb[bkey])
-        haskey(gu,bkey) && gadjustboundarycondition!(gu[bkey],gb[bkey]) 
+        haskey(gu, bkey) && gadjustboundarycondition!(gu[bkey], gb[bkey]; r = r) 
     end
 end
 
 #function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple) #where {N1, N2, T <: Real}
+function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition}, u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
+    gadjustboundarycondition!(gu, u; r = r)
     return gu
 end
 

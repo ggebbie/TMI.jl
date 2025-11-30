@@ -4,6 +4,9 @@
 Check if any non-nothing fields in a NamedTuple share the same memory address.
 Throws an error if shared references are detected.
 
+# Detects shared objects so in-place updates on one field do not silently
+# mutate another.
+
 # Arguments
 - `nt`: NamedTuple to check
 - `name`: Name of the variable (for error message)
@@ -45,8 +48,8 @@ Container for optimization control variables (boundary conditions, sources, mass
 Includes optional first guess values and weighting matrices for inverse problems.
 
 # Fields
-- `du`: NamedTuple of boundary condition perturbations (BoundaryCondition objects)
-- `dq`: NamedTuple of source perturbations (Source objects)
+- `u`: NamedTuple of boundary condition perturbations (BoundaryCondition objects)
+- `q`: NamedTuple of source perturbations (Source objects)
 - `m`: NamedTuple of mass fractions (MassFraction objects)
 - `u₀`: NamedTuple of first guess boundary conditions
 - `q₀`: NamedTuple of first guess sources
@@ -55,21 +58,21 @@ Includes optional first guess values and weighting matrices for inverse problems
 - `Qₛ`: NamedTuple of inverse covariance matrices (Symmetric or Diagonal) for source errors
 - `Qₘ`: Single inverse covariance matrix (Symmetric or Diagonal) for mass fraction errors
 - `vector`: Flattened vector representation of all control parameters (if store_vector=true)
-- `du_length`: Total length of vectorized `du` (if store_lengths=true)
-- `dq_length`: Total length of vectorized `dq` (if store_lengths=true)
+- `u_length`: Total length of vectorized `u` (if store_lengths=true)
+- `q_length`: Total length of vectorized `q` (if store_lengths=true)
 - `m_length`: Total length of vectorized `m` (if store_lengths=true)
 
 # Constructor
 ```julia
-ControlParameters(; du = nothing, dq = nothing, m = nothing,
+ControlParameters(; u = nothing, q = nothing, m = nothing,
                    u₀ = nothing, q₀ = nothing, m₀ = nothing,
                    Qᵤ = nothing, Qₛ = nothing, Qₘ = nothing,
                    store_vector = true, store_lengths = true)
 ```
 """
 struct ControlParameters
-    du::Union{NamedTuple, Nothing}
-    dq::Union{NamedTuple, Nothing}
+    u::Union{NamedTuple, Nothing}
+    q::Union{NamedTuple, Nothing}
     m::Union{NamedTuple, Nothing}
     u₀::Union{NamedTuple, Nothing}
     q₀::Union{NamedTuple, Nothing}
@@ -78,17 +81,17 @@ struct ControlParameters
     Qₛ::Union{NamedTuple, Nothing}
     Qₘ::Union{Symmetric, Diagonal, Nothing}
     vector::Union{Vector, Nothing}
-    du_length::Union{Int, Nothing}
-    dq_length::Union{Int, Nothing}
+    u_length::Union{Int, Nothing}
+    q_length::Union{Int, Nothing}
     m_length::Union{Int, Nothing}
 
-    function ControlParameters(; du = nothing, dq = nothing, m = nothing,
+    function ControlParameters(; u = nothing, q = nothing, m = nothing,
                                 u₀ = nothing, q₀ = nothing, m₀ = nothing,
                                 Qᵤ = nothing, Qₛ = nothing, Qₘ = nothing,
                                 store_vector = true, store_lengths = true)
-        # Check for aliasing issues - fields should not share memory
-        check_shared_references(du, "du")
-        check_shared_references(dq, "dq")
+        # Ensure control entries and priors are independent objects.
+        check_shared_references(u, "u")
+        check_shared_references(q, "q")
         check_shared_references(m, "m")
         check_shared_references(u₀, "u₀")
         check_shared_references(q₀, "q₀")
@@ -96,33 +99,25 @@ struct ControlParameters
         check_shared_references(Qᵤ, "Qᵤ")
         check_shared_references(Qₛ, "Qₛ")
 
-        if store_vector
-            vector = vectorize_controls(du, dq, m)
-        else
-            vector = nothing
-        end
+        # Optionally cache flattened controls for Optim/ForwardDiff style interfaces.
+        vector = store_vector ? vectorize_controls(u, q, m) : nothing
 
-        if store_lengths
-            du_length = isnothing(du) ? nothing : length(vec(du))
-            dq_length = isnothing(dq) ? nothing : length(vec(dq))
-            m_length = isnothing(m) ? nothing : length(vec(m))
-        else
-            du_length = nothing
-            dq_length = nothing
-            m_length = nothing
-        end
+        # Segment lengths let `unvec` slice an incoming control vector without recomputing sizes.
+        u_length = store_lengths && !isnothing(u) ? length(vec(u)) : nothing
+        q_length = store_lengths && !isnothing(q) ? length(vec(q)) : nothing
+        m_length = store_lengths && !isnothing(m) ? length(vec(m)) : nothing
 
-        new(du, dq, m, u₀, q₀, m₀, Qᵤ, Qₛ, Qₘ, vector, du_length, dq_length, m_length)
+        new(u, q, m, u₀, q₀, m₀, Qᵤ, Qₛ, Qₘ, vector, u_length, q_length, m_length)
     end
 end
 
 """
-    vectorize_controls(du, dq, m) -> Vector
+    vectorize_controls(u, q, m) -> Vector
 
 Flatten control parameters into a single vector by concatenating vectorized non-nothing fields.
 """
-function vectorize_controls(du, dq, m)
-    return vcat(vec.([du, dq, m])...)
+function vectorize_controls(u, q, m)
+    return vcat(vec.([u, q, m])...)
 end
 
 """
@@ -135,37 +130,37 @@ function vec(cp::ControlParameters)
     if !isnothing(cp.vector)
         return cp.vector
     else
-        return vectorize_controls(cp.du, cp.dq, cp.m)
+        return vectorize_controls(cp.u, cp.q, cp.m)
     end
 end
 
 """
-    unvec(cp, vector) -> (du, dq, m)
+    unvec(cp, vector) -> (u, q, m)
 
 Reconstruct boundary condition, source, and mass fraction NamedTuples from a flat control vector.
 """
 function unvec(cp::ControlParameters, vector::AbstractVector)
     # Calculate boundaries
-    du_len = cp.du_length
-    dq_len = cp.dq_length
+    u_len = cp.u_length
+    q_len = cp.q_length
     m_len = cp.m_length
     
     idx = 1
-    du = nothing; dq = nothing; m = nothing
+    u = nothing; q = nothing; m = nothing
     
-    if !isnothing(cp.du)
-        du = unvec(cp.du, vector[idx:idx+du_len-1])
-        idx += du_len
+    if !isnothing(cp.u)
+        u = unvec(cp.u, vector[idx:idx+u_len-1])
+        idx += u_len
     end
     
-    if !isnothing(cp.dq)
-        dq = unvec(cp.dq, vector[idx:idx+dq_len-1])
-        idx += dq_len
+    if !isnothing(cp.q)
+        q = unvec(cp.q, vector[idx:idx+q_len-1])
+        idx += q_len
     end
     
     if !isnothing(cp.m)
         m = unvec(cp.m, vector[idx:idx+m_len-1])
     end
 
-    return du, dq, m
+    return u, q, m
 end
