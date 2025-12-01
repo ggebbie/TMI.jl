@@ -15,15 +15,15 @@ lon = collect(range(0.0,1000.0,length=ngrid[1]))
 tracer = collect(1.0.-lon./xmax)
 
 axes = (lon,)
-wet = trues(ngrid)
+wets = trues(ngrid)
 
-interior = copy(wet)
+interior = copy(wets)
 interior[begin] = false
 interior[end] = false
 
 wrap = (false,)
 Δ = [CartesianIndex(1,),CartesianIndex(-1,)]
-γ = Grid(axes,wet,interior,wrap,Δ)
+γ = Grid(axes,wets,interior,wrap,Δ)
 n = neighbors(γ)
 m0 = massfractions_isotropic(γ)
 m0 = (west = m0[1], east = m0[2])
@@ -48,7 +48,7 @@ q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)
 c_noncons = steadyinversion(A,b,γ; q = q)
 Δc = c_noncons - c
 
-
+q
 # Deep-copy priors so each control entry owns its storage.
 u₀ = (c = deepcopy(b), c_q = deepcopy(b))
 q₀ = (c = nothing, c_q = deepcopy(q),)
@@ -103,11 +103,11 @@ fg!(F, G, x) = optim_fg_constrained_global_costfunction!(F, G, x, controls, c_ob
 x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
 lb = -Inf
 ub = +Inf
-
-_, _, xstart =unvec(controls, x0)
-
-
 using Optim, LineSearches, BenchmarkTools
+
+
+@btime fg!(NaN, zero.(x0), x0)
+
 @btime result_opt_fg = Optim.optimize(
     Optim.only_fg!(fg!),
     lb, ub, x0,
@@ -121,6 +121,9 @@ using Optim, LineSearches, BenchmarkTools
 
 uopt, qopt, xopt =unvec(controls, result_opt_fg.minimizer)
 mopt = softmax_massfractions(xopt; α = 5.0)
+
+
+@btime deepcopy(q₀)
 
 vec(q₀)
 vec(qopt)

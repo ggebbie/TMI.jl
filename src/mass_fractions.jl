@@ -82,21 +82,23 @@ function Base.vec(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where nam
     return uvec
 end
 
-function unvec!(u::MassFraction,uvec::Vector{T}) where T <: Real
-    I = findall(wet(u)) # findall seems slow
-    for (ii,vv) in enumerate(I)
-        u.fraction[vv] = uvec[ii]
+function unvec!(u::MassFraction, uvec::Vector{T}; idx::Int = 1, return_idx::Bool = false) where T <: Real
+    mask = wet(u)
+    data = u.fraction
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] = uvec[idx]
+            idx += 1
+        end
     end
+    return return_idx ? idx : nothing
 end
 
-function unvec!(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names
-    nlo = 1
-    nhi = 0
+function unvec!(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}, uvec::Vector; idx::Int = 1, return_idx::Bool = false) where names
     for v in u
-        nhi += sum(wet(v))
-        unvec!(v,uvec[nlo:nhi])
-        nlo = nhi + 1
+        idx = unvec!(v, uvec; idx = idx, return_idx = true)
     end
+    return return_idx ? idx : nothing
 end
 
 function unvec(u₀::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names

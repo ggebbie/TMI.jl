@@ -84,6 +84,9 @@ function softmax_massfractions(m::NamedTuple; α::Real = 1)
     end
 
     n_neighbors = neighbors(m, γ)
+    max_neighbors = maximum(n_neighbors.tracer)
+    untransformed_fractions = Vector{T}(undef, max(max_neighbors, 1))
+    transformed_fractions = similar(untransformed_fractions)
 
     transformed_m = similar(m)
 
@@ -91,7 +94,6 @@ function softmax_massfractions(m::NamedTuple; α::Real = 1)
     for I in Iint
         nneigh = n_neighbors.tracer[I]
         nneigh == 0 && continue
-        untransformed_fractions = Vector{T}(undef, nneigh)
         j = 1
         for k in m_keys
             if m[k].γ.wet[I]
@@ -99,7 +101,23 @@ function softmax_massfractions(m::NamedTuple; α::Real = 1)
                 j += 1
             end
         end
-        transformed_fractions = softmax_vector(untransformed_fractions; α = α)
+
+        # softmax with reused buffers to avoid per-cell allocations
+        vmax = untransformed_fractions[1] / α
+        @inbounds for t in 2:nneigh
+            val = untransformed_fractions[t] / α
+            val > vmax && (vmax = val)
+        end
+
+        denom = zero(T)
+        @inbounds for t in 1:nneigh
+            transformed_fractions[t] = exp(untransformed_fractions[t] / α - vmax)
+            denom += transformed_fractions[t]
+        end
+        inv_denom = inv(denom)
+        @inbounds for t in 1:nneigh
+            transformed_fractions[t] *= inv_denom
+        end
 
         j = 1
         for k in m_keys

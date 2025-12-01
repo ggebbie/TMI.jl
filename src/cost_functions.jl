@@ -360,6 +360,28 @@ function unconstrained_global_costfunction(control_vector::Vector,
     
 end
 
+@inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
+    idx = 1
+    if !isnothing(controls.u)
+        guv = vec(gu)
+        len = length(guv)
+        copyto!(G, idx, guv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.q)
+        gqv = vec(gq)
+        len = length(gqv)
+        copyto!(G, idx, gqv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.m)
+        gmv = vec(gm)
+        len = length(gmv)
+        copyto!(G, idx, gmv, 1, len)
+    end
+    return nothing
+end
+
 function constrained_global_costfunction(control_vector::Vector, 
                                            controls::ControlParameters, c_obs, γ; 
                                            locs = nothing, return_gradients = false)
@@ -493,7 +515,7 @@ function optim_fg_unconstrained_global_costfunction!(F, G, control_vector,
                                             locs = locs, return_gradients = return_gradients)
 
     if G !== nothing
-        G .= vcat(vec.([gu, gq, gm])...)
+        _write_gradient!(G, gu, gq, gm, controls)
     end
 
     if F !== nothing
@@ -525,7 +547,7 @@ function optim_fg_constrained_global_costfunction!(F, G, control_vector,
 
     if G !== nothing
         gx = gsoftmax_massfractions(gm, m; α = α)
-        G .= vcat(vec.([gu, gq, gx])...)
+        _write_gradient!(G, gu, gq, gx, controls)
     end
 
     if F !== nothing

@@ -29,7 +29,7 @@ function Observations(values::Union{Vector{T}, Field{T}};
                       W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
     if !isnothing(W)
         # Keep a quick sanity check that weights match the observation count.
-        n = values isa Vector ? length(values) : length(values.tracer)
+        n = values isa Vector ? length(values) : length(vec(values))
         size(W) == (n, n) || error("W must have dimensions ($n, $n) to match the length of values")
     end
 

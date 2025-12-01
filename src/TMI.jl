@@ -67,6 +67,7 @@ export config, download_file,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors, 
+    softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
     Observations, ControlParameters, vectorize_controls,
     zero, 
     gsteadyinversion, gwatermassmatrix, gadjustboundarycondition, 
@@ -75,7 +76,8 @@ export config, download_file,
     prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
     gprior_source_cost, gmodel_observation_cost, 
     gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
-    unconstrained_global_costfunction
+    unconstrained_global_costfunction, optim_fg_constrained_global_costfunction!, 
+    constrained_global_costfunction
     
 
 # export Observations, 
@@ -112,6 +114,7 @@ include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
+include(pkgsrcdir("parameterizations.jl"))
 include(pkgsrcdir("observations.jl"))
 include(pkgsrcdir("control_parameters.jl"))
 include(pkgsrcdir("cost_functions.jl"))
@@ -1471,8 +1474,16 @@ end
 vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
 function vec(u::NamedTuple) 
+    # grab all non-nothing values
+    nn = collect(filter(!isnothing, values(u)))
 
-    ufirst = first(filter(!isnothing, values(u)))
+    # if everything is `nothing`, return an empty vector
+    if isempty(nn)
+        return Float64[]   # or Float64[] or whatever element type you prefer
+    end
+
+    # use the first non-nothing entry to figure out T
+    ufirst = first(nn)
 
     if ufirst isa Union{Field, BoundaryCondition, Source}
         T = eltype(ufirst.tracer)
@@ -1539,23 +1550,25 @@ end
     u need to be known at runtime.
     Supports nested NamedTuples.
 """
-function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
-    I = findall(wet(u)) # findall seems slow
-    for (ii,vv) in enumerate(I)
-        u.tracer[vv] = uvec[ii]
-    end
-end
-
-function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-    nlo = 1
-    nhi = 0
-    for v in u
-        if !isnothing(v)
-            nhi += sum(wet(v))
-            unvec!(v,uvec[nlo:nhi])
-            nlo = nhi + 1
+function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}}, uvec::Vector{T}; idx::Int = 1, return_idx::Bool = false) where T <: Real
+    mask = wet(u)
+    data = u.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] = uvec[idx]
+            idx += 1
         end
     end
+    return return_idx ? idx : nothing
+end
+
+function unvec!(u::NamedTuple, uvec::Vector; idx::Int = 1, return_idx::Bool = false) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            idx = unvec!(v, uvec; idx = idx, return_idx = true)
+        end
+    end
+    return return_idx ? idx : nothing
 end
 
 function one!(u::NamedTuple) #where {N, T <: Real}
@@ -1596,7 +1609,7 @@ end
 function zero!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
     if length(u) > 1
        u.tracer .= NaN
-       u.tracer[u.γ.wet] .= 0.0
+       u.tracer[wet(u)] .= 0.0
     else 
         u.tracer .= 0.0
     end
