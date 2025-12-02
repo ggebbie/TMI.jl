@@ -6,21 +6,11 @@ using TMI
 using Statistics
 using FiniteDiff
 using Test
-using BenchmarkTools
+using Optim, LineSearches, BenchmarkTools
 percent_difference(x, y) = @. 100 * (x - y) / y
 
 TMIversion = "modern_180x90x33_GH11_GH12"
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
-
-@btime lu(A)
-
-findnz(Alu.L * Alu.U)
-
-using SparseArrays
-
-findnz(Alu)
-# set them as surface boundary condition
-
 
 cobs = (θ =  readfield(TMIfile, "θ", γ),
     S = readfield(TMIfile, "Sp", γ),
@@ -58,33 +48,43 @@ x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
 lb = -Inf
 ub = +Inf
 
-using Optim, LineSearches, BenchmarkTools
+@btime fg!(NaN, zero.(x0), x0);
 
-fg!(NaN, zero.(x0), x0)
+fg!(F, G, x) = optim_fg_constrained_global_costfunction2!(F, G, x, controls, c_obs, γ; locs=nothing)
+x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
+lb = -Inf
+ub = +Inf
 
-@btime fg!(NaN, zero.(x0), x0)
-
+tmp = zero.(x0)
+@btime optim_fg_constrained_global_costfunction2!(NaN, tmp, x0, controls, c_obs, γ; locs=nothing);
+@btime optim_fg_constrained_global_costfunction2!(NaN, nothing, x0, controls, c_obs, γ; locs=nothing);
+@btime fg!(NaN, tmp, x0);
+fg!(NaN, tmp, x0);
 
 result_opt_fg = Optim.optimize(
-    Optim.only_fg!(fg!),
-    lb, ub, x0,
-    Fminbox(LBFGS(;m = 5, 
-            alphaguess = LineSearches.InitialHagerZhang(α0=NaN), 
-            linesearch = LineSearches.HagerZhang())
-            ),
+    Optim.only_fg!(fg!), x0,
+    LBFGS(linesearch = LineSearches.BackTracking()),
     Optim.Options(f_abstol = 1e-12, g_tol = 1e-12,
-                  iterations = 2500, store_trace = false,
-                  show_trace = false, show_warnings = false));
+                  iterations = 5, store_trace = false,
+                  show_trace = true, show_warnings = false));
 
-uopt, qopt, xopt =unvec(controls, result_opt_fg.minimizer)
-mopt = softmax_massfractions(xopt; α = 5.0)
+@btime result_opt_fg = Optim.optimize(
+    Optim.only_fg!(fg!), x0,
+    LBFGS(linesearch = LineSearches.BackTracking()),
+    Optim.Options(f_abstol = 1e-12, g_tol = 1e-12,
+                  iterations = 1, store_trace = false,
+                  show_trace = true, show_warnings = false));
 
+# result_opt_fg = Optim.optimize(
+#     Optim.only_fg!(fg!),
+#     lb, ub, x0,
+#     Fminbox(LBFGS(;m = 5, 
+#             alphaguess = LineSearches.InitialHagerZhang(α0=NaN), 
+#             linesearch = LineSearches.HagerZhang())
+#             ),
+#     Optim.Options(f_abstol = 1e-12, g_tol = 1e-12,
+#                   iterations = 2500, store_trace = false,
+#                   show_trace = false, show_warnings = false));
 
-@btime deepcopy(q₀)
-
-vec(q₀)
-vec(qopt)
-
-
-vec(u₀)
-vec(uopt)
+# uopt, qopt, xopt =unvec(controls, result_opt_fg.minimizer)
+# mopt = softmax_massfractions(xopt; α = 5.0)

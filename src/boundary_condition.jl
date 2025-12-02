@@ -458,6 +458,8 @@ end
 function adjustboundarycondition!(b::BoundaryCondition, u::BoundaryCondition; r::Real = 1.0)
     # write it out so b changes when returned
     b.tracer[b.wet] += r .* u.tracer[u.wet] 
+    # @. b.tracer[b.wet] += r * u.tracer[u.wet] 
+
 end
 function adjustboundarycondition!(b::NamedTuple, u::NamedTuple; r::Real = 1.0)
     # only the bkeys are certain to be type BoundaryCondition

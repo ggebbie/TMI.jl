@@ -6,6 +6,7 @@ using TMI
 using Statistics
 using FiniteDiff
 using Test
+using BenchmarkTools
 
 percent_difference(x, y) = @. 100 * (x - y) / y
 
@@ -98,15 +99,25 @@ J, Jg = constrained_global_costfunction(control_vector, controls, c_obs, γ; ret
 @test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
 
 
+x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
+objective(x) = optim_fg_constrained_global_costfunction2!(NaN, nothing, x, controls, c_obs, γ; locs=nothing)
+Jg_finite = FiniteDiff.finite_difference_gradient(objective, x0, Val{:central})
+Jg = zero(x0)
+J = optim_fg_constrained_global_costfunction2!(NaN, Jg, x0, controls, c_obs, γ; locs=nothing)
+@test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
+
 
 fg!(F, G, x) = optim_fg_constrained_global_costfunction!(F, G, x, controls, c_obs, γ; locs=nothing)
+fg2!(F, G, x) = optim_fg_constrained_global_costfunction2!(F, G, x, controls, c_obs, γ; locs=nothing)
+
 x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
 lb = -Inf
 ub = +Inf
 using Optim, LineSearches, BenchmarkTools
 
 
-@btime fg!(NaN, zero.(x0), x0)
+@btime fg!(NaN, zero.(x0), x0);
+@btime fg2!(NaN, zero.(x0), x0);
 
 @btime result_opt_fg = Optim.optimize(
     Optim.only_fg!(fg!),

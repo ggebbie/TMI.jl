@@ -476,6 +476,7 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
         #for I in Iint
             nrow = R[I]
             if m1.γ.wet[I]
+                #can this be precomputed? 
                 Istep, _ = step_cartesian(I, m1.position, γ)
                 counter += 1
                 ilist[counter] = nrow
@@ -490,7 +491,7 @@ end
 
 function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
 
-    nfield = sum(γ.wet)
+    # nfield = sum(γ.wet)
 
     # for bounds checking
     Rfull = CartesianIndices(γ.wet)
@@ -501,20 +502,20 @@ function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
     Iint = cartesianindex(γ.interior)
 
     # allocate water mass matrix
-    nfield = sum(γ.wet)
+    # nfield = sum(γ.wet)
     # Note, flipped sign of interior points
     #A = spdiagm(nfield,nfield,ones(nfield))
-    gm = similar(m)
+    gm = deepcopy(m)
     [gm1.fraction .= NaN for gm1 in gm]
 
-    counter = nfield
+    # counter = nfield
     for I in Iint
         for gm1 in gm
         #for I in Iint
             nrow = R[I]
             if gm1.γ.wet[I]
                 Istep, _ = step_cartesian(I, gm1.position, γ)
-                counter += 1
+                # counter += 1
                 gm1.fraction[I] = -gA[nrow,R[Istep]]
             end
         end
@@ -540,7 +541,6 @@ function local_watermass_matrix(c::NamedTuple,
     #for i1 in eachindex(m)
     i = 0; j = 0
     for m1 in m
-
         if m1.γ.wet[I]
             j += 1
             i = 0

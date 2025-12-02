@@ -250,26 +250,51 @@ end
 Residual between model state and observations (fields or sampled vectors); handles Field,
 Vector, or Observations inputs.
 """
-function model_data_misfit(c::Field, c_obs::Union{Vector, Field, Observations},
+# function model_data_misfit(c::Field, c_obs::Union{Vector, Field, Observations},
+#                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing) where G
+#     # n = (c - c_obs)
+#     if c_obs isa Field
+#         n = c - c_obs
+#         # n = (Ec - c_obs)
+#     elseif c_obs isa Vector
+#         y = observe(c, locs, γ)
+#         n = y .- c_obs
+#     elseif c_obs isa Observations
+#         c_obs_val = c_obs.values
+#         if c_obs_val isa Vector
+#             y = observe(c, c_obs.wis, γ) #use pre-computed weights
+#             n = y .- c_obs_val
+#         else
+#             n = c - c_obs_val
+#         end
+#     end
+#     return n
+# end
+
+function model_data_misfit(c::Field, c_obs::Field,
                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing) where G
     # n = (c - c_obs)
-    if c_obs isa Field
-        n = c - c_obs
-        # n = (Ec - c_obs)
-    elseif c_obs isa Vector
-        y = observe(c, locs, γ)
-        n = y .- c_obs
-    elseif c_obs isa Observations
-        c_obs_val = c_obs.values
-        if c_obs_val isa Vector
-            y = observe(c, c_obs.wis, γ) #use pre-computed weights
-            n = y .- c_obs_val
-        else
-            n = c - c_obs_val
-        end
-    end
+    n = c - c_obs
     return n
 end
+
+function model_data_misfit(c::Field, c_obs::Vector,
+                                  γ::Grid; locs::Union{Nothing, Vector{G}}=nothing) where G
+    # n = (c - c_obs)
+    y = observe(c, locs, γ) #need to specify wis here 
+    n = y .- c_obs
+    return n
+end
+
+function model_data_misfit(c::Field, c_obs::Observations,
+                                  γ::Grid; locs::Union{Nothing, Vector{G}}=nothing) where G
+
+    c_obs_val = c_obs.values
+    n = model_data_misfit(c, c_obs_val, γ; locs=c_obs.locs)
+    return n
+end
+
+
 
 function model_data_misfit(c::NamedTuple, c_obs::NamedTuple,
                                   γ::Grid; locs::Union{Nothing, NamedTuple}=nothing)
@@ -294,23 +319,36 @@ end
 
 Adjoint of `model_data_misfit`: propagate residual sensitivities `dn` back to the state.
 """
-function gmodel_data_misfit(dn::Union{Vector, Field},
-                                    c::Field, c_obs::Union{Vector, Field, Observations}, 
+function gmodel_data_misfit(dn::Field,
+                                    c::Field, c_obs::Field, 
                                   γ::Grid; locs::Union{Nothing, NamedTuple}=nothing)
-    if c_obs isa Field
+    gc = dn
+
+    return gc
+
+end
+
+function gmodel_data_misfit(dn::Vector,
+                                    c::Field, c_obs::Vector, 
+                                  γ::Grid; locs::Union{Nothing, NamedTuple}=nothing)
+    gy = dn 
+    gc = gobserve(gy,c,locs) 
+    return gc
+
+end
+
+
+function gmodel_data_misfit(dn::Union{Vector, Field},
+                                    c::Field, c_obs::Observations, 
+                                  γ::Grid; locs::Union{Nothing, NamedTuple}=nothing)
+    c_obs_val = c_obs.values
+    if c_obs_val isa Field
         gc = dn
-    elseif c_obs isa Vector
+    elseif c_obs_val isa Vector
         gy = dn 
-        gc = gobserve(gy,c,locs) 
-    elseif c_obs isa Observations
-        c_obs_val = c_obs.values
-        if c_obs_val isa Field
-            gc = dn
-        elseif c_obs_val isa Vector
-            gy = dn 
-            gc = gobserve(gy,c,c_obs.locs; wis = c_obs.wis) 
-        end
+        gc = gobserve(gy,c,c_obs.locs; wis = c_obs.wis) 
     end
+    
 
     return gc
 
@@ -408,6 +446,139 @@ function constrained_global_costfunction(control_vector::Vector,
 end
 
 """
+    unconstrained_global_forward(ub, uq, m, controls, c_obs, γ; locs=nothing)
+
+Forward pass for the unconstrained cost: applies control updates, assembles matrices,
+solves the steady state, and returns intermediates needed for the backward pass.
+"""
+function unconstrained_global_forward(ub, uq, m, controls::ControlParameters,
+                                      c_obs, γ; locs = nothing)
+    # b = deepcopy(controls.u₀)
+    # q = deepcopy(controls.q₀)
+    # du = deepcopy(ub)
+    # dq = deepcopy(uq)
+
+    # du_names = keys(ub)
+    # dq_names = keys(uq)
+
+    # for key in keys(b)
+    #     if key ∈ du_names
+    #         adjustboundarycondition!(du[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
+    #         adjustboundarycondition!(b[key], du[key]; r = 1.0) #b = b + du
+    #     end
+    # end
+
+    # for key in keys(q)
+    #     if !isnothing(q[key])
+    #         if key ∈ du_names #mirrors existing behavior; keys(du) drives source updates
+    #             adjustsource!(dq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
+    #             adjustsource!(q[key], dq[key]; r = 1.0)  #q = q + dq
+    #         end
+    #     end
+    # end
+
+    b = ub #just point
+    q = uq
+    du = deepcopy(ub)
+    dq = deepcopy(uq)
+
+    du_names = keys(ub)
+    dq_names = keys(uq)
+
+    @inbounds for key in eachindex(b)
+        if key ∈ du_names
+            adjustboundarycondition!(du[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
+        end
+    end
+
+    @inbounds for key in eachindex(q)
+        if !isnothing(q[key])
+            if key ∈ du_names #mirrors existing behavior; keys(du) drives source updates
+                adjustsource!(dq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
+            end
+        end
+    end
+    A = watermassmatrix(m, γ)
+    Alu = lu(A)
+    c = steadyinversion(Alu, b, q, γ)
+    n = model_data_misfit(c, c_obs, γ; locs=locs)
+
+    J = model_observation_cost(n,c_obs) 
+    J += prior_source_cost(dq, controls.q₀, controls.Qₛ) 
+    J += prior_boundary_cost(du, controls.u₀, controls.Qᵤ)
+    J += prior_mass_fraction_cost(m,controls.m₀,controls.Qₘ)
+
+    return (
+        J = J,
+        b = b,
+        q = q,
+        du = du,
+        dq = dq,
+        m = m,
+        c = c,
+        n = n,
+        A = A,
+        Alu = Alu,
+        du_names = du_names,
+        dq_names = dq_names,
+    )
+end
+
+"""
+    unconstrained_global_backward(state, controls, c_obs, γ; locs=nothing)
+
+Backward pass given intermediates from `unconstrained_global_forward`, returning gradients
+with respect to (u, q, m) in the same structured containers as their inputs.
+"""
+function unconstrained_global_backward(state, controls::ControlParameters, c_obs, γ; locs = nothing)
+    du = state.du
+    dq = state.dq
+    m = state.m
+    c = state.c
+    n = state.n
+    A = state.A
+    Alu = state.Alu
+    b = state.b
+    q = state.q
+    du_names = state.du_names
+    dq_names = state.dq_names
+
+    gdu = zero(du)
+    gdq = zero(dq)
+    gm = similar(controls.m₀)
+
+    # Prior contributions (no model dynamics).
+    gdu_1 = gprior_boundary_cost(du,controls.u₀, controls.Qᵤ)
+    gdq_1 = gprior_source_cost(dq,controls.q₀, controls.Qₛ)
+    gm_1 = gprior_mass_fraction_cost(m, controls.m₀, controls.Qₘ)
+
+    # Start adjoint by differentiating the observation-cost wrt residuals.
+    gn = gmodel_observation_cost(n, c_obs)
+    gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=locs)
+    gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q)
+    gm_2 = gwatermassmatrix(gA_total, m, γ)
+
+    # Accumulate adjoint contributions into control gradients.
+    for key in du_names
+        gadjustboundarycondition!(gdu[key], gdu_1[key])
+        gadjustboundarycondition!(gdu[key], gdu_2[key])
+    end
+
+    for key in dq_names
+        if !isnothing(q[key])
+            gadjustsource!(gdq[key], gdq_1[key], controls.q₀[key])
+            gadjustsource!(gdq[key], gdq_2[key], controls.q₀[key])
+        end
+    end
+
+    for key in keys(gm)
+        gm[key].fraction .= gm_1[key].fraction .+ gm_2[key].fraction
+    end
+
+    return gdu, gdq, gm
+end
+
+"""
     unconstrained_global_costfunction(du, dq, m, controls, c_obs, γ; locs=nothing, return_gradients=false)
 
 Objective for the unconstrained inversion: update `b`/`q` with controls, assemble `A`,
@@ -442,6 +613,7 @@ function unconstrained_global_costfunction(ub, uq, m, controls::ControlParameter
         end
     end
 
+
     A = watermassmatrix(m, γ)
     Alu = lu(A)
 
@@ -469,7 +641,7 @@ function unconstrained_global_costfunction(ub, uq, m, controls::ControlParameter
         # Start adjoint by differentiating the observation-cost wrt residuals.
         gn = gmodel_observation_cost(n, c_obs)
         gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=locs)
-        gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q, γ)
+        gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q)
         gm_2 = gwatermassmatrix(gA_total, m, γ)
 
         # Accumulate adjoint contributions into control gradients.
@@ -515,6 +687,8 @@ function optim_fg_unconstrained_global_costfunction!(F, G, control_vector,
                                             locs = locs, return_gradients = return_gradients)
 
     if G !== nothing
+        gx = gsoftmax_massfractions(gm, m; α = α)
+        # G .= vcat(vec.([gu, gq, gx])...)
         _write_gradient!(G, gu, gq, gm, controls)
     end
 
@@ -547,10 +721,37 @@ function optim_fg_constrained_global_costfunction!(F, G, control_vector,
 
     if G !== nothing
         gx = gsoftmax_massfractions(gm, m; α = α)
+        G = 
         _write_gradient!(G, gu, gq, gx, controls)
     end
 
     if F !== nothing
         return J
+    end
+end
+
+"""
+    optim_fg_constrained_global_costfunction2!(F, G, control_vector, controls, c_obs, γ; locs=nothing)
+
+Optim.jl-compatible objective/gradient using split forward/backward helpers to avoid
+redundant work between passes.
+"""
+function optim_fg_constrained_global_costfunction2!(F, G, control_vector,
+    controls::ControlParameters, c_obs, γ; locs = nothing)
+    u, q, x = unvec(controls, control_vector) #x is a real number vector 
+    α = 5. #an optional parameter to shrink gradients related to this transformation
+    m = softmax_massfractions(x; α = α) #transform x ∈ R to mass fraction that are non-negative and sum to 1
+
+    state = unconstrained_global_forward(u, q, m, controls, c_obs, γ; locs = locs)
+
+    if G !== nothing
+        gu, gq, gm = unconstrained_global_backward(state, controls, c_obs, γ; locs = locs)
+        gx = gsoftmax_massfractions(gm, m; α = α)
+        _write_gradient!(G, gu, gq, gx, controls)
+        GC.gc()
+    end
+
+    if F !== nothing
+        return state.J
     end
 end

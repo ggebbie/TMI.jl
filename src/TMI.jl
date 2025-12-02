@@ -77,7 +77,7 @@ export config, download_file,
     gprior_source_cost, gmodel_observation_cost, 
     gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
     unconstrained_global_costfunction, optim_fg_constrained_global_costfunction!, 
-    constrained_global_costfunction
+    constrained_global_costfunction, optim_fg_constrained_global_costfunction2!
     
 
 # export Observations, 
@@ -2194,8 +2194,6 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
         setsource!(d,q,r)
     end
 
-    # Warning: doesn't this need to loop over the NamedTuple?
-
     # define ldiv with fields
     #c = zeros(d.γ,b.name,b.longname,b.units)
     c = Alu \ d
@@ -2210,15 +2208,18 @@ end
 """
 function steadyinversion(Alu,b::NamedTuple{tracer_names, S}, q::NamedTuple,
                         γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
-    n_tracers = length(tracer_names)
-    c_results = Vector{Field}(undef, n_tracers)
+    # n_tracers = length(tracer_names)
+    # c_results = Vector{Field}(undef, n_tracers)
 
-    for (i, name) in enumerate(tracer_names)
-        b_i = get(b, name, nothing)
-        q_i = get(q, name, nothing)  # q is a NamedTuple
-        c_results[i] = steadyinversion(Alu,b_i,γ;q=q_i, r = r) #Alu \ d
-    end
-    c_nt = NamedTuple{tracer_names}(Tuple(c_results))
+    # for (i, name) in enumerate(tracer_names)
+    #     b_i = get(b, name, nothing)
+    #     q_i = get(q, name, nothing)  # q is a NamedTuple
+    #     c_results[i] = steadyinversion(Alu,b_i,γ;q=q_i, r = r) #Alu \ d
+    # end
+    # c_nt = NamedTuple{tracer_names}(Tuple(c_results))
+    c_nt = map(b, q) do b_i, q_i
+            steadyinversion(Alu, b_i, γ; q = q_i, r = r)
+            end
     return c_nt
 
 end
@@ -2288,6 +2289,78 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu,
     gq = (;zip(tracer_names, gq_results)...)
     return gb, gq, gA_total
 end
+
+
+function gsteadyinversion!(
+    gA_vals::AbstractVector,     # preallocated, length == length(rows_offdiag)
+    gc::Field, c::Field, Alu,
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer};
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    # Solve adjoint system
+    gd = Alu' \ gc    # later you could make this ldiv! if you have a workspace
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]     # row index of wet point 
+        jp = cols_offdiag[k]     # col index of wet point 
+
+        il = wet_inds[ip]        # full-grid index for gd
+        jl = wet_inds[jp]        # full-grid index for c
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    gb = gsetboundarycondition(gd, b)
+    gq = isnothing(q) ? nothing : gsetsource(gd, q, r)
+
+    return gb, gq
+end
+
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu,
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}; r = 1.0) where {b_names, B, q_names, Q}
+
+    tracer_names = keys(gc)
+
+    # Get off-diagonal structure of A once
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    # Allocate gA_vals, to be accumulated by each tracer
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    n_tracers = length(tracer_names)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gb_i, gq_i = gsteadyinversion!(
+            gA_vals, gc[name], c[name], Alu,
+            b_i, q_i, gA_rows, gA_cols; r = r)
+
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+
+    gb = (; zip(tracer_names, gb_results)...)
+    gq = (; zip(tracer_names, gq_results)...)
+
+    return gb, gq, gA_total
+end
+
+
 
 # """
 #     function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
