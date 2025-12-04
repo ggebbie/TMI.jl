@@ -282,14 +282,19 @@ end
 function model_data_misfit(c::Field{T}, c_obs::Vector,
                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing, wis = nothing) where {T, G}
     # n = (c - c_obs)
-    y = observe(c, locs, γ) 
+    if !isnothing(wis)
+        y = observe(c, wis, γ) 
+    elseif !isnothing(locs)
+        y = observe(c, locs, γ) 
+    end
+    
     n = y .- c_obs
+
     return n
 end
 
 function model_data_misfit(c::Field{T}, c_obs::Observations,
                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing, wis = nothing) where {T, G}
-
     c_obs_val = c_obs.values
     n = model_data_misfit(c, c_obs_val, γ; locs=c_obs.locs) #need to specify wis here 
     return n
@@ -337,7 +342,6 @@ function gmodel_data_misfit(dn::Vector,
 
 end
 
-
 function gmodel_data_misfit(dn::Union{Vector, Field{T}},
                                     c::Field{T}, c_obs::Observations, 
                                   γ::Grid; locs::Union{Nothing, NamedTuple}=nothing) where {T}
@@ -348,10 +352,8 @@ function gmodel_data_misfit(dn::Union{Vector, Field{T}},
         gy = dn 
         gc = gobserve(gy,c,c_obs.locs; wis = c_obs.wis) 
     end
-    
 
     return gc
-
 end
 
 function gmodel_data_misfit(gn::NamedTuple, c::NamedTuple, c_obs::NamedTuple,
@@ -368,8 +370,8 @@ function gmodel_data_misfit(gn::NamedTuple, c::NamedTuple, c_obs::NamedTuple,
         gc_results[i] = gmodel_data_misfit(dn_i, c_i, c_obs_i, γ; locs = locs)
     end
     gc_nt = (; zip(tracer_names, gc_results)...)
-    return gc_nt
 
+    return gc_nt
 end
 
 
@@ -381,32 +383,6 @@ solves the steady state, and returns intermediates needed for the backward pass.
 """
 function unconstrained_global_forward(controls::ControlParameters,
                                       c_obs, γ; locs = nothing)
-    # b = deepcopy(controls.u₀)
-    # q = deepcopy(controls.q₀)
-    # du = deepcopy(ub)
-    # dq = deepcopy(uq)
-
-    # du_names = keys(ub)
-    # dq_names = keys(uq)
-
-    # @inbounds for key in keys(b)
-    #     if key ∈ du_names
-    #         adjustboundarycondition!(du[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
-    #         adjustboundarycondition!(b[key], du[key]; r = 1.0) #b = b + du
-    #     end
-    # end
-
-    # @inbounds for key in keys(q)
-    #     if !isnothing(q[key])
-    #         if key ∈ dq_names #mirrors existing behavior; keys(du) drives source updates
-    #             adjustsource!(dq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
-    #             adjustsource!(q[key], dq[key]; r = 1.0)  #q = q + dq
-    #         end
-    #     end
-    # end
-
-    # b = deepcopy(controls.u₀) #may benefit from having a controls .b 
-    # q = deepcopy(controls.q₀)
     b = controls.b #may benefit from having a controls .b 
     q = controls.q
 
@@ -434,8 +410,8 @@ function unconstrained_global_forward(controls::ControlParameters,
     end
 
     A = watermassmatrix(controls.m, γ, controls.mass_fraction_steps)
-    # Alu = lu(A) #could benefit from having an 
-    # Alu = nothing
+    # Alu = lu(A) #avoiding the LU decomposition for now. 
+
     prob = LinearProblem(A,  Vector{Float64}(undef, size(A,1)))
     P = ilu(A; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
@@ -451,13 +427,9 @@ function unconstrained_global_forward(controls::ControlParameters,
 
     return (
         J = J,
-        # du = controls.du,
-        # dq = controls.duq,
-        # m = m,
         c = c,
         n = n,
         A = A,
-        # Alu = Alu
     )
 end
 
@@ -468,36 +440,14 @@ Backward pass given intermediates from `unconstrained_global_forward`, returning
 with respect to (ub, uq, m) in the same structured containers as their inputs.
 """
 function unconstrained_global_backward!(state, controls::ControlParameters, c_obs, γ; locs = nothing)
-    # m = state.m
     c = state.c
     n = state.n
     A = state.A
 
-    #TO-DO, replace these with inplace 
-    #could also use a zero! function. would save on three allocation here
-    # gdu = zero(controls.dub) 
-    # gdq = zero(controls.duq)
-    # @inbounds for key in eachindex(controls.gdub)
-    #     zero!(controls.gdub[key])
-    # end
-
-    # @inbounds for key in eachindex(controls.gduq)
-    #     if !isnothing(controls.gduq[key])
-    #         zero!(controls.gduq[key])
-    #     end
-    # end
     zero!(controls.gdub)
     zero!(controls.gduq)
     zero!(controls.gm)
 
-    # gm = similar(controls.m₀) #this is expensive, I thnk. 
-    #if starting in-place functions, then  need to zero out the m's gds amd gdqs. 
-    #its probably worth it for all of these. it will be as 
-    #simple (hopefully) as 
-
-    # Prior contributions (no model dynamics).
-    # gdu_1 = gprior_boundary_cost(controls.dub,controls.u₀, controls.Qᵤ)
-    # gdq_1 = gprior_source_cost(controls.duq,controls.q₀, controls.Qₛ)
     gprior_boundary_cost!(controls.gdub, controls.dub,controls.u₀, controls.Qᵤ)
     gprior_source_cost!(controls.gduq, controls.duq,controls.q₀, controls.Qₛ)
     gprior_mass_fraction_cost!(controls.gm, controls.m, controls.m₀, controls.Qₘ)
@@ -513,27 +463,8 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
 
     gA_total = gsteadyinversion!(controls.gdub, controls.gduq, 
                                  gc, c, A, cache, controls.b, controls.q, γ)
-    # gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, cache, controls.b, controls.q, γ)
-    # gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q)
 
-    # gm_2 = gwatermassmatrix(gA_total, controls.m, γ, controls.mass_fraction_steps)
     gwatermassmatrix!(controls.gm, gA_total, controls.m, γ, controls.mass_fraction_steps)
-    # Accumulate adjoint contributions into control gradients.
-    # @inbounds for key in eachindex(controls.gdub)
-    #     # gadjustboundarycondition!(controls.gdub[key], gdu_1[key])
-    #     gadjustboundarycondition!(controls.gdub[key], gdu_2[key])
-    # end
-
-    # @inbounds for key in eachindex(controls.gduq)
-    #     if !isnothing(controls.q[key])
-    #         # gadjustsource!(controls.gduq[key], gdq_1[key], controls.q₀[key])
-    #         gadjustsource!(controls.gduq[key], gdq_2[key], controls.q₀[key])
-    #     end
-    # end
-
-#    @inbounds for key in eachindex(controls.gm)
-#         controls.gm[key].fraction .+= gm_2[key].fraction
-#     end
 
 end
 
@@ -618,7 +549,6 @@ end
 #             end
 #         end
 #     end
-
 
 #     A = watermassmatrix(m, γ)
 #     Alu = lu(A)

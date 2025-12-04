@@ -49,3 +49,21 @@ function Observations(values::Union{Vector{T}, Field{T}};
 
     return Observations{T, VType, WIType}(values, locs, wis, W)
 end
+
+
+function observe(c::Field{T}, c_obs::Observations, γ)::Vector{T} where {T <: Real,R}
+    return observe(c, c_obs.wis, γ)
+end
+
+
+function gobserve(gy::Vector{T},c::Field{T}, c_obs::Observations, γ) where T <: Real
+
+    #initialize gc this sneaky way
+    gc = 0.0 * c
+    for ii in eachindex(gy)
+        # interpweights repeats some calculations
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ; wis = c_obs.wis)[c.γ.wet]
+    end
+
+    return gc
+end

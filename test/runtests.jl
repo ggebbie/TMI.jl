@@ -1,7 +1,8 @@
 using Test
 using TMI
-using LinearAlgebra: lu
+using LinearAlgebra: Diagonal, lu
 using SparseArrays
+using Random
 
 function compare_controls(ubc,ubc2,testval)
     irand = rand(1:sum(ubc.wet))
@@ -23,4 +24,6 @@ end
     include("test_massfractions.jl")
 
     include("test_1d.jl")
+
+    include("test_inversion.jl")
 end

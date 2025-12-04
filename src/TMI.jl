@@ -1840,6 +1840,8 @@ function gobserve(gy::Vector{T},c::Field{T},locs; wis =nothing) where T <: Real
     return gc
 end
 
+
+
 """
     function location_obs(field, locs, γ)
 """
