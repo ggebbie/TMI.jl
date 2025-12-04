@@ -17,7 +17,7 @@ using OrderedCollections
 using Downloads
 
 #Anthony imports 
-using LinearSolve, IncompleteLU
+# using LinearSolve, IncompleteLU
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
