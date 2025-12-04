@@ -81,8 +81,10 @@ end
 
 """
     function cartesianindex(file)
-    Read and assemble the grid coordinates
-    according to the legacy MATLAB code (z,y,x order).
+
+Read and assemble the grid coordinates
+according to the legacy MATLAB code (z,y,x order).
+
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
@@ -98,7 +100,8 @@ end
 
 """
     function axislabels(file)
-    Read and assemble the grid properties.
+
+Read and assemble the grid properties.
 # Arguments
 - `file`: TMI NetCDF file name
 # Output
@@ -112,7 +115,7 @@ function axislabels(file::String)
 end
 
 """
-function gridsize(TMIversion)
+    function gridsize(TMIversion)
 
 Parse the TMIversion string for the grid size
 

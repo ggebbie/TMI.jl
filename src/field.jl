@@ -1,18 +1,18 @@
 """
     struct Field
 
-    This structure permits the grid to be 
-    automatically passed to functions with
-    the tracer field.
+ This structure permits the grid to be 
+ automatically passed to functions with
+ the tracer field.
 
-    This structure assumes the Tracer type to be 
-    three-dimensional.
+ This structure assumes the Tracer type to be 
+ three-dimensional.
 
-    tracer::AbstractArray{T,N}
-    γ::Grid{A,N}
-    name::Symbol
-    longname::String
-    units::String
+ tracer::AbstractArray{T,N}
+ γ::Grid{A,N}
+ name::Symbol
+ longname::String
+ units::String
 """
 struct Field{T <: Real,R <: Real,N,F <: AbstractArray{T,N}}
     tracer::F
