@@ -7,6 +7,7 @@ using Statistics
 using FiniteDiff
 using Test
 using BenchmarkTools
+using Optim, LineSearches, BenchmarkTools
 
 percent_difference(x, y) = @. 100 * (x - y) / y
 
@@ -49,13 +50,12 @@ q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)
 c_noncons = steadyinversion(A,b,γ; q = q)
 Δc = c_noncons - c
 
-q
 # Deep-copy priors so each control entry owns its storage.
 u₀ = (c = deepcopy(b), c_q = deepcopy(b))
 q₀ = (c = nothing, c_q = deepcopy(q),)
 c0 = steadyinversion(Alu,u₀, q₀, γ)
 Alu = lu(A)
-
+TMI.zero!(u₀)
 
 # Controls and priors -------------------------------------------------------
 ub = deepcopy(u₀)
@@ -64,9 +64,12 @@ Qᵤ = map(v -> Diagonal(one.(vec(v))), ub)
 Qₛ = map(v -> isnothing(v) ? nothing : Diagonal(one.(vec(v))), uq)
 Qₘ = Diagonal(one.(vec(m0)))
 
-controls = ControlParameters(; u = ub, q = uq, m = m0,
+controls = ControlParameters(; γ = γ, 
+                                ub = ub, uq = uq, m = m0,
                                 u₀ = u₀, q₀ = q₀, m₀ = m0, 
                                 Qᵤ = Qᵤ, Qₛ = Qₛ, Qₘ = Qₘ)
+
+
 
 # Objective and gradient check for pointwise inversion ---------------------------------------------
 obs_loc = [lon[2]]                                                           # single-point example
@@ -75,49 +78,38 @@ W_pt = map(vals -> Diagonal(one.(vals)), observed_vals)
 c_obs = map((vals, w) -> Observations(vals; locs = obs_loc, γ = γ, W = w), observed_vals, W_pt)
 
 control_vector = randn(length(vec(controls)))
-objective(x) = unconstrained_global_costfunction(x, controls, c_obs, γ)
+objective(x) = optim_fg_constrained_global_costfunction!(NaN, nothing, x, controls, c_obs, γ)
 Jg_finite = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
-J, Jg = unconstrained_global_costfunction(control_vector, controls, c_obs, γ; return_gradients = true)
-
+Jg = zero(control_vector)
+J = optim_fg_constrained_global_costfunction!(NaN, Jg, control_vector, controls, c_obs, γ)
 @test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
 
 # Objective and gradient check for full field inversion ---------------------------------------------
 W_full = map(v -> Diagonal(one.(vec(v))), c0)                                # full-field, unit weights
 c_obs = map((v, w) -> Observations(v; W = w), c0, W_full)                    # full-field obs
-
 control_vector = randn(length(vec(controls)))
 
-objective(x) = unconstrained_global_costfunction(x, controls, c_obs, γ)
+objective(x) = optim_fg_constrained_global_costfunction!(NaN, nothing, x, controls, c_obs, γ)
 Jg_finite = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
-J, Jg = unconstrained_global_costfunction(control_vector, controls, c_obs, γ; return_gradients = true)
+Jg = zero(control_vector)
+J = optim_fg_constrained_global_costfunction!(NaN, Jg, control_vector, controls, c_obs, γ)
 @test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
-
-control_vector = randn(length(vec(controls)))
-objective(x) = constrained_global_costfunction(x, controls, c_obs, γ; return_gradients = false)
-Jg_finite = FiniteDiff.finite_difference_gradient(objective, control_vector, Val{:central})
-J, Jg = constrained_global_costfunction(control_vector, controls, c_obs, γ; return_gradients = true)
-@test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
-
-
-x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
-objective(x) = optim_fg_constrained_global_costfunction2!(NaN, nothing, x, controls, c_obs, γ; locs=nothing)
-Jg_finite = FiniteDiff.finite_difference_gradient(objective, x0, Val{:central})
-Jg = zero(x0)
-J = optim_fg_constrained_global_costfunction2!(NaN, Jg, x0, controls, c_obs, γ; locs=nothing)
-@test all(abs.(percent_difference(Jg_finite, Jg)) .< 0.1) #all within 1 percent 
-
 
 fg!(F, G, x) = optim_fg_constrained_global_costfunction!(F, G, x, controls, c_obs, γ; locs=nothing)
-fg2!(F, G, x) = optim_fg_constrained_global_costfunction2!(F, G, x, controls, c_obs, γ; locs=nothing)
 
 x0 = vcat([vec(u₀), vec(q₀), randn(length(vec(m0)))]...)
+
 lb = -Inf
 ub = +Inf
-using Optim, LineSearches, BenchmarkTools
+G =zero.(x0)
+@btime fg!(NaN, G, x0);
+@btime fg!(NaN, nothing, x0);
 
-
-@btime fg!(NaN, zero.(x0), x0);
-@btime fg2!(NaN, zero.(x0), x0);
+fg!(NaN, nothing, x0)
+G = zero.(x0)
+fg!(NaN, G, x0)
+G2= deepcopy(G)
+fg!(NaN, G, x0)
 
 @btime result_opt_fg = Optim.optimize(
     Optim.only_fg!(fg!),

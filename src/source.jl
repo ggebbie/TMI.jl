@@ -91,6 +91,32 @@ function adjustsource!(q::Source,u::Source; r::Real = 1.0)
         q.tracer[q.γ.interior] += r .* u.tracer[u.γ.interior]
     end        
 end
+function adjustsource!(q::Source{T}, u::AbstractVector{T};
+                       idx::Int = 1,
+                       return_idx::Bool = false,
+                       r::Real = 1.0) where {T<:Real}
+    mask = q.γ.interior
+    data = q.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* u[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+function adjustsource!(q::NamedTuple,
+                       uvec::AbstractVector;
+                       idx::Int = 1,
+                       return_idx::Bool = false,
+                       r::Real = 1.0)
+    for v in q
+        if !isnothing(v)
+            idx = adjustsource!(v, uvec; idx = idx, return_idx = true, r = r)
+        end
+    end
+    return return_idx ? idx : nothing
+end
 function adjustsource!(q::NamedTuple,u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     for qkey in keys(q)
         if haskey(u,qkey)

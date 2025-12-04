@@ -16,6 +16,8 @@ using UnicodePlots
 using OrderedCollections
 using Downloads
 
+#Anthony imports 
+using LinearSolve, IncompleteLU
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
@@ -66,18 +68,22 @@ export config, download_file,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors, 
-    softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
+    massfractions, massfractions_isotropic, neighbors
+
+export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
     Observations, ControlParameters, vectorize_controls,
     zero, 
-    gsteadyinversion, gwatermassmatrix, gadjustboundarycondition, 
+    gsteadyinversion, gwatermassmatrix, gwatermassmatrix!, gadjustboundarycondition, 
     gadjustboundarycondition!, gadjustsource!, 
     model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
     prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
     gprior_source_cost, gmodel_observation_cost, 
     gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
     unconstrained_global_costfunction, optim_fg_constrained_global_costfunction!, 
-    constrained_global_costfunction, optim_fg_constrained_global_costfunction2!
+    constrained_global_costfunction, optim_fg_constrained_global_costfunction2!, 
+    optim_fg_constrained_global_costfunction3!, 
+    softmax_massfractions!, watermassmatrix!, precompute_mass_fraction_steps, 
+    replacesource!, steadyinversion2, gprior_boundary_cost!, gprior_source_cost!
     
 
 # export Observations, 
@@ -1447,6 +1453,44 @@ function setsource!(d::Field{T},q::Source{T},r=1.0) where T<: Real
     d.tracer[d.γ.interior] -= r * q.tracer[q.γ.interior]
 end
 
+# Apply one source to another source (in-place).
+function setsource!(d::Source{T}, q::Source{T}; r=1.0) where T<: Real
+    d.tracer[d.γ.interior] .-= r .* q.tracer[q.γ.interior]
+end
+
+# Apply a collection of sources to a collection of fields.
+function setsource!(d::NamedTuple, q::NamedTuple; r=1.0)
+    for key in keys(q)
+        if haskey(d, key) && isnothing(q[key])
+            setsource!(d[key], q[key]; r)
+        end
+    end
+end
+
+# Apply one source to another source (in-place).
+function replacesource!(d::Source{T}, q::Source{T}) where T<: Real
+    d.tracer .= q.tracer
+end
+
+# Apply a collection of sources to a collection of fields.
+function replacesource!(d::NamedTuple, q::NamedTuple)
+    for key in keys(q)
+        if haskey(d, key) && !isnothing(q[key])
+            replacesource!(d[key], q[key])
+        end
+    end
+end
+
+
+# Apply a collection of sources with per-source ratios.
+function setsource!(d::NamedTuple, q::NamedTuple, r::NamedTuple)
+    keys(q) == keys(r) || error("setsource!: key mismatch between q and r")
+    for key in keys(q)
+        haskey(d, key) && setsource!(d[key], q[key], r[key])
+    end
+    return d
+end
+
 """
     function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
 
@@ -2130,7 +2174,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)
@@ -2180,7 +2224,7 @@ end
 
 
 # function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
 
     # preallocate Field for equation constraints
     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
@@ -2206,7 +2250,7 @@ end
 
     steady inversion for b::NamedTuple with q as required positional argument
 """
-function steadyinversion(Alu,b::NamedTuple{tracer_names, S}, q::NamedTuple,
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::NamedTuple{tracer_names, S}, q::NamedTuple,
                         γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
     # n_tracers = length(tracer_names)
     # c_results = Vector{Field}(undef, n_tracers)
@@ -2224,7 +2268,78 @@ function steadyinversion(Alu,b::NamedTuple{tracer_names, S}, q::NamedTuple,
 
 end
 
-function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,NamedTuple}, q::Union{Nothing,Source},γ::Grid; r=1.0) #where T <: Real
+
+function lsolve(cache::LinearSolve.LinearCache, d::Field{T}, γ) where T
+    c = zeros(γ,d.name,d.longname,d.units)
+    cache.b .= vec(d)
+    sol = solve!(cache)
+    c.tracer[wet(c)] .= sol.u
+    return c
+end
+
+function steadyinversion(cache::LinearSolve.LinearCache,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
+
+    # preallocate Field for equation constraints
+    d = zeros(γ,b.name,b.longname,b.units)
+    
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    return lsolve(cache, d, γ)
+end
+
+
+
+# function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+
+    # preallocate Field for equation constraints
+    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
+
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    return lsolve(cache, d, γ)
+
+end
+
+"""
+    function steadyinversion(Alu,b::NamedTuple{NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
+
+    steady inversion for b::NamedTuple with q as required positional argument
+"""
+function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple{tracer_names, S}, q::NamedTuple,
+                        γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
+    # n_tracers = length(tracer_names)
+    # c_results = Vector{Field}(undef, n_tracers)
+
+    # for (i, name) in enumerate(tracer_names)
+    #     b_i = get(b, name, nothing)
+    #     q_i = get(q, name, nothing)  # q is a NamedTuple
+    #     c_results[i] = steadyinversion(Alu,b_i,γ;q=q_i, r = r) #Alu \ d
+    # end
+    # c_nt = NamedTuple{tracer_names}(Tuple(c_results))
+    c_nt = map(b, q) do b_i, q_i
+            steadyinversion(cache, b_i, γ; q = q_i, r = r)
+            end
+    return c_nt
+
+end
+
+function gsteadyinversion(gc::Field,c::Field,A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU}, 
+                        b::Union{BoundaryCondition,NamedTuple}, q::Union{Nothing,Source},γ::Grid; r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
     gd = Alu' \ gc
 
@@ -2250,7 +2365,7 @@ function gsteadyinversion(gc::Field,c::Field,A, Alu, b::Union{BoundaryCondition,
     end
 end
 
-function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, 
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU}, 
                           b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, 
                           γ::Grid; r=1.0) where {b_names, B, q_names, Q}
 
@@ -2293,7 +2408,7 @@ end
 
 function gsteadyinversion!(
     gA_vals::AbstractVector,     # preallocated, length == length(rows_offdiag)
-    gc::Field, c::Field, Alu,
+    gc::Field, c::Field, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
     b::Union{BoundaryCondition,NamedTuple},
     q::Union{Nothing,Source},
     rows_offdiag::AbstractVector{<:Integer},
@@ -2321,7 +2436,7 @@ function gsteadyinversion!(
     return gb, gq
 end
 
-function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu,
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
     b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}; r = 1.0) where {b_names, B, q_names, Q}
 
     tracer_names = keys(gc)
@@ -2358,6 +2473,155 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu,
     gq = (; zip(tracer_names, gq_results)...)
 
     return gb, gq, gA_total
+end
+
+
+function gsteadyinversion!(
+    gA_vals::AbstractVector,     # preallocated, length == length(rows_offdiag)
+    gc::Field, c::Field, 
+    cache::LinearSolve.LinearCache,
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    # Solve adjoint system
+    gd = lsolve(cache, gc, γ) #Alu' \ gc    # later you could make this ldiv! if you have a workspace
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]     # row index of wet point 
+        jp = cols_offdiag[k]     # col index of wet point 
+
+        il = wet_inds[ip]        # full-grid index for gd
+        jl = wet_inds[jp]        # full-grid index for c
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    gb = gsetboundarycondition(gd, b)
+    gq = isnothing(q) ? nothing : gsetsource(gd, q, r)
+
+    return gb, gq
+end
+
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0) where {b_names, B, q_names, Q}
+
+    tracer_names = keys(gc)
+
+    # Get off-diagonal structure of A once
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    # Allocate gA_vals, to be accumulated by each tracer
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    n_tracers = length(tracer_names)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gb_i, gq_i = gsteadyinversion!(
+            gA_vals, gc[name], c[name], cache,
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+
+    gb = (; zip(tracer_names, gb_results)...)
+    gq = (; zip(tracer_names, gq_results)...)
+
+    return gb, gq, gA_total
+end
+
+
+# In-place variant that accumulates gdu/gdq into provided buffers and does not return them.
+function gsteadyinversion!(
+    gdub::Union{Nothing,BoundaryCondition,NamedTuple},
+    gduq::Union{Nothing,Source,NamedTuple},
+    gA_vals::AbstractVector,
+    gc::Field, c::Field, 
+    cache::LinearSolve.LinearCache,
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    gd = lsolve(cache, gc, γ)
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]
+        jp = cols_offdiag[k]
+
+        il = wet_inds[ip]
+        jl = wet_inds[jp]
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    if !isnothing(gdub)
+        adjustboundarycondition!(gdub, gsetboundarycondition(gd, b); r = 1.0)
+    end
+    if !isnothing(gduq) && !isnothing(q)
+        adjustsource!(gduq, gsetsource(gd, q, r); r = 1.0)
+    end
+
+    return nothing
+end
+
+
+"""
+    gsteadyinversion!(gb_dest, gq_dest, gA_vals, gc, c, A, cache, b, q, γ; r=1.0)
+
+In-place variant that writes boundary/source adjoints directly into preallocated
+`gb_dest`/`gq_dest` buffers (e.g., `controls.gdub`/`controls.gduq`). Accumulates
+`gA_vals` in the same way as the allocating version. Does not return `gb_dest`/`gq_dest`.
+"""
+function gsteadyinversion!(
+    gdub::NamedTuple, gduq::NamedTuple,
+    gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0
+) where {b_names, B, q_names, Q}
+
+    tracer_names = keys(gc)
+
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    for name in tracer_names
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gsteadyinversion!(
+            gdub[name], gduq[name],
+            gA_vals, gc[name], c[name], cache,
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+    return gA_total
 end
 
 

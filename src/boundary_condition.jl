@@ -447,6 +447,7 @@ function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple}, u::Unio
     return bnew
 end
 
+
 """
     function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
 
@@ -455,17 +456,53 @@ end
     warning: if u doesn't contain any boundary condition adjustments,
     nothing will change.
 """
-function adjustboundarycondition!(b::BoundaryCondition, u::BoundaryCondition; r::Real = 1.0)
-    # write it out so b changes when returned
-    b.tracer[b.wet] += r .* u.tracer[u.wet] 
-    # @. b.tracer[b.wet] += r * u.tracer[u.wet] 
-
+function adjustboundarycondition!(b::BoundaryCondition{T},
+                                  u::BoundaryCondition{T};
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0) where {T<:Real}
+    b.tracer[b.wet] .+= r .* u.tracer[u.wet]
+    return return_idx ? idx + count(b.wet) : nothing
 end
-function adjustboundarycondition!(b::NamedTuple, u::NamedTuple; r::Real = 1.0)
+function adjustboundarycondition!(b::BoundaryCondition{T},
+                                  uvec::AbstractVector{T};
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0) where {T<:Real}
+    mask = wet(b)
+    data = b.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+function adjustboundarycondition!(b::NamedTuple,
+                                  u::NamedTuple;
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0)
     # only the bkeys are certain to be type BoundaryCondition
     for bkey in keys(b)
-        haskey(u,bkey) && adjustboundarycondition!(b[bkey], u[bkey]; r = r) 
+        if haskey(u, bkey) && !isnothing(u[bkey])
+            idx = adjustboundarycondition!(b[bkey], u[bkey]; idx = idx, return_idx = true, r = r)
+        end
     end
+    return return_idx ? idx : nothing
+end
+function adjustboundarycondition!(b::NamedTuple,
+                                  uvec::AbstractVector;
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0)
+    for v in b
+        if !isnothing(v)
+            idx = adjustboundarycondition!(v, uvec; idx = idx, return_idx = true, r = r)
+        end
+    end
+    return return_idx ? idx : nothing
 end
 
 # Seems not to be general because gu overwritten.

@@ -101,10 +101,47 @@ function unvec!(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}, uvec::Vecto
     return return_idx ? idx : nothing
 end
 
+function adjustmassfraction!(m::MassFraction{T}, uvec::AbstractVector{T};
+                             idx::Int = 1,
+                             return_idx::Bool = false,
+                             r::Real = 1.0) where {T<:Real}
+    mask = wet(m)
+    data = m.fraction
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+
+function adjustmassfraction!(m::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}, uvec::AbstractVector;
+                             idx::Int = 1,
+                             return_idx::Bool = false,
+                             r::Real = 1.0) where {names}
+    for v in m
+        idx = adjustmassfraction!(v, uvec; idx = idx, return_idx = true, r = r)
+    end
+    return return_idx ? idx : nothing
+end
+
 function unvec(u₀::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names
     u = deepcopy(u₀)
     unvec!(u,uvec)
     return u
+end
+
+function zero!(m::MassFraction)
+    m.fraction[m.γ.wet] .= 0
+    return m
+end
+
+function zero!(m::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    for v in m
+        zero!(v)
+    end
+    return m
 end
 
 function Base.similar(v::Vector{<:MassFraction})
@@ -451,7 +488,7 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
     mlist = Array{Float64}(undef,nm+nfield)
 
     # ones on diagonal
-    for ii in 1:nfield
+    @inbounds @simd for ii in 1:nfield
         ilist[ii] = ii
         jlist[ii] = ii
         mlist[ii] = 1.0
@@ -489,6 +526,84 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
     return sparse(ilist,jlist,mlist)
 end
 
+"""
+    precompute_mass_fraction_steps(m, γ)
+
+Precompute `R[Istep]` targets for each mass fraction in `m`, returning a container
+mirroring `m` (NamedTuple or Vector) where each entry is an array of the same size
+as `γ.R`. Entries are zero for dry/invalid steps.
+"""
+function precompute_mass_fraction_steps(m::Union{NamedTuple,Vector}, γ::Grid)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    function build_targets(m1)
+        steps = zeros(Int, size(R))
+        for I in Iint
+            if m1.γ.wet[I]
+                Istep, inbounds = step_cartesian(I, m1.position, γ)
+                steps[I] = inbounds ? R[Istep] : 0
+            end
+        end
+        return steps
+    end
+
+    return map(build_targets, m)
+end
+
+"""
+    watermassmatrix(m, γ, mass_fraction_steps)
+
+Construct water-mass matrix using precomputed step targets instead of calling
+`step_cartesian` inside the loop. `mass_fraction_steps` mirrors `m`: either a
+`NamedTuple` with matching field names or a `Vector`, and in both cases each
+element is an integer array (e.g. an integer matrix shaped like `γ.R` or a
+flattened vector of length `length(vec(γ.R))`). Each entry gives the linear
+index `R[Istep]` reached from `I` using that fraction's `position`; dry/invalid
+points should hold zero.
+"""
+function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid,
+    mass_fraction_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    nfield = sum(γ.wet)
+    nm = 0
+    for m1 in m
+        nm += length(m1)
+    end
+
+    ilist = Array{Int64}(undef,nm+nfield)
+    jlist = Array{Int64}(undef,nm+nfield)
+    mlist = Array{Float64}(undef,nm+nfield)
+
+    # ones on diagonal
+    @inbounds for ii in 1:nfield
+        ilist[ii] = ii
+        jlist[ii] = ii
+        mlist[ii] = 1.0
+    end
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    counter = nfield
+    for I in Iint
+        for (i, m1) in enumerate(m)
+            m1.γ.wet[I] || continue
+            steps_i = mass_fraction_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            counter += 1
+            ilist[counter] = R[I]
+            jlist[counter] = col
+            mlist[counter] = -m1.fraction[I]
+        end
+    end
+    return sparse(ilist,jlist,mlist)
+end
+
 function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
 
     # nfield = sum(γ.wet)
@@ -518,6 +633,62 @@ function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
                 # counter += 1
                 gm1.fraction[I] = -gA[nrow,R[Istep]]
             end
+        end
+    end
+
+    return gm
+end
+
+"""
+    gwatermassmatrix(gA, m, γ, mass_fraction_steps)
+
+Use precomputed step targets when forming the gradient-version of the
+water-mass matrix. `mass_fraction_steps` mirrors `m` and holds integer step
+targets (see `watermassmatrix(m, γ, mass_fraction_steps)`).
+"""
+function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid,
+    mass_fraction_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    gm = deepcopy(m)
+    [gm1.fraction .= NaN for gm1 in gm]
+
+    for I in Iint
+        for (i, gm1) in enumerate(gm)
+            gm1.γ.wet[I] || continue
+            steps_i = mass_fraction_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            nrow = R[I]
+            gm1.fraction[I] = -gA[nrow, col]
+        end
+    end
+
+    return gm
+end
+
+function gwatermassmatrix!(gm, gA, m::Union{NamedTuple,Vector}, γ::Grid,
+    mass_fraction_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    for I in Iint
+        for (i, gm1) in enumerate(gm)
+            gm1.γ.wet[I] || continue
+            steps_i = mass_fraction_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            nrow = R[I]
+            gm1.fraction[I] += -gA[nrow, col]
         end
     end
 

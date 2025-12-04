@@ -49,16 +49,61 @@ function softmax_vector(v::Vector{T}; α::Real = 1) where T
     return s
 end
 
+"""
+    softmax_vector!(v; α = 1)
+
+In-place softmax of `v`. Overwrites `v` with its temperatured softmax (non-negative,
+sum to 1) using a stable log-sum-exp. Returns `v`. Works with vectors and vector
+views.
+"""
+function softmax_vector!(v::AbstractVector{T}; α::Real = 1) where T
+    isempty(v) && return v
+    invα = inv(α)
+    vmax = @inbounds v[1] * invα
+    @inbounds for i in 2:length(v)
+        val = v[i] * invα
+        val > vmax && (vmax = val)
+    end
+
+    denom = zero(T)
+    @inbounds for i in eachindex(v)
+        v[i] = exp(v[i] * invα - vmax)
+        denom += v[i]
+    end
+    invden = inv(denom)
+    @inbounds for i in eachindex(v)
+        v[i] *= invden
+    end
+    return v
+end
+
 
 """
     gsoftmax_vector(gs, s; α = 1)
 
 Adjoint of `softmax_vector` with temperature `α`. Gradients scale like `1/α`.
+Works with vectors and vector views.
 """
-function gsoftmax_vector(gs::Vector{T}, s::Vector{T}; α::Real = 1) where T
-    length(s) == length(gs) || error("gs and v have length mismatch")
-    gv = (1/α) * s .* (gs .- dot(gs, s))
-    return gv
+function gsoftmax_vector(gs::AbstractVector{T}, s::AbstractVector{T}; α::Real = 1) where T
+    work_gm = similar(s)
+    gsoftmax_vector!(work_gm, gs, s; α = α)
+    return work_gm
+end
+
+"""
+    gsoftmax_vector!(gv, gs, s; α = 1)
+
+In-place adjoint of `softmax_vector`. Writes gradients into `gv` (matching length),
+given upstream `gs` and softmaxed `s`. Works with vectors and views. Returns `gv`.
+"""
+function gsoftmax_vector!(work_gm::AbstractVector{T}, gs::AbstractVector{T}, s::AbstractVector{T}; α::Real = 1) where T
+    (length(s) == length(gs) && length(gs) == length(work_gm)) || error("gsoftmax_vector!: length mismatch")
+    dotgs = dot(gs, s)
+    scale = inv(α)
+    @inbounds for i in eachindex(s)
+        work_gm[i] = scale * s[i] * (gs[i] - dotgs)
+    end
+    return work_gm
 end
 
 """
@@ -76,59 +121,96 @@ function softmax_massfractions(m::NamedTuple; α::Real = 1)
     nint = sum(γ.interior)
     ngrid = size(γ.wet)
 
-    m_keys = collect(keys(m))
-    nf = length(m_keys)
-
-    for k in m_keys
+    for k in eachindex(m)
         sum(m[k].γ.interior) == nint || error("mass fraction grids do not match")
     end
 
     n_neighbors = neighbors(m, γ)
     max_neighbors = maximum(n_neighbors.tracer)
-    untransformed_fractions = Vector{T}(undef, max(max_neighbors, 1))
-    transformed_fractions = similar(untransformed_fractions)
+    work = Vector{T}(undef, max(max_neighbors, 1))
 
     transformed_m = similar(m)
 
-    Iint = cartesianindex(γ.interior)
-    for I in Iint
+    for I in eachindex(n_neighbors.tracer)
         nneigh = n_neighbors.tracer[I]
         nneigh == 0 && continue
         j = 1
-        for k in m_keys
+        for k in eachindex(m)
             if m[k].γ.wet[I]
-                untransformed_fractions[j] = m[k].fraction[I]
+                work[j] = m[k].fraction[I]
                 j += 1
             end
         end
 
-        # softmax with reused buffers to avoid per-cell allocations
-        vmax = untransformed_fractions[1] / α
-        @inbounds for t in 2:nneigh
-            val = untransformed_fractions[t] / α
-            val > vmax && (vmax = val)
-        end
-
-        denom = zero(T)
-        @inbounds for t in 1:nneigh
-            transformed_fractions[t] = exp(untransformed_fractions[t] / α - vmax)
-            denom += transformed_fractions[t]
-        end
-        inv_denom = inv(denom)
-        @inbounds for t in 1:nneigh
-            transformed_fractions[t] *= inv_denom
-        end
+        softmax_vector!(view(work, 1:nneigh); α = α)
 
         j = 1
-        for k in m_keys
+        for k in eachindex(m)
             if m[k].γ.wet[I]
-                transformed_m[k].fraction[I] = transformed_fractions[j]
+                transformed_m[k].fraction[I] = work[j]
                 j += 1
             end
         end
     end
     s = transformed_m
     return s
+end
+
+"""
+    softmax_massfractions!(x; α = 1)
+
+In-place version of `softmax_massfractions`. Softmaxes `x` on each wet cell and
+writes the results back into `x` without allocating new `MassFraction`s. Returns `x`.
+"""
+function softmax_massfractions!(x::NamedTuple; α::Real = 1)
+    firstm = first(x)
+    γ = firstm.γ
+    T = eltype(firstm.fraction)
+    nint = sum(γ.interior)
+
+    @inbounds for k in eachindex(x)
+        sum(x[k].γ.interior) == nint || error("softmax_massfractions!: grid mismatch")
+    end
+
+    n_neighbors = neighbors(x, γ)
+    max_neighbors = maximum(n_neighbors.tracer)
+    work = Vector{T}(undef, max(max_neighbors, 1))
+
+    for I in eachindex(n_neighbors.tracer)
+        nneigh = n_neighbors.tracer[I]
+        nneigh == 0 && continue
+
+        j = 1
+        for k in eachindex(x)
+            if x[k].γ.wet[I]
+                work[j] = x[k].fraction[I]
+                j += 1
+            end
+        end
+
+        softmax_vector!(view(work, 1:nneigh); α = α)
+
+        j = 1
+        for k in eachindex(x)
+            if x[k].γ.wet[I]
+                x[k].fraction[I] = work[j]
+                j += 1
+            end
+        end
+    end
+
+    # Ensure dry points stay NaN to keep vec() consistent with wet mask.
+    nanval = zero(T) / zero(T)
+    # @inbounds for k in eachindex(x)
+    #     wet = x[k].γ.wet
+    #     frac = x[k].fraction
+    #     for I in eachindex(wet)
+    #         wet[I] && continue
+    #         frac[I] = nanval
+    #     end
+    # end
+
+    return x
 end
 
 
@@ -158,25 +240,28 @@ function gsoftmax_massfractions(gs::NamedTuple, s::NamedTuple; α::Real = 1)
     end
 
     n_neighbors = neighbors(s, γ)
+    max_neighbors = maximum(n_neighbors.tracer)
+    work_s = Vector{T}(undef, max(max_neighbors, 1))
+    work_gs = Vector{T}(undef, max(max_neighbors, 1))
+    work_gm = Vector{T}(undef, max(max_neighbors, 1))
 
-    Iint = cartesianindex(γ.interior)
-    for I in Iint
+    for I in eachindex(n_neighbors.tracer)
         nneigh = n_neighbors.tracer[I]
         nneigh == 0 && continue
-        svec = Vector{T}(undef, nneigh)
-        gsvec = Vector{T}(undef, nneigh)
         j = 1
-        for k in keys(s)
+        for k in eachindex(s)
             if s[k].γ.wet[I]
-                svec[j] = s[k].fraction[I]
-                gsvec[j] = gs[k].fraction[I]
+                work_s[j] = s[k].fraction[I]
+                work_gs[j] = gs[k].fraction[I]
                 j += 1
             end
         end
-        gvec = gsoftmax_vector(gsvec, svec; α = α)
+        gvec = gsoftmax_vector!(view(work_gm, 1:nneigh),
+                                view(work_gs, 1:nneigh),
+                                view(work_s, 1:nneigh); α = α)
 
         j = 1
-        for k in keys(s)
+        for k in eachindex(s)
             if s[k].γ.wet[I]
                 g_m[k].fraction[I] = gvec[j]
                 j += 1
@@ -185,6 +270,61 @@ function gsoftmax_massfractions(gs::NamedTuple, s::NamedTuple; α::Real = 1)
     end
 
     return g_m
+end
+
+"""
+    gsoftmax_massfractions!(gs, s; α = 1)
+
+In-place version of `gsoftmax_massfractions`. Overwrites `gs` with gradients of the
+pre-softmax mass fractions given upstream sensitivities `gs` and softmaxed mass
+fractions `s`. Returns `gs`.
+"""
+function gsoftmax_massfractions!(gs::NamedTuple, s::NamedTuple; α::Real = 1)
+    keys(s) == keys(gs) || error("gsoftmax_massfractions!: key mismatch")
+    γ = first(s).γ
+    T = eltype(first(s).fraction)
+    nint = sum(γ.interior)
+
+    for k in keys(s)
+        sum(s[k].γ.interior) == nint || error("gsoftmax_massfractions!: grid mismatch")
+        sum(gs[k].γ.interior) == nint || error("gsoftmax_massfractions!: grid mismatch")
+        gs[k].fraction .= zero(T) / zero(T) # set to NaN everywhere
+    end
+
+    n_neighbors = neighbors(s, γ)
+    max_neighbors = maximum(n_neighbors.tracer)
+    work_s = Vector{T}(undef, max(max_neighbors, 1))
+    work_gs = Vector{T}(undef, max(max_neighbors, 1))
+    work_gm = Vector{T}(undef, max(max_neighbors, 1))
+
+    for I in eachindex(n_neighbors.tracer)
+        nneigh = n_neighbors.tracer[I]
+        nneigh == 0 && continue
+        j = 1
+        for k in eachindex(s)
+            if s[k].γ.wet[I]
+                work_s[j] = s[k].fraction[I]
+                work_gs[j] = gs[k].fraction[I]
+                j += 1
+            end
+        end
+
+        gvec = gsoftmax_vector!(view(work_gm, 1:nneigh),
+                                view(work_gs, 1:nneigh),
+                                view(work_s, 1:nneigh); α = α)
+
+        j = 1
+        for k in eachindex(s)
+            if s[k].γ.wet[I]
+                gs[k].fraction[I] = gvec[j]
+                j += 1
+            end
+        end
+    end
+
+    gm = gs #gs has now been transformed to gm
+    
+    return gm
 end
 
 
