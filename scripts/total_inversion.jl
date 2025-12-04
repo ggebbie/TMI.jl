@@ -122,7 +122,7 @@ fg!(NaN, G, x0)
                   iterations = 2500, store_trace = false,
                   show_trace = false, show_warnings = false));
 
-uopt, qopt, xopt =unvec(controls, result_opt_fg.minimizer)
+uopt, qopt, xopt = unvec(controls, result_opt_fg.minimizer)
 mopt = softmax_massfractions(xopt; α = 5.0)
 
 

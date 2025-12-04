@@ -584,7 +584,6 @@ end
 #function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
 function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition}, u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
-    gadjustboundarycondition!(gu, u; r = r)
     return gu
 end
 

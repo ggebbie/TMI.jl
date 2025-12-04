@@ -71,7 +71,7 @@ end
     
 function adjustsource!(q::Field,u::Field; r::Real = 1.0)
     # write it out so b changes when returned
-    q.tracer[q.γ.wet] += r .* u.tracer[q.γ.wet] 
+    q.tracer[q.γ.wet] += r .* u.tracer[u.γ.wet] 
 end
 function adjustsource!(q::Source,u::Source; r::Real = 1.0)
     if q.logscale && u.logscale
