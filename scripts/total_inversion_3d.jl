@@ -64,12 +64,12 @@ function constrained_global_optimization(controls::ControlParameters, c_obs, γ:
                 alphaguess = LineSearches.InitialHagerZhang(α0=NaN), 
                 linesearch = LineSearches.HagerZhang()),
         Optim.Options(f_abstol = 1e-12, g_tol = 1e-8,
-                    iterations = 5, store_trace = false,
+                    iterations = 15, store_trace = false,
                     show_trace = true, show_warnings = false));
     return result_opt_fg
 end
 
 x0 = vcat([vec(controls.u₀), vec(controls.q₀), randn(length(vec(controls.m₀)))]...)
-# constrained_global_optimization(controls, c_obs, γ; x0 = x0)
+result_opt_fg = constrained_global_optimization(controls, c_obs, γ; x0 = x0)
 
 # @btime constrained_global_optimization(controls, c_obs, γ; x0 = x0)
