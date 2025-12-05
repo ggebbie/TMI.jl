@@ -42,18 +42,20 @@ Container for optimization control variables (boundary conditions, sources, mass
 - `ub`, `uq`, `m`: NamedTuples of boundary conditions, sources, and mass fractions
 - `u₀`, `q₀`, `m₀`: first-guess values for the above
 - `Qᵤ`, `Qₛ`, `Qₘ`: inverse covariance matrices for control errors
+- `ub_bounds`, `uq_bounds`, `m_bounds`: optional bounds (NamedTuples keyed like `ub`/`uq`/`m`) for box constraints
 - `vector`: cached flattened controls (if `cache_vector=true`)
-- `ub_length`, `uq_length`, `m_length`: cached segment lengths (if `cache_lengths=true`)
+- `ub_length`, `uq_length`, `m_length`: cached segment lengths (always stored)
 - `mass_fraction_steps`: cached precomputed mass-fraction step targets (if enabled)
 - `A`: cached water-mass matrix (if enabled)
 - `dub`, `duq`: cached boundary/source perturbations
 - `gm`: cached mass-fraction gradient buffer
 - `b`, `q`: cached boundary/source fields initialized from priors
 """
-struct ControlParameters{UB,UQ,M,U0,Q0,M0,QU,QS,QM,V,UBL,QL,ML,S,AT,G<:Grid,DUB,DUQ,GDUB,GDUQ,GM,BU,BQ}
+struct ControlParameters{UB,UQ,M,U0,Q0,M0,QU,QS,QM,UBB,UQB,MB,V,UBL,QL,ML,S,AT,G<:Grid,DUB,DUQ,GDUB,GDUQ,GM,BU,BQ}
     ub::UB; uq::UQ; m::M
     u₀::U0; q₀::Q0; m₀::M0
     Qᵤ::QU; Qₛ::QS; Qₘ::QM
+    ub_bounds::UBB; uq_bounds::UQB; m_bounds::MB
     vector::V
     ub_length::UBL; uq_length::QL; m_length::ML
     mass_fraction_steps::S
@@ -68,12 +70,19 @@ struct ControlParameters{UB,UQ,M,U0,Q0,M0,QU,QS,QM,V,UBL,QL,ML,S,AT,G<:Grid,DUB,
     q::BQ
 end
 
+check_bounds_keys(::Nothing, ::Any, ::String) = nothing
+function check_bounds_keys(bounds::NamedTuple, controls::NamedTuple, name::String)
+    keys(bounds) == keys(controls) || error("$name keys must match control keys")
+    return nothing
+end
+
 
 function ControlParameters(; γ::Grid,
                             ub = nothing, uq = nothing, m = nothing,
                             u₀ = nothing, q₀ = nothing, m₀ = nothing,
                             Qᵤ = nothing, Qₛ = nothing, Qₘ = nothing,
-                            cache_vector = false, cache_lengths = true,
+                            ub_bounds = nothing, uq_bounds = nothing, m_bounds = nothing,
+                            cache_vector = false,
                             cache_mass_fraction_steps = true,
                             cache_A = true)
     # Ensure control entries and priors are independent objects.
@@ -82,6 +91,14 @@ function ControlParameters(; γ::Grid,
                         (Qᵤ, "Qᵤ"), (Qₛ, "Qₛ"))
         check_shared_references(val, name)
     end
+
+    # Validate optional bounds.
+    !isnothing(ub_bounds) && isnothing(ub) && throw(ArgumentError("ub_bounds provided but ub is nothing"))
+    !isnothing(uq_bounds) && isnothing(uq) && throw(ArgumentError("uq_bounds provided but uq is nothing"))
+    !isnothing(m_bounds) && isnothing(m) && throw(ArgumentError("m_bounds provided but m is nothing"))
+    isnothing(ub) || check_bounds_keys(ub_bounds, ub, "ub_bounds")
+    isnothing(uq) || check_bounds_keys(uq_bounds, uq, "uq_bounds")
+    isnothing(m) || check_bounds_keys(m_bounds, m, "m_bounds")
 
     # Optionally cache precomputed mass-fraction steps and water-mass matrix.
     m_steps = nothing
@@ -104,9 +121,9 @@ function ControlParameters(; γ::Grid,
     vector = cache_vector ? vectorize_controls(ub, uq, m) : nothing
 
     # Segment lengths let `unvec` slice an incoming control vector without recomputing sizes.
-    ub_length = cache_lengths && !isnothing(ub) ? length(vec(ub)) : nothing
-    uq_length = cache_lengths && !isnothing(uq) ? length(vec(uq)) : nothing
-    m_length = cache_lengths && !isnothing(m) ? length(vec(m)) : nothing
+    ub_length = isnothing(ub) ? nothing : length(vec(ub))
+    uq_length = isnothing(uq) ? nothing : length(vec(uq))
+    m_length = isnothing(m) ? nothing : length(vec(m))
 
     dub_cached = isnothing(ub) ? nothing : deepcopy(ub)
     duq_cached = isnothing(uq) ? nothing : deepcopy(uq)
@@ -120,6 +137,7 @@ function ControlParameters(; γ::Grid,
     return ControlParameters{typeof(ub), typeof(uq), typeof(m),
                              typeof(u₀), typeof(q₀), typeof(m₀),
                              typeof(Qᵤ), typeof(Qₛ), typeof(Qₘ),
+                             typeof(ub_bounds), typeof(uq_bounds), typeof(m_bounds),
                              typeof(vector),
                              typeof(ub_length), typeof(uq_length), typeof(m_length),
                              typeof(m_steps), typeof(A_cached),
@@ -127,7 +145,8 @@ function ControlParameters(; γ::Grid,
                              typeof(gdub_cached), typeof(gduq_cached),
                              typeof(gm_cached),
                              typeof(b_cached), typeof(q_cached)}(
-        ub, uq, m, u₀, q₀, m₀, Qᵤ, Qₛ, Qₘ, vector, ub_length, uq_length, m_length,
+        ub, uq, m, u₀, q₀, m₀, Qᵤ, Qₛ, Qₘ, ub_bounds, uq_bounds, m_bounds,
+        vector, ub_length, uq_length, m_length,
         m_steps, A_cached, γ, dub_cached, duq_cached, gdub_cached, gduq_cached, gm_cached, b_cached, q_cached)
 end
 
@@ -209,4 +228,94 @@ function unvec!(cp::ControlParameters, vector::AbstractVector)
     end
 
     return cp.ub, cp.uq, cp.m
+end
+
+function _vectorize_bounds(bnds::Tuple{T,T}, controls::NamedTuple) where {T<:Real}
+    lb = Float64[]
+    ub = Float64[]
+
+    lower, upper = bnds
+
+    for control in controls
+        n = length(vec(control))
+        append!(lb, fill(T(lower), n))
+        append!(ub, fill(T(upper), n))
+    end
+
+    return lb, ub
+end
+
+function _vectorize_bounds(bnds::NamedTuple, controls::NamedTuple)
+    keys(bnds) == keys(controls) || error("bounds keys must match controls")
+
+    lb = Float64[]
+    ub = Float64[]
+
+    for key in eachindex(controls)
+        control = controls[key]
+        isnothing(control) && continue #if control is nothing (e.g., no source) just skip. 
+ 
+        bnd = bnds[key]
+        n = length(vec(control))
+
+        if control isa NamedTuple
+            if bnd isa Tuple
+                lb_sub, ub_sub = _vectorize_bounds(bnd, control)
+                append!(lb, lb_sub); append!(ub, ub_sub)
+            elseif bnd isa NamedTuple
+                keys(bnd) == keys(control) || error("nested bounds keys for $key must match control vector keys")
+                lb_sub, ub_sub = _vectorize_bounds(bnd, control)
+                append!(lb, lb_sub); append!(ub, ub_sub)
+            end
+        else
+            lower, upper = bnd
+            (lower isa Real && upper isa Real) || error("bounds for $key must be scalars")
+            append!(lb, fill(Float64(lower), n)); append!(ub, fill(Float64(upper), n))
+        end
+    end
+
+    return lb, ub
+end
+
+"""
+    vectorize_control_parameter_bounds(cp::ControlParameters) -> (lb, ub)
+
+Flatten bound tuples (`ub_bounds`, `uq_bounds`, `m_bounds`) into lower/upper
+vectors aligned with `vec(cp)`. Bounds may be a single `(lower, upper)` tuple
+applied everywhere, a NamedTuple of such tuples (matching keys), or nested
+NamedTuples mirroring nested controls. Missing entries default to unbounded.
+"""
+function vectorize_control_parameter_bounds(cp::ControlParameters)
+    total_len = 0
+    total_len += isnothing(cp.ub_length) ? 0 : cp.ub_length
+    total_len += isnothing(cp.uq_length) ? 0 : cp.uq_length
+    total_len += isnothing(cp.m_length) ? 0 : cp.m_length
+
+    lower_bounds = Vector{Float64}(undef, total_len)
+    upper_bounds = Vector{Float64}(undef, total_len)
+
+    idx = 1
+
+    if !isnothing(cp.ub)
+        lower_ub, upper_ub = _vectorize_bounds(cp.ub_bounds, cp.ub)
+        len = length(lower_ub)
+        lower_bounds[idx:idx+len-1] .= lower_ub
+        upper_bounds[idx:idx+len-1] .= upper_ub
+        idx += len
+    end
+    if !isnothing(cp.uq)
+        lower_uq, upper_uq = _vectorize_bounds(cp.uq_bounds, cp.uq)
+        len = length(lower_uq)
+        lower_bounds[idx:idx+len-1] .= lower_uq
+        upper_bounds[idx:idx+len-1] .= upper_uq
+        idx += len
+    end
+    if !isnothing(cp.m)
+        lower_m, upper_m = _vectorize_bounds(cp.m_bounds, cp.m)
+        len = length(lower_m)
+        lower_bounds[idx:idx+len-1] .= lower_m
+        upper_bounds[idx:idx+len-1] .= upper_m
+    end
+
+    return lower_bounds, upper_bounds
 end

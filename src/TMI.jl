@@ -71,7 +71,7 @@ export config, download_file,
     massfractions, massfractions_isotropic, neighbors
 
 export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
-    Observations, ControlParameters, vectorize_controls,
+    Observations, ControlParameters, vectorize_controls, vectorize_control_parameter_bounds,
     zero, 
     gsteadyinversion, gwatermassmatrix, gwatermassmatrix!, gadjustboundarycondition, 
     gadjustboundarycondition!, gadjustsource!, 

@@ -60,16 +60,47 @@ function constrained_global_optimization(controls::ControlParameters, c_obs, γ:
 
     result_opt_fg = Optim.optimize(
         Optim.only_fg!(fg!), x0,
-        LBFGS(;m = 10, 
+        LBFGS(;m = 15, 
                 alphaguess = LineSearches.InitialHagerZhang(α0=NaN), 
-                linesearch = LineSearches.HagerZhang()),
+                linesearch = LineSearches.HagerZhang(), 
+                scaleinvH0 = false),
         Optim.Options(f_abstol = 1e-12, g_tol = 1e-8,
-                    iterations = 15, store_trace = false,
+                    iterations = 10, store_trace = false,
                     show_trace = true, show_warnings = false));
     return result_opt_fg
 end
 
-x0 = vcat([vec(controls.u₀), vec(controls.q₀), randn(length(vec(controls.m₀)))]...)
-result_opt_fg = constrained_global_optimization(controls, c_obs, γ; x0 = x0)
+function constrained_global_optimization_nograd(controls::ControlParameters, c_obs, γ::Grid; 
+                                        x0::Union{Nothing,Vector{T}} = nothing, lowerb = -Inf, upperb = +Inf) where T
 
-# @btime constrained_global_optimization(controls, c_obs, γ; x0 = x0)
+    objective(x) = log(optim_fg_constrained_global_costfunction!(NaN, nothing, x, controls, c_obs, γ; locs=nothing))
+
+    if isnothing(x0) #a naive first guess
+        x0 = vcat([vec(controls.u₀), vec(controls.q₀), randn(length(vec(controls.m₀)))]...)
+    end
+
+    # result_opt_f = Optim.optimize(
+    #     objective, -100, 100, x0,
+    #     Optim.SAMIN(),
+    #     Optim.Options(f_abstol = 1e-12,
+    #                 iterations = 25, store_trace = false,
+    #                 show_trace = true, show_warnings = false));
+    result_opt_f = Optim.optimize(
+        objective, x0,
+        Optim.SimulatedAnnealing(),
+        Optim.Options(f_abstol = 1e-12,
+                    iterations = 10, store_trace = false,
+                    show_trace = true, show_warnings = false));
+    return result_opt_f
+end
+
+x0 = vcat([vec(controls.u₀), vec(controls.q₀), randn(length(vec(controls.m₀)))]...)
+
+@time constrained_global_optimization(controls, c_obs, γ; x0 = x0);
+
+# @time constrained_global_optimization_nograd(controls, c_obs, γ; x0 = x0);
+
+# objective(x0 .+ randn(length(x0))) - objective(x0)
+
+# ΔJs = [objective(x0 .+ randn(length(x0))) - objective(x0) for _ in 1:10]
+# minimum(ΔJs), maximum(ΔJs)
