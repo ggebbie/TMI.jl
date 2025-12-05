@@ -1,3 +1,4 @@
+# Helper: finite-difference gradient for small vectors (used to sanity-check adjoints).
 function centered_finite_difference(f, x; δ = 1e-12)
     orig_size = size(x)
     x_vec = vec(copy(x))
@@ -73,6 +74,7 @@ percent_difference(a, b; eps = 1e-12) = @. 100 * ((a - b) / b)
                                  u₀ = u₀, q₀ = q₀, m₀ = m0,
                                  Qᵤ = Qᵤ, Qₛ = Qₛ, Qₘ = Qₘ)
 
+    # Compare adjoint gradient against finite-difference for the base (no links) case.
     function gradient_check(obs; seed = 1, atol = 1e-10)
         Random.seed!(seed)
         control_vector = randn(length(vec(controls)))
@@ -96,5 +98,97 @@ percent_difference(a, b; eps = 1e-12) = @. 100 * ((a - b) / b)
         W_full = map(v -> Diagonal(one.(vec(v))), c0) #W is just 1.0 on diagonals for all tracers
         c_obs = map((v, w) -> Observations(v; W = w), c0, W_full)
         gradient_check(c_obs; seed = 3)
+    end
+end
+
+@testset "linked inversion gradient checks" begin
+    Random.seed!(43)
+
+    ngrid = (50,) # number of grid cells
+    xmax = 1000.0
+    lon = collect(range(0.0, xmax, length = ngrid[1]))
+    tracer = collect(1.0 .- lon ./ xmax)
+
+    axes = (lon,)
+    wet = trues(ngrid)
+    interior = copy(wet)
+    interior[begin] = false
+    interior[end] = false
+
+    wrap = (false,)
+    Δ = [CartesianIndex(1,), CartesianIndex(-1,)]
+    γ = Grid(axes, wet, interior, wrap, Δ)
+
+    m_iso = massfractions_isotropic(γ)
+    m0 = (west = m_iso[1], east = m_iso[2])
+    c = Field(tracer, γ, :c, "linear equilibrated tracer", "μmol/kg")
+
+    A = watermassmatrix(m0, γ)
+    Alu = lu(A)
+
+    dim = 1
+    b = (west = TMI.getboundarycondition(c, dim, 1, γ),
+         east = TMI.getboundarycondition(c, 1, ngrid[dim], γ))
+
+    qfield = 1.0e-2 * ones(ngrid)
+    q = TMI.Source(-qfield, γ, :q, "remineralized stuff", "μmol/kg", false)
+
+    # Validate the bookkeeping helpers for base vs. dependent sources:
+    # - identify bases
+    # - parse links
+    # - allocate buffers for dependents when q₀ is missing
+    # - ensure only bases are unvec’d from the control vector
+    u₀ = (c = deepcopy(b), c_q = deepcopy(b), c_dep = deepcopy(b))
+    q₀ = (c = nothing, c_q = deepcopy(q), c_dep = nothing)
+    c0 = steadyinversion(Alu, u₀, q₀, γ)
+    Alu = lu(A)
+    TMI.zero!(u₀)
+
+    ub = deepcopy(u₀)
+    uq = (c = nothing,
+          c_q = deepcopy(q),
+          c_dep = (scale = 2.0, dependson = :c_q))
+
+    # Dependent-source sanity checks using the actual linked controls:
+    bases = TMI._uq_base_keys(uq)
+    @test bases == (:c_q,)
+    links = TMI._uq_links(uq)
+    @test haskey(links, :c_dep)
+    @test links.c_dep.dependson == :c_q
+    @test links.c_dep.scale == 2.0
+    buf = TMI._make_source_buffer(uq, q₀) # c_dep q₀ is nothing → cloned/zeroed from parent
+    base_vec = fill(3.0, length(vec(q)))
+    TMI._unvec_sources!(buf, base_vec; base_keys = bases)
+    @test all(buf.c_q.tracer[buf.c_q.γ.interior] .== 3.0)
+    @test all(buf.c_dep.tracer[buf.c_dep.γ.interior] .== 0.0)
+
+    Qᵤ = map(v -> Diagonal(one.(vec(v))), ub)
+    Qₛ = (c = nothing,
+          c_q = Diagonal(one.(vec(uq.c_q))),
+          c_dep = nothing)
+    Qₘ = Diagonal(one.(vec(m0)))
+
+    controls = ControlParameters(; γ = γ,
+                                 ub = ub, uq = uq, m = m0,
+                                 u₀ = u₀, q₀ = q₀, m₀ = m0,
+                                 Qᵤ = Qᵤ, Qₛ = Qₛ, Qₘ = Qₘ)
+
+    # Compare adjoint gradient against finite-difference when a dependent source
+    # (c_dep) is linked to a base source (c_q) via dq_dep = scale * dq_q.
+    function gradient_check_linked(obs; seed = 5, atol = 1e-10)
+        Random.seed!(seed)
+        control_vector = randn(length(vec(controls)))
+        objective(x) = optim_fg_constrained_global_costfunction!(NaN, nothing, x, controls, obs, γ)
+        fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-6)
+        analytic = zero(control_vector)
+        optim_fg_constrained_global_costfunction!(NaN, analytic, control_vector, controls, obs, γ)
+        abspdiff = abs.(percent_difference(fd_grad, analytic; eps = atol))
+        @test all(abspdiff .< 0.1)
+    end
+
+    @testset "full-field observation gradient with linked source" begin
+        W_full = map(v -> Diagonal(one.(vec(v))), c0)
+        c_obs = map((v, w) -> Observations(v; W = w), c0, W_full)
+        gradient_check_linked(c_obs; seed = 6)
     end
 end

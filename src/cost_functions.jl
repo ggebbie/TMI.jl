@@ -383,33 +383,50 @@ solves the steady state, and returns intermediates needed for the backward pass.
 """
 function unconstrained_global_forward(controls::ControlParameters,
                                       c_obs, γ; locs = nothing)
-    b = controls.b #may benefit from having a controls .b 
-    q = controls.q
+    b = controls.boundary.b # working boundary fields
+    q = controls.source.q
 
-    du_names = keys(controls.ub)
-    dq_names = keys(controls.uq)
+    du_names = keys(controls.boundary.ub)
+    uq_base_keys = _uq_base_keys(controls.source.uq)
 
     @inbounds for key in keys(b)
-        setboundarycondition!(controls.b[key], controls.u₀[key]) #du = ub - u₀
+        setboundarycondition!(controls.boundary.b[key], controls.boundary.u₀[key]) #du = ub - u₀
         if key ∈ du_names
-            setboundarycondition!(controls.dub[key], controls.ub[key]) #du = ub - u₀
-            adjustboundarycondition!(controls.dub[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
-            adjustboundarycondition!(b[key], controls.dub[key]; r = 1.0) #b = b + du
+            setboundarycondition!(controls.boundary.dub[key], controls.boundary.ub[key]) #du = ub - u₀
+            adjustboundarycondition!(controls.boundary.dub[key], controls.boundary.u₀[key]; r = -1.0) #du = ub - u₀
+            adjustboundarycondition!(b[key], controls.boundary.dub[key]; r = 1.0) #b = b + du
         end
     end
 
     @inbounds for key in keys(q)
-        if !isnothing(q[key])
-            replacesource!(controls.q[key], controls.q₀[key]) #dq = uq - q₀
-            if key ∈ dq_names #mirrors existing behavior; keys(du) drives source updates
-                replacesource!(controls.duq[key], controls.uq[key]) #du = ub - u₀
-                adjustsource!(controls.duq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
-                adjustsource!(q[key], controls.duq[key]; r = 1.0)  #q = q + dq
+        if isnothing(q[key])
+            continue
+        end
+        q0_key = isnothing(controls.source.q₀) ? nothing : controls.source.q₀[key]
+        if isnothing(q0_key)
+            zero!(controls.source.q[key])                 # child with no prior: start from zero
+        else
+            replacesource!(controls.source.q[key], q0_key) # dq = uq - q₀
+        end
+        if key ∈ uq_base_keys #mirrors existing behavior; keys(du) drives source updates
+            replacesource!(controls.source.duq[key], controls.source.uq[key]) #du = ub - u₀
+            if !isnothing(q0_key)
+                adjustsource!(controls.source.duq[key], q0_key; r = -1.0) #dq = uq - q₀
             end
+            adjustsource!(q[key], controls.source.duq[key]; r = 1.0)  #q = q + dq
         end
     end
 
-    A = watermassmatrix(controls.m, γ, controls.mass_fraction_steps)
+    # Apply dependent source links: dq_child = scale * dq_parent
+    for (child, link) in pairs(_uq_links(controls.source.uq))
+        parent = link.dependson
+        scale = link.scale
+        zero!(controls.source.duq[child])
+        adjustsource!(controls.source.duq[child], controls.source.duq[parent]; r = scale)
+        adjustsource!(q[child], controls.source.duq[child]; r = 1.0)
+    end
+
+    A = watermassmatrix(controls.massfrac.m, γ, controls.massfrac.mass_fraction_steps)
     # Alu = lu(A) #avoiding the LU decomposition for now. 
 
     prob = LinearProblem(A,  Vector{Float64}(undef, size(A,1)))
@@ -421,9 +438,9 @@ function unconstrained_global_forward(controls::ControlParameters,
     n = model_data_misfit(c, c_obs, γ; locs=locs)
 
     J = model_observation_cost(n,c_obs) 
-    J += prior_source_cost(controls.duq, controls.q₀, controls.Qₛ) 
-    J += prior_boundary_cost(controls.dub, controls.u₀, controls.Qᵤ)
-    J += prior_mass_fraction_cost(controls.m,controls.m₀,controls.Qₘ)
+    J += prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
+    J += prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
+    J += prior_mass_fraction_cost(controls.massfrac.m,controls.massfrac.m₀,controls.massfrac.Qₘ)
 
     return (
         J = J,
@@ -444,13 +461,13 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
     n = state.n
     A = state.A
 
-    zero!(controls.gdub)
-    zero!(controls.gduq)
-    zero!(controls.gm)
+    zero!(controls.boundary.gdub)
+    zero!(controls.source.gduq)
+    zero!(controls.massfrac.gm)
 
-    gprior_boundary_cost!(controls.gdub, controls.dub,controls.u₀, controls.Qᵤ)
-    gprior_source_cost!(controls.gduq, controls.duq,controls.q₀, controls.Qₛ)
-    gprior_mass_fraction_cost!(controls.gm, controls.m, controls.m₀, controls.Qₘ)
+    gprior_boundary_cost!(controls.boundary.gdub, controls.boundary.dub,controls.boundary.u₀, controls.boundary.Qᵤ)
+    gprior_source_cost!(controls.source.gduq, controls.source.duq,controls.source.q₀, controls.source.Qₛ)
+    gprior_mass_fraction_cost!(controls.massfrac.gm, controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
 
     # Start adjoint by differentiating the observation-cost wrt residuals.
     gn = gmodel_observation_cost(n, c_obs)
@@ -461,28 +478,36 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
     P = ilu(A_t; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
-    gA_total = gsteadyinversion!(controls.gdub, controls.gduq, 
-                                 gc, c, A, cache, controls.b, controls.q, γ)
+    gA_total = gsteadyinversion!(controls.boundary.gdub, controls.source.gduq, 
+                                 gc, c, A, cache, controls.boundary.b, controls.source.q, γ)
 
-    gwatermassmatrix!(controls.gm, gA_total, controls.m, γ, controls.mass_fraction_steps)
+    gwatermassmatrix!(controls.massfrac.gm, gA_total, controls.massfrac.m, γ, controls.massfrac.mass_fraction_steps)
+
+    # Accumulate dependent-source gradients back to their bases.
+    for (child, link) in pairs(_uq_links(controls.source.uq))
+        parent = link.dependson
+        scale = link.scale
+        adjustsource!(controls.source.gduq[parent], controls.source.gduq[child]; r = scale)
+    end
 
 end
 
 @inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
     idx = 1
-    if !isnothing(controls.ub)
+    if !isnothing(controls.boundary.ub)
         guv = vec(gu)
         len = length(guv)
         copyto!(G, idx, guv, 1, len)
         idx += len
     end
-    if !isnothing(controls.uq)
-        gqv = vec(gq)
+    if !isnothing(controls.source.uq)
+        base_keys = _uq_base_keys(controls.source.uq)
+        gqv = _vec_base_sources(gq, base_keys)
         len = length(gqv)
         copyto!(G, idx, gqv, 1, len)
         idx += len
     end
-    if !isnothing(controls.m)
+    if !isnothing(controls.massfrac.m)
         gmv = vec(gm)
         len = length(gmv)
         copyto!(G, idx, gmv, 1, len)
@@ -496,22 +521,21 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
     unvec!(controls, control_vector) 
     #should make alpha an optional varibale, then check and apply transfomrationatins if needed
     α = 5. #an optional parameter to shrink gradients related to this transformation
-    #controls.m is a real number vector 
-    #transform m ∈ R to mass fraction that are non-negative and sum to 1
-    softmax_massfractions!(controls.m; α = α)  
+    # controls.massfrac.m is a real-number vector; transform to non-negative fractions summing to 1
+    softmax_massfractions!(controls.massfrac.m; α = α)  
 
     state = unconstrained_global_forward(controls, c_obs, γ; locs = locs)
 
     if G !== nothing
         unconstrained_global_backward!(state, controls, c_obs, γ; locs = locs)
-        gx = gsoftmax_massfractions(controls.gm, controls.m; α = α)
-        _write_gradient!(G, controls.gdub, controls.gduq, gx, controls)
+        gx = gsoftmax_massfractions(controls.massfrac.gm, controls.massfrac.m; α = α)
+        _write_gradient!(G, controls.boundary.gdub, controls.source.gduq, gx, controls)
         # GC.gc()
     end
 
     if F !== nothing
-        println("hello")
-        println(state.J)
+        # println("hello")
+        # println(state.J)
 
         return state.J
     end
