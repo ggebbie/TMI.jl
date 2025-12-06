@@ -534,9 +534,6 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
     end
 
     if F !== nothing
-        # println("hello")
-        # println(state.J)
-
         return state.J
     end
 end
