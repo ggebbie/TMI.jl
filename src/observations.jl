@@ -51,7 +51,7 @@ function Observations(values::Union{Vector{T}, Field{T}};
 end
 
 
-function observe(c::Field{T}, c_obs::Observations, γ)::Vector{T} where {T <: Real}
+function observe(c::Field{T}, c_obs::Observations, γ)::Vector{T} where {T <: Real,R}
     return observe(c, c_obs.wis, γ)
 end
 
