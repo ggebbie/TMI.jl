@@ -142,7 +142,7 @@ function prior_source_cost(
     J = 0
     lo = 1
     for name in tracer_names
-        if !isnothing(q₀[name])
+        if !isnothing(q₀[name]) && !isnothing(get(Qₛ, name, nothing))
             len = size(Qₛ[name], 1)
             hi = lo + len - 1
             dq_slice = @view dqvec[lo:hi]
@@ -381,54 +381,39 @@ Execute the forward pass for the full cost function evaluation. This involves ap
 """
 function unconstrained_global_forward(controls::ControlParameters,
                                       c_obs, γ; locs = nothing)
-    b = controls.boundary.b #may benefit from having a controls .b 
+    
+    b = controls.boundary.b
+    
+    # Update boundary conditions
+    du_names = keys(controls.boundary.ub)
+    @inbounds for key in keys(b)
+        setboundarycondition!(controls.boundary.b[key], controls.boundary.u₀[key])
+        if key ∈ du_names
+            setboundarycondition!(controls.boundary.dub[key], controls.boundary.ub[key])
+            adjustboundarycondition!(controls.boundary.dub[key], controls.boundary.u₀[key]; r = -1.0)
+            adjustboundarycondition!(b[key], controls.boundary.dub[key]; r = 1.0)
+        end
+    end
+
+    # Update all source fields (independent and coupled)
+    update_q!(controls.source)
     q = controls.source.q
 
-    du_names = keys(controls.boundary.ub)
-    dq_names = keys(controls.source.uq)
-
-    @inbounds for key in keys(b)
-        setboundarycondition!(controls.boundary.b[key], controls.boundary.u₀[key]) #du = ub - u₀
-        if key ∈ du_names
-            setboundarycondition!(controls.boundary.dub[key], controls.boundary.ub[key]) #du = ub - u₀
-            adjustboundarycondition!(controls.boundary.dub[key], controls.boundary.u₀[key]; r = -1.0) #du = ub - u₀
-            adjustboundarycondition!(b[key], controls.boundary.dub[key]; r = 1.0) #b = b + du
-        end
-    end
-
-    @inbounds for key in keys(q)
-        if !isnothing(q[key])
-            replacesource!(controls.source.q[key], controls.source.q₀[key]) #dq = uq - q₀
-            if key ∈ dq_names #mirrors existing behavior; keys(du) drives source updates
-                replacesource!(controls.source.duq[key], controls.source.uq[key]) #du = ub - u₀
-                adjustsource!(controls.source.duq[key], controls.source.q₀[key]; r = -1.0) #dq = uq - q₀
-                adjustsource!(q[key], controls.source.duq[key]; r = 1.0)  #q = q + dq
-            end
-        end
-    end
-
     A = watermassmatrix(controls.massfrac.m, γ, controls.massfrac.steps)
-    # Alu = lu(A) #avoiding the LU decomposition for now. 
-
-    prob = LinearProblem(A,  Vector{Float64}(undef, size(A,1)))
+    
+    prob = LinearProblem(A, Vector{Float64}(undef, size(A,1)))
     P = ilu(A; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
-    # c = steadyinversion(Alu, b, q, γ)
-    c =  steadyinversion(cache, b, q, γ)
+    c = steadyinversion(cache, b, q, γ)
     n = model_data_misfit(c, c_obs, γ; locs=locs)
 
-    J = model_observation_cost(n,c_obs) 
+    J = model_observation_cost(n, c_obs) 
     J += prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
     J += prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
-    J += prior_mass_fraction_cost(controls.massfrac.m,controls.massfrac.m₀,controls.massfrac.Qₘ)
+    J += prior_mass_fraction_cost(controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
 
-    return (
-        J = J,
-        c = c,
-        n = n,
-        A = A,
-    )
+    return (J=J, c=c, n=n, A=A)
 end
 
 """
@@ -441,28 +426,36 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
     n = state.n
     A = state.A
 
+    # Zero out all gradient buffers
     zero!(controls.boundary.gdub)
     zero!(controls.source.gduq)
+    zero!(controls.source.gduq_cache)
     zero!(controls.massfrac.gm)
 
-    gprior_boundary_cost!(controls.boundary.gdub, controls.boundary.dub,controls.boundary.u₀, controls.boundary.Qᵤ)
-    gprior_source_cost!(controls.source.gduq, controls.source.duq,controls.source.q₀, controls.source.Qₛ)
+    # --- Prior Gradient Contributions ---
+    gprior_boundary_cost!(controls.boundary.gdub, controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
+    gprior_source_cost!(controls.source.gduq, controls.source.duq, controls.source.q₀, controls.source.Qₛ)
     gprior_mass_fraction_cost!(controls.massfrac.gm, controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
 
+    # --- Adjoint Model Pass ---
     # Start adjoint by differentiating the observation-cost wrt residuals.
     gn = gmodel_observation_cost(n, c_obs)
     gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=locs)
 
     A_t = sparse(transpose(A))
-    prob = LinearProblem(A_t,Vector{Float64}(undef, size(A_t,1)))
+    prob = LinearProblem(A_t, Vector{Float64}(undef, size(A_t,1)))
     P = ilu(A_t; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
-    gA_total = gsteadyinversion!(controls.boundary.gdub, controls.source.gduq, 
+    # Calculate initial sensitivities wrt boundary and all sources (independent & dependent)
+    gA_total = gsteadyinversion!(controls.boundary.gdub, controls.source.gduq_cache, 
                                  gc, c, A, cache, controls.boundary.b, controls.source.q, γ)
 
-    gwatermassmatrix!(controls.massfrac.gm, gA_total, controls.massfrac.m, γ, controls.massfrac.steps)
+    # Apply chain rule for coupled sources
+    update_gduq!(controls.source)
 
+    # Propagate sensitivities back to mass fractions
+    gwatermassmatrix!(controls.massfrac.gm, gA_total, controls.massfrac.m, γ, controls.massfrac.steps)
 end
 
 """

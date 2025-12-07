@@ -53,44 +53,70 @@ struct ControlParameters{BC, SC, MC, V, UBL, QL, ML, G <: Grid}
     γ::G
 end
 
+
 """
     ControlParameters(; γ::Grid, ub=nothing, uq=nothing, m=nothing, ...)
 
 Construct and initialize the `ControlParameters` object for an optimization.
 This function takes all individual control components (boundary conditions,
-sources, etc.), organizes them into the appropriate sub-structs
-(`BoundaryControls`, `SourceControls`, `MassFracControls`), and performs
-necessary pre-caching. Caching can include the transport matrix `A` and a
-flattened vector of all control variables for use with optimizers.
+sources, etc.), organizes them into the appropriate sub-structs, and performs
+necessary pre-caching. It also handles the setup of coupled sources, filtering
+the control vectors to include only independent variables.
 """
 function ControlParameters(; γ::Grid,
                             ub=nothing, uq=nothing, m=nothing,
                             u₀=nothing, q₀=nothing, m₀=nothing,
                             Qᵤ=nothing, Qₛ=nothing, Qₘ=nothing,
+                            source_couplings=nothing,
                             cache_vector=false, cache_lengths=true,
                             cache_mass_fraction_steps=true,
                             cache_A=true)
 
+    # --- Reference and Coupling Validation ---
     for (val, name) in ((ub, "ub"), (uq, "uq"), (m, "m"),
                         (u₀, "u₀"), (q₀, "q₀"), (m₀, "m₀"),
                         (Qᵤ, "Qᵤ"), (Qₛ, "Qₛ"))
         check_shared_references(val, name)
     end
 
+    dependent_sources = isnothing(source_couplings) ? () : keys(source_couplings)
+    if !isnothing(uq)
+        for dep_name in dependent_sources
+            if haskey(uq, dep_name) && !isnothing(uq[dep_name])
+                error("Tracer :$(dep_name) is defined as a dependent source in " *
+                      "`source_couplings` but also has an independent control " *
+                      "in `uq`. A tracer's source cannot be both.")
+            end
+        end
+    end
+
+    # --- Boundary Controls ---
     boundary_controls = BoundaryControls(
         ub, u₀, Qᵤ,
-        isnothing(ub) ? nothing : deepcopy(ub),
-        isnothing(ub) ? nothing : deepcopy(ub),
-        isnothing(u₀) ? nothing : deepcopy(u₀)
+        isnothing(ub) ? nothing : deepcopy(ub), # dub
+        isnothing(ub) ? nothing : deepcopy(ub), # gdub
+        isnothing(u₀) ? nothing : deepcopy(u₀)  # b
     )
 
+    # --- Source Controls ---
+    # Filter controls to only include independent sources
+    independent_sources = isnothing(uq) ? () : filter(k -> !isnothing(uq[k]), keys(uq))
+    
+    uq_indep = isnothing(uq) ? nothing : NamedTuple{independent_sources}(getproperty(uq, k) for k in independent_sources)
+    Qₛ_indep = isnothing(Qₛ) ? nothing : NamedTuple{independent_sources}(getproperty(Qₛ, k) for k in independent_sources)
+    
     source_controls = SourceControls(
-        uq, q₀, Qₛ,
-        isnothing(uq) ? nothing : deepcopy(uq),
-        isnothing(uq) ? nothing : deepcopy(uq),
-        isnothing(q₀) ? nothing : deepcopy(q₀)
+        uq_indep,
+        q₀,
+        Qₛ_indep,
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # duq
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # gduq
+        isnothing(q₀) ? nothing : deepcopy(q₀),             # q
+        source_couplings,
+        isnothing(q₀) ? nothing : zero(q₀)                   # gduq_cache
     )
     
+    # --- Mass Fraction Controls ---
     m_steps = nothing
     if cache_mass_fraction_steps
         isnothing(m) && throw(ArgumentError("cache_mass_fraction_steps=true requires m"))
@@ -105,13 +131,14 @@ function ControlParameters(; γ::Grid,
 
     massfrac_controls = MassFracControls(
         m, m₀, Qₘ,
-        isnothing(m) ? nothing : deepcopy(m),
+        isnothing(m) ? nothing : deepcopy(m), # gm
         m_steps,
         A_cached
     )
 
+    # --- Final Assembly ---
     ub_length = cache_lengths && !isnothing(ub) ? length(vec(ub)) : nothing
-    uq_length = cache_lengths && !isnothing(uq) ? length(vec(uq)) : nothing
+    uq_length = cache_lengths && !isnothing(uq_indep) ? length(vec(uq_indep)) : nothing
     m_length = cache_lengths && !isnothing(m) ? length(vec(m)) : nothing
 
     vector = cache_vector ? vectorize_controls(boundary_controls.ub,

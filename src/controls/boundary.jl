@@ -26,3 +26,32 @@ struct BoundaryControls{U, U0, QU, D, G, B}
     gdub::G
     b::B
 end
+
+"""
+    update_b!(bc::BoundaryControls)
+
+Update the main boundary condition buffer `bc.b` based on the current boundary
+control variables.
+
+This function applies the optimized boundary condition perturbations (`bc.ub`)
+to the prior boundary conditions (`bc.u₀`) and stores the resulting boundary
+conditions in `bc.b`. This `bc.b` then represents the full set of boundary
+conditions used in the forward model run.
+"""
+function update_b!(bc::BoundaryControls)
+    # Ensure bc.b is initialized with prior boundary conditions
+    # Assuming bc.b has the same keys as bc.u₀, etc.
+
+    du_names = keys(bc.ub) # Names of tracers for which boundary conditions are controlled
+    @inbounds for key in keys(bc.b) # Iterate over all possible boundary condition keys
+        setboundarycondition!(bc.b[key], bc.u₀[key]) # Start with the prior boundary condition
+        if key ∈ du_names # If this tracer's boundary condition is being optimized
+            # Calculate the perturbation: dub = ub - u₀
+            setboundarycondition!(bc.dub[key], bc.ub[key])
+            adjustboundarycondition!(bc.dub[key], bc.u₀[key]; r = -1.0)
+            # Apply the perturbation to bc.b: bc.b = bc.b + dub
+            adjustboundarycondition!(bc.b[key], bc.dub[key]; r = 1.0)
+        end
+    end
+    return nothing
+end
