@@ -1,7 +1,8 @@
+
 """
     prior_mass_fraction_cost(m, m₀, Qⁱₘ) -> Real
 
-Quadratic penalty for mass-fraction departures from the prior: `(m - m₀)' Qⁱₘ (m - m₀)`.
+Calculate the quadratic cost associated with deviations of mass fractions `m` from a prior estimate `m₀`. This cost is weighted by the inverse covariance matrix `Qⁱₘ`, penalizing larger deviations from the prior. It is a core component of the objective function in an inverse problem.
 """
 function prior_mass_fraction_cost(m::Vector,m₀::Vector,Qⁱₘ::Union{Diagonal, Symmetric})
     Δm = (m .- m₀)
@@ -12,11 +13,10 @@ function prior_mass_fraction_cost(m::NamedTuple,m₀::NamedTuple,Qⁱₘ::Union{
     return prior_mass_fraction_cost(vec(m), vec(m₀), Qⁱₘ)
 end
 
-
 """
     gprior_mass_fraction_cost(m, m₀, Qₘ) -> Vector
 
-Gradient of the mass-fraction prior: `∂/∂m = 2 Qₘ (m - m₀)`.
+Compute the gradient of the mass-fraction prior cost function. This gradient is essential for optimization algorithms that use first-derivative information to find the optimal state. It represents the sensitivity of the cost function to changes in the mass fractions.
 """
 function gprior_mass_fraction_cost(m::Vector,m₀::Vector,Qₘ::Union{Diagonal, Symmetric})
     Δm = (m .- m₀)
@@ -33,11 +33,10 @@ function gprior_mass_fraction_cost!(gm, m::NamedTuple,m₀::NamedTuple,Qₘ::Uni
     adjustmassfraction!(gm, gmvec)
 end
 
-
 """
     prior_boundary_cost(du, u₀, Qⁱᵤ) -> Real
 
-Quadratic penalty on boundary-condition perturbations: `du' Qⁱᵤ du`.
+Calculate the quadratic cost for perturbations `du` to the boundary conditions relative to a prior `u₀`. This term penalizes deviations from the prior boundary state, weighted by the inverse covariance `Qⁱᵤ`. It is used to regularize the inverse problem.
 """
 function prior_boundary_cost(duvec::AbstractVector,
                              u₀::Union{BoundaryCondition{T}, NamedTuple},
@@ -72,12 +71,10 @@ function prior_boundary_cost(du::NamedTuple,u₀::NamedTuple,Qᵤ::NamedTuple)
     return J
 end
 
-
-
 """
     gprior_boundary_cost(du, u₀, Qⁱᵤ) -> Vector
 
-Gradient of the boundary prior: `∂/∂du = 2 Qⁱᵤ du`.
+Compute the gradient of the boundary condition prior cost. This provides the sensitivity of the cost function to changes in the boundary condition perturbations `du`. This gradient is a key input for gradient-based optimization of the model state.
 """
 function gprior_boundary_cost(duvec::AbstractVector,
                               u₀::Union{BoundaryCondition{T}, NamedTuple},
@@ -126,11 +123,10 @@ function gprior_boundary_cost!(gdu, du::NamedTuple, u₀::NamedTuple, Qᵤ::Name
 
 end
 
-
 """
     prior_source_cost(dq, q₀, Qⁱₛ) -> Real
 
-Quadratic penalty on source perturbations: `dq' Qⁱₛ dq`.
+Calculate the quadratic cost for perturbations `dq` to interior sources/sinks relative to a prior `q₀`. This term penalizes deviations from the prior source distribution, weighted by the inverse covariance `Qⁱₛ`. It helps regularize the solution of the inverse problem.
 """
 function prior_source_cost(dqvec::Union{Vector, SubArray},
                            q₀::Union{Source{T}, NamedTuple},
@@ -171,7 +167,7 @@ end
 """
     gprior_source_cost(dq, q₀, Qⁱₛ) -> Vector
 
-Gradient of the source prior: `∂/∂dq = 2 Qⁱₛ dq`.
+Compute the gradient of the interior source/sink prior cost. This provides the sensitivity of the cost function to changes in the source perturbations `dq`. This gradient is used by optimization algorithms to adjust the sources.
 """
 function gprior_source_cost(dqvec::Union{Vector, SubArray},
                             q₀::Union{Source{T}, NamedTuple},
@@ -233,7 +229,7 @@ end
 """
     model_observation_cost(n, Wⁱ) -> Real
 
-Weighted observation misfit: `n' Wⁱ n`.
+Calculate the quadratic cost of the model-data misfit `n`, weighted by the inverse observation error covariance `Wⁱ`. This measures how poorly the model state reproduces the observations. Minimizing this term is the primary goal of the data assimilation.
 """
 function model_observation_cost(n::Union{Vector, Field{T}},
                                 Wⁱ::Union{Diagonal, Symmetric}) where {T}
@@ -252,7 +248,7 @@ end
 """
     gmodel_observation_cost(n, Wⁱ) -> Vector
 
-Gradient of the observation misfit: `∂/∂n = 2 Wⁱ n`.
+Compute the gradient of the model-observation misfit cost. This represents the sensitivity of the misfit cost to changes in the model state `n`. It is the initial step in the backward pass of the adjoint model.
 """
 function gmodel_observation_cost(n::Union{Vector, Field{T}},
                                  Wⁱ::Union{Diagonal, Symmetric}) where {T}
@@ -272,6 +268,11 @@ function gmodel_observation_cost(n::NamedTuple, c_obs::NamedTuple)
     return dn_nt
 end
 
+"""
+    model_data_misfit(c, c_obs, γ; ...) -> Field or Vector
+
+Calculate the misfit (residual) between the modeled tracer field `c` and observations `c_obs`. This function handles both gridded and point observations, interpolating the model to observation locations if necessary. The result `n` is the difference `c - c_obs`.
+"""
 function model_data_misfit(c::Field{T}, c_obs::Field{T},
                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing, wis = nothing) where {T, G}
     # n = (c - c_obs)
@@ -319,11 +320,10 @@ function model_data_misfit(c::NamedTuple, c_obs::NamedTuple,
 
 end
 
-
 """
-    gmodel_data_misfit(dn, c, c_obs, γ; locs=nothing) -> gradient
+    gmodel_data_misfit(dn, c, c_obs, γ; ...) -> Field
 
-Adjoint of `model_data_misfit`: propagate residual sensitivities `dn` back to the state.
+Compute the adjoint of the model-data misfit calculation. This function propagates the sensitivities of the cost function with respect to the misfit `dn` back to sensitivities on the full tracer field `gc`. It is a crucial step in the adjoint model's backward pass.
 """
 function gmodel_data_misfit(dn::Field{T}, c::Field{T}, c_obs::Field{T}, 
                                   γ::Grid; locs::Union{Nothing, NamedTuple}=nothing) where {T}
@@ -374,42 +374,40 @@ function gmodel_data_misfit(gn::NamedTuple, c::NamedTuple, c_obs::NamedTuple,
     return gc_nt
 end
 
-
 """
-    unconstrained_global_forward(ub, uq, m, controls, c_obs, γ; locs=nothing)
+    unconstrained_global_forward(controls, c_obs, γ; ...)
 
-Forward pass for the unconstrained cost: applies control updates, assembles matrices,
-solves the steady state, and returns intermediates needed for the backward pass.
+Execute the forward pass for the full cost function evaluation. This involves applying the current control parameters to solve for the steady-state tracer distribution and then calculating the total cost. It returns the total cost `J` and intermediate state variables needed for the corresponding backward pass.
 """
 function unconstrained_global_forward(controls::ControlParameters,
                                       c_obs, γ; locs = nothing)
-    b = controls.b #may benefit from having a controls .b 
-    q = controls.q
+    b = controls.boundary.b #may benefit from having a controls .b 
+    q = controls.source.q
 
-    du_names = keys(controls.ub)
-    dq_names = keys(controls.uq)
+    du_names = keys(controls.boundary.ub)
+    dq_names = keys(controls.source.uq)
 
     @inbounds for key in keys(b)
-        setboundarycondition!(controls.b[key], controls.u₀[key]) #du = ub - u₀
+        setboundarycondition!(controls.boundary.b[key], controls.boundary.u₀[key]) #du = ub - u₀
         if key ∈ du_names
-            setboundarycondition!(controls.dub[key], controls.ub[key]) #du = ub - u₀
-            adjustboundarycondition!(controls.dub[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
-            adjustboundarycondition!(b[key], controls.dub[key]; r = 1.0) #b = b + du
+            setboundarycondition!(controls.boundary.dub[key], controls.boundary.ub[key]) #du = ub - u₀
+            adjustboundarycondition!(controls.boundary.dub[key], controls.boundary.u₀[key]; r = -1.0) #du = ub - u₀
+            adjustboundarycondition!(b[key], controls.boundary.dub[key]; r = 1.0) #b = b + du
         end
     end
 
     @inbounds for key in keys(q)
         if !isnothing(q[key])
-            replacesource!(controls.q[key], controls.q₀[key]) #dq = uq - q₀
+            replacesource!(controls.source.q[key], controls.source.q₀[key]) #dq = uq - q₀
             if key ∈ dq_names #mirrors existing behavior; keys(du) drives source updates
-                replacesource!(controls.duq[key], controls.uq[key]) #du = ub - u₀
-                adjustsource!(controls.duq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
-                adjustsource!(q[key], controls.duq[key]; r = 1.0)  #q = q + dq
+                replacesource!(controls.source.duq[key], controls.source.uq[key]) #du = ub - u₀
+                adjustsource!(controls.source.duq[key], controls.source.q₀[key]; r = -1.0) #dq = uq - q₀
+                adjustsource!(q[key], controls.source.duq[key]; r = 1.0)  #q = q + dq
             end
         end
     end
 
-    A = watermassmatrix(controls.m, γ, controls.mass_fraction_steps)
+    A = watermassmatrix(controls.massfrac.m, γ, controls.massfrac.steps)
     # Alu = lu(A) #avoiding the LU decomposition for now. 
 
     prob = LinearProblem(A,  Vector{Float64}(undef, size(A,1)))
@@ -421,9 +419,9 @@ function unconstrained_global_forward(controls::ControlParameters,
     n = model_data_misfit(c, c_obs, γ; locs=locs)
 
     J = model_observation_cost(n,c_obs) 
-    J += prior_source_cost(controls.duq, controls.q₀, controls.Qₛ) 
-    J += prior_boundary_cost(controls.dub, controls.u₀, controls.Qᵤ)
-    J += prior_mass_fraction_cost(controls.m,controls.m₀,controls.Qₘ)
+    J += prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
+    J += prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
+    J += prior_mass_fraction_cost(controls.massfrac.m,controls.massfrac.m₀,controls.massfrac.Qₘ)
 
     return (
         J = J,
@@ -434,23 +432,22 @@ function unconstrained_global_forward(controls::ControlParameters,
 end
 
 """
-    unconstrained_global_backward(state, controls, c_obs, γ; locs=nothing)
+    unconstrained_global_backward!(state, controls, c_obs, γ; ...)
 
-Backward pass given intermediates from `unconstrained_global_forward`, returning gradients
-with respect to (ub, uq, m) in the same structured containers as their inputs.
+Execute the backward pass of the adjoint model to compute gradients of the cost function. This function takes the state from the forward pass and propagates sensitivities backward through the model equations. It calculates the gradients with respect to all control variables and stores them in the `controls` object.
 """
 function unconstrained_global_backward!(state, controls::ControlParameters, c_obs, γ; locs = nothing)
     c = state.c
     n = state.n
     A = state.A
 
-    zero!(controls.gdub)
-    zero!(controls.gduq)
-    zero!(controls.gm)
+    zero!(controls.boundary.gdub)
+    zero!(controls.source.gduq)
+    zero!(controls.massfrac.gm)
 
-    gprior_boundary_cost!(controls.gdub, controls.dub,controls.u₀, controls.Qᵤ)
-    gprior_source_cost!(controls.gduq, controls.duq,controls.q₀, controls.Qₛ)
-    gprior_mass_fraction_cost!(controls.gm, controls.m, controls.m₀, controls.Qₘ)
+    gprior_boundary_cost!(controls.boundary.gdub, controls.boundary.dub,controls.boundary.u₀, controls.boundary.Qᵤ)
+    gprior_source_cost!(controls.source.gduq, controls.source.duq,controls.source.q₀, controls.source.Qₛ)
+    gprior_mass_fraction_cost!(controls.massfrac.gm, controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
 
     # Start adjoint by differentiating the observation-cost wrt residuals.
     gn = gmodel_observation_cost(n, c_obs)
@@ -461,28 +458,33 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
     P = ilu(A_t; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
-    gA_total = gsteadyinversion!(controls.gdub, controls.gduq, 
-                                 gc, c, A, cache, controls.b, controls.q, γ)
+    gA_total = gsteadyinversion!(controls.boundary.gdub, controls.source.gduq, 
+                                 gc, c, A, cache, controls.boundary.b, controls.source.q, γ)
 
-    gwatermassmatrix!(controls.gm, gA_total, controls.m, γ, controls.mass_fraction_steps)
+    gwatermassmatrix!(controls.massfrac.gm, gA_total, controls.massfrac.m, γ, controls.massfrac.steps)
 
 end
 
+"""
+    _write_gradient!(G, gu, gq, gm, controls)
+
+A helper function to flatten the structured gradients (`gu`, `gq`, `gm`) into a single vector `G`. This is used to prepare the gradient for consumption by an optimization algorithm. The function writes the components of the gradient in-place into the vector `G`.
+"""
 @inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
     idx = 1
-    if !isnothing(controls.ub)
+    if !isnothing(controls.boundary.ub)
         guv = vec(gu)
         len = length(guv)
         copyto!(G, idx, guv, 1, len)
         idx += len
     end
-    if !isnothing(controls.uq)
+    if !isnothing(controls.source.uq)
         gqv = vec(gq)
         len = length(gqv)
         copyto!(G, idx, gqv, 1, len)
         idx += len
     end
-    if !isnothing(controls.m)
+    if !isnothing(controls.massfrac.m)
         gmv = vec(gm)
         len = length(gmv)
         copyto!(G, idx, gmv, 1, len)
@@ -490,6 +492,11 @@ end
     return nothing
 end
 
+"""
+    optim_fg_constrained_global_costfunction!(F, G, control_vector, ...)
+
+This function provides the core interface to `Optim.jl` for cost function and gradient evaluation. It takes a flat `control_vector`, reconstructs the structured control parameters, runs the forward and backward passes, and returns the cost `F` and gradient `G`. It also handles transformations (e.g., softmax for mass fractions) required by the optimization.
+"""
 function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G::Union{Nothing, Vector{T}}, control_vector::Vector{T},
     controls::ControlParameters, c_obs, γ; locs = nothing) where T
 
@@ -498,14 +505,14 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
     α = 5. #an optional parameter to shrink gradients related to this transformation
     #controls.m is a real number vector 
     #transform m ∈ R to mass fraction that are non-negative and sum to 1
-    softmax_massfractions!(controls.m; α = α)  
+    softmax_massfractions!(controls.massfrac.m; α = α)  
 
     state = unconstrained_global_forward(controls, c_obs, γ; locs = locs)
 
     if G !== nothing
         unconstrained_global_backward!(state, controls, c_obs, γ; locs = locs)
-        gx = gsoftmax_massfractions(controls.gm, controls.m; α = α)
-        _write_gradient!(G, controls.gdub, controls.gduq, gx, controls)
+        gx = gsoftmax_massfractions(controls.massfrac.gm, controls.massfrac.m; α = α)
+        _write_gradient!(G, controls.boundary.gdub, controls.source.gduq, gx, controls)
         # GC.gc()
     end
 
@@ -513,91 +520,3 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
         return state.J
     end
 end
-
-###### OLD REFERENCE. More anaytical, but really slow #####
-# """
-#     unconstrained_global_costfunction(ub, uq, m, controls, c_obs, γ; locs=nothing, return_gradients=false)
-
-# Objective for the unconstrained inversion: update `b`/`q` with controls, assemble `A`,
-# solve the steady state, add observation misfit and priors, and optionally return adjoint
-# gradients w.r.t. `du`, `dq`, and `m` when `return_gradients=true`.
-# """
-# function unconstrained_global_costfunction(ub, uq, m, controls::ControlParameters, 
-#                                            c_obs, γ; locs = nothing, return_gradients = false)
-#     # Forward pass: compute state at current control vector
-#     b = deepcopy(controls.u₀) #deep-copying to 
-#     q = deepcopy(controls.q₀)
-#     du = deepcopy(ub)
-#     dq = deepcopy(uq)
-
-#     # Apply control updates: du,dq store perturbations relative to priors.
-#     du_names = keys(ub)
-#     dq_names = keys(uq)
-
-#     for key in keys(b)
-#         if key ∈ du_names
-#             adjustboundarycondition!(du[key], controls.u₀[key]; r = -1.0) #du = ub - u₀
-#             adjustboundarycondition!(b[key], du[key]; r = 1.0) #du = ub - u₀
-#         end
-#     end
-
-#     for key in keys(q)
-#         if !isnothing(q[key])
-#             if key ∈ du_names
-#                 adjustsource!(dq[key], controls.q₀[key]; r = -1.0) #dq = uq - q₀
-#                 adjustsource!(q[key], dq[key]; r = 1.0)  #uq = uq + q₀
-#             end
-#         end
-#     end
-
-#     A = watermassmatrix(m, γ)
-#     Alu = lu(A)
-
-#     # Solve for each tracer
-#     c = steadyinversion(Alu,b, q, γ)
-#     n = model_data_misfit(c, c_obs, γ; locs=locs)
-#     J = model_observation_cost(n,c_obs) + 
-#         prior_source_cost(dq, controls.q₀, controls.Qₛ) + 
-#         prior_boundary_cost(du, controls.u₀, controls.Qᵤ) + 
-#         prior_mass_fraction_cost(m,controls.m₀,controls.Qₘ)
-        
-#     if !return_gradients 
-#         return J, nothing, nothing, nothing #just return cost
-#     else
-#         # Propagate gradients through adjoint operations
-#         gdu = zero(du)
-#         gdq = zero(dq)
-#         gm = similar(controls.m₀)
-
-#         # Prior contributions (no model dynamics).
-#         gdu_1 = gprior_boundary_cost(du,controls.u₀, controls.Qᵤ)
-#         gdq_1 = gprior_source_cost(dq,controls.q₀, controls.Qₛ)
-#         gm_1 = gprior_mass_fraction_cost(m, controls.m₀, controls.Qₘ)
-
-#         # Start adjoint by differentiating the observation-cost wrt residuals.
-#         gn = gmodel_observation_cost(n, c_obs)
-#         gc = gmodel_data_misfit(gn, c, c_obs, γ; locs=locs)
-#         gdu_2, gdq_2, gA_total = gsteadyinversion(gc, c, A, Alu, b, q)
-#         gm_2 = gwatermassmatrix(gA_total, m, γ)
-
-#         # Accumulate adjoint contributions into control gradients.
-#         for key in du_names
-#             gadjustboundarycondition!(gdu[key], gdu_1[key])
-#             gadjustboundarycondition!(gdu[key], gdu_2[key])
-#         end
-
-#         for key in dq_names
-#             if !isnothing(q[key])
-#                 gadjustsource!(gdq[key], gdq_1[key], controls.q₀[key])
-#                 gadjustsource!(gdq[key], gdq_2[key], controls.q₀[key])
-#             end
-#         end
-
-#         for key in keys(gm)
-#             gm[key].fraction .= gm_1[key].fraction .+ gm_2[key].fraction
-#         end
-
-#         #since du = u - u₀, ∂J/∂du = ∂J/∂u. Same for dq if q is not on logscale 
-#         return J, gdu, gdq, gm
-#     end
-# end
