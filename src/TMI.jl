@@ -72,21 +72,15 @@ export config, download_file,
 
 export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
     Observations, ControlParameters, vectorize_controls, setup_inversion,
-    zero, 
     gsteadyinversion, gwatermassmatrix, gwatermassmatrix!, gadjustboundarycondition, 
     gadjustboundarycondition!, gadjustsource!, 
     model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
     prior_boundary_cost, prior_source_cost, gprior_boundary_cost, 
     gprior_source_cost, gmodel_observation_cost, 
     gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
-    unconstrained_global_costfunction, optim_fg_constrained_global_costfunction!, 
-    constrained_global_costfunction, optim_fg_constrained_global_costfunction2!, 
-    optim_fg_constrained_global_costfunction3!, 
-    softmax_massfractions!, watermassmatrix!, precompute_mass_fraction_steps, 
-    replacesource!, steadyinversion2, gprior_boundary_cost!, gprior_source_cost!
-    
-
-# export Observations, 
+    optim_fg_constrained_global_costfunction!, 
+    softmax_massfractions!, precompute_mass_fraction_steps, 
+    replacesource!, gprior_boundary_cost!, gprior_source_cost!
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
