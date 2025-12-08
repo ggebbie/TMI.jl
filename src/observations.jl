@@ -15,6 +15,8 @@ struct Observations{T, V, WI}
     locs::Union{Vector{V}, Nothing}
     wis::Union{Vector{WI}, Nothing}
     W::Union{Symmetric, Diagonal, Nothing}
+    decay_rate::Union{T, Nothing}
+    decay_rate_matrix::Union{SparseMatrixCSC, Nothing}
 end
 
 """
@@ -26,11 +28,25 @@ If locations are provided, interpolation weights are precomputed.
 function Observations(values::Union{Vector{T}, Field{T}};
                       locs::Union{Vector{V}, Nothing} = nothing,
                       γ::Union{Grid, Nothing} = nothing,
-                      W::Union{Symmetric, Diagonal, Nothing} = nothing) where {T, V}
+                      W::Union{Symmetric, Diagonal, Nothing} = nothing,
+                      decay_rate::Union{T, Nothing} = nothing) where {T, V}
+
+    n = values isa Vector ? length(values) : length(vec(values)) # Use 'n' here, as it is consistent with the argument list
+
     if !isnothing(W)
         # Keep a quick sanity check that weights match the observation count.
-        n = values isa Vector ? length(values) : length(vec(values))
         size(W) == (n, n) || error("W must have dimensions ($n, $n) to match the length of values")
+    end
+
+    num_wet_cells = isnothing(γ) ? 0 : sum(γ.wet)
+
+    if isnothing(decay_rate)
+        decay_rate_matrix = nothing
+    else
+        if num_wet_cells == 0
+            error("γ must be provided to create decay_rate_matrix")
+        end
+        decay_rate_matrix = spdiagm(0 => fill(decay_rate, num_wet_cells))
     end
 
     if isnothing(locs)
@@ -47,7 +63,7 @@ function Observations(values::Union{Vector{T}, Field{T}};
         WIType = eltype(wis)
     end
 
-    return Observations{T, VType, WIType}(values, locs, wis, W)
+    return Observations{T, VType, WIType}(values, locs, wis, W, decay_rate, decay_rate_matrix)
 end
 
 

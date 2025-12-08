@@ -69,7 +69,22 @@ function constrained_global_optimization(controls::ControlParameters, c_obs, γ:
     return result_opt_fg
 end
 
-x0 = vcat([vec(controls.u₀), vec(controls.q₀), randn(length(vec(controls.m₀)))]...)
+x0 = vcat([vec(controls.boundary.u₀), vec(controls.source.q₀), randn(length(vec(controls.massfrac.m₀)))]...)
+
+G_tests = zero(x0)
+function fg!(F, G, x)
+        optim_fg_constrained_global_costfunction!(F, G, x, controls, c_obs, γ; locs=nothing)
+end
+
+fg!(NaN, G_tests, x0)
+
+idx = rand(1:length(G_tests)); small = 1e-3
+x0_pert1 = deepcopy(x0); x0_pert1[idx] += small
+x0_pert2 = deepcopy(x0); x0_pert2[idx] -= small
+
+(fg!(NaN, nothing, x0_pert1) .- fg!(NaN, nothing, x0_pert2)) / (2 * small)
+G_tests[idx]
+
 result_opt_fg = constrained_global_optimization(controls, c_obs, γ; x0 = x0)
 
 # @btime constrained_global_optimization(controls, c_obs, γ; x0 = x0)

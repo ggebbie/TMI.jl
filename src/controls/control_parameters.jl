@@ -1,7 +1,4 @@
 
-include("controls/boundary.jl")
-include("controls/source.jl")
-include("controls/massfrac.jl")
 
 """
     check_shared_references(nt::NamedTuple, name::String)
@@ -25,9 +22,8 @@ function check_shared_references(nt::NamedTuple, name::String)
                         push!(shared_keys, string(key_names[k]))
                     end
                 end
-                error("Shared reference detected in $name: fields " *
-                      "$(join(shared_keys, ", ")) point to the same object in " *
-                      "memory. Use deepcopy to create independent copies.")
+                error("Shared reference in '$name'. Fields $(join(shared_keys, ", "))\n" *
+                      "point to same object. Use deepcopy for independent copies.")
             end
         end
     end
@@ -35,18 +31,19 @@ end
 check_shared_references(x, name::String) = nothing  # Non-NamedTuple, no check needed
 
 """
-    struct ControlParameters{BC, SC, MC, V, UBL, QL, ML, G <: Grid}
+    struct ControlParameters{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
 
 A top-level container for all control variables in an optimization problem. It
-aggregates boundary, source, and mass fraction controls, along with the grid
-and cached data for efficient computation. This struct is the primary object
-passed to cost functions and optimization routines.
+aggregates boundary, source, and mass fraction controls, along with the grid,
+cached data, and optimization bounds for efficient computation.
 """
-struct ControlParameters{BC, SC, MC, V, UBL, QL, ML, G <: Grid}
+struct ControlParameters{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
     boundary::BC
     source::SC
     massfrac::MC
     vector::V
+    lower_bound::LB
+    upper_bound::UB
     ub_length::UBL
     uq_length::QL
     m_length::ML
@@ -60,13 +57,13 @@ end
 Construct and initialize the `ControlParameters` object for an optimization.
 This function takes all individual control components (boundary conditions,
 sources, etc.), organizes them into the appropriate sub-structs, and performs
-necessary pre-caching. It also handles the setup of coupled sources, filtering
-the control vectors to include only independent variables.
+necessary pre-caching.
 """
 function ControlParameters(; γ::Grid,
                             ub=nothing, uq=nothing, m=nothing,
                             u₀=nothing, q₀=nothing, m₀=nothing,
                             Qᵤ=nothing, Qₛ=nothing, Qₘ=nothing,
+                            lower_bound=nothing, upper_bound=nothing,
                             source_couplings=nothing,
                             cache_vector=false, cache_lengths=true,
                             cache_mass_fraction_steps=true,
@@ -83,9 +80,8 @@ function ControlParameters(; γ::Grid,
     if !isnothing(uq)
         for dep_name in dependent_sources
             if haskey(uq, dep_name) && !isnothing(uq[dep_name])
-                error("Tracer :$(dep_name) is defined as a dependent source in " *
-                      "`source_couplings` but also has an independent control " *
-                      "in `uq`. A tracer's source cannot be both.")
+                error("Tracer :$(dep_name) is dependent in `source_couplings`\n" *
+                      "and independent in `uq`. Source cannot be both.")
             end
         end
     end
@@ -119,13 +115,13 @@ function ControlParameters(; γ::Grid,
     # --- Mass Fraction Controls ---
     m_steps = nothing
     if cache_mass_fraction_steps
-        isnothing(m) && throw(ArgumentError("cache_mass_fraction_steps=true requires m"))
+        isnothing(m) && throw(ArgumentError("cache_mass_fraction_steps=true requires `m`."))
         m_steps = precompute_mass_fraction_steps(m, γ)
     end
 
     A_cached = nothing
     if cache_A
-        isnothing(m) && throw(ArgumentError("cache_A=true requires m"))
+        isnothing(m) && throw(ArgumentError("cache_A=true requires `m`."))
         A_cached = watermassmatrix(m, γ, cache_mass_fraction_steps ? m_steps : nothing)
     end
 
@@ -146,7 +142,8 @@ function ControlParameters(; γ::Grid,
                                                massfrac_controls.m) : nothing
     
     return ControlParameters(boundary_controls, source_controls, massfrac_controls,
-                             vector, ub_length, uq_length, m_length, γ)
+                             vector, lower_bound, upper_bound,
+                             ub_length, uq_length, m_length, γ)
 end
 
 
@@ -235,3 +232,4 @@ function unvec!(cp::ControlParameters, vector::AbstractVector)
 
     return cp.boundary.ub, cp.source.uq, cp.massfrac.m
 end
+

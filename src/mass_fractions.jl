@@ -72,6 +72,9 @@ Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
 wet(m::MassFraction) = m.γ.wet
 
 function Base.vec(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    if isempty(u)
+        return Float64[]
+    end
     T = eltype(values(u)[1].fraction)
     #T = eltype(u)
     uvec = Vector{T}(undef,0)

@@ -405,7 +405,7 @@ function unconstrained_global_forward(controls::ControlParameters,
     P = ilu(A; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
-    c = steadyinversion(cache, b, q, γ)
+    c = steadyinversion(cache, b, q, γ; c_obs=c_obs)
     n = model_data_misfit(c, c_obs, γ; locs=locs)
 
     J = model_observation_cost(n, c_obs) 
@@ -449,7 +449,7 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
 
     # Calculate initial sensitivities wrt boundary and all sources (independent & dependent)
     gA_total = gsteadyinversion!(controls.boundary.gdub, controls.source.gduq_cache, 
-                                 gc, c, A, cache, controls.boundary.b, controls.source.q, γ)
+                                 gc, c, A, cache, controls.boundary.b, controls.source.q, γ; c_obs=c_obs)
 
     # Apply chain rule for coupled sources
     update_gduq!(controls.source)

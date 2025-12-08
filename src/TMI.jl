@@ -71,7 +71,7 @@ export config, download_file,
     massfractions, massfractions_isotropic, neighbors
 
 export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
-    Observations, ControlParameters, vectorize_controls,
+    Observations, ControlParameters, vectorize_controls, setup_inversion,
     zero, 
     gsteadyinversion, gwatermassmatrix, gwatermassmatrix!, gadjustboundarycondition, 
     gadjustboundarycondition!, gadjustsource!, 
@@ -122,8 +122,12 @@ include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("parameterizations.jl"))
 include(pkgsrcdir("observations.jl"))
-include(pkgsrcdir("control_parameters.jl"))
+include(pkgsrcdir("controls", "boundary.jl"))
+include(pkgsrcdir("controls", "source.jl"))
+include(pkgsrcdir("controls", "massfrac.jl"))
+include(pkgsrcdir("controls", "control_parameters.jl"))
 include(pkgsrcdir("cost_functions.jl"))
+include(pkgsrcdir("inversion_setup.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -1531,13 +1535,15 @@ function vec(u::NamedTuple)
 
     if ufirst isa Union{Field, BoundaryCondition, Source}
         T = eltype(ufirst.tracer)
+    elseif ufirst isa AbstractVector # Added this clause to handle NamedTuple of Vectors
+        T = eltype(ufirst)
     elseif ufirst isa NamedTuple 
         #handling the case of tuples of tuples
         uufirst = first(filter(!isnothing, values(ufirst)))
         T = eltype(uufirst.tracer)
     end
-
-    #T = eltype(u)
+    #println(typeof(ufirst)) # Commented out debug print
+    # T = eltype(u)
     uvec = Vector{T}(undef,0)
     for v in u
         if !isnothing(v)
@@ -2320,23 +2326,29 @@ end
     steady inversion for b::NamedTuple with q as required positional argument
 """
 function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple{tracer_names, S}, q::NamedTuple,
-                        γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
-    # n_tracers = length(tracer_names)
-    # c_results = Vector{Field}(undef, n_tracers)
+                        γ::Grid{T}; r=1.0, c_obs = nothing) where {T <: Real, tracer_names, S} # c_obs is now OPTIONAL
+    n_tracers = length(tracer_names)
+    c_results = Vector{Field}(undef, n_tracers)
 
-    # for (i, name) in enumerate(tracer_names)
-    #     b_i = get(b, name, nothing)
-    #     q_i = get(q, name, nothing)  # q is a NamedTuple
-    #     c_results[i] = steadyinversion(Alu,b_i,γ;q=q_i, r = r) #Alu \ d
-    # end
-    # c_nt = NamedTuple{tracer_names}(Tuple(c_results))
-    c_nt = map(b, q) do b_i, q_i
-            steadyinversion(cache, b_i, γ; q = q_i, r = r)
-            end
+    for (i, name) in enumerate(tracer_names)
+        local_cache = cache # Start with the original cache
+
+        # Check for decay rate for this specific tracer, with !isnothing(c_obs)
+        if !isnothing(c_obs) && haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = cache.A - c_obs[name].decay_rate_matrix # Modify A from the original cache
+            prob = LinearProblem(A_modified, Vector{Float64}(undef, size(A_modified,1)))
+            P = ilu(A_modified; τ=0.01)
+            local_cache = init(prob, KrylovJL_GMRES(); Pl=P) # Create a new local_cache
+        end
+
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)  # q is a NamedTuple
+        c_results[i] = steadyinversion(local_cache, b_i, γ; q = q_i, r = r) # Use the potentially modified local_cache
+    end
+    c_nt = NamedTuple{tracer_names}(Tuple(c_results))
     return c_nt
 
 end
-
 function gsteadyinversion(gc::Field,c::Field,A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU}, 
                         b::Union{BoundaryCondition,NamedTuple}, q::Union{Nothing,Source},γ::Grid; r=1.0) #where T <: Real
     #println("running adjoint steady inversion")
@@ -2508,7 +2520,7 @@ function gsteadyinversion!(
 end
 
 function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
-    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0) where {b_names, B, q_names, Q}
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs) where {b_names, B, q_names, Q} # c_obs is now REQUIRED
 
     tracer_names = keys(gc)
 
@@ -2527,11 +2539,20 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.L
     gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
 
     for (i, name) in enumerate(tracer_names)
+        local_cache_adjoint = cache # Start with the original adjoint cache
+        if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = A - c_obs[name].decay_rate_matrix
+            A_modified_t = sparse(transpose(A_modified))
+            prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
+            P_t = ilu(A_modified_t; τ=0.01)
+            local_cache_adjoint = init(prob_t, KrylovJL_GMRES(); Pl=P_t)
+        end
+
         b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)
 
         gb_i, gq_i = gsteadyinversion!(
-            gA_vals, gc[name], c[name], cache,
+            gA_vals, gc[name], c[name], local_cache_adjoint, # Pass local_cache_adjoint here
             b_i, q_i, gA_rows, gA_cols, γ; r = r)
 
         gb_results[i] = gb_i
@@ -2596,8 +2617,8 @@ In-place variant that writes boundary/source adjoints directly into preallocated
 function gsteadyinversion!(
     gdub::NamedTuple, gduq::NamedTuple,
     gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
-    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0
-) where {b_names, B, q_names, Q}
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs
+) where {b_names, B, q_names, Q} 
 
     tracer_names = keys(gc)
 
@@ -2610,12 +2631,21 @@ function gsteadyinversion!(
     gA_vals = zeros(Tval, length(gA_rows))
 
     for name in tracer_names
+        local_cache_adjoint = cache # Start with the original adjoint cache
+        if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = A - c_obs[name].decay_rate_matrix
+            A_modified_t = sparse(transpose(A_modified))
+            prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
+            P_t = ilu(A_modified_t; τ=0.01)
+            local_cache_adjoint = init(prob_t, KrylovJL_GMRES(); Pl=P_t)
+        end
+
         b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)
 
         gsteadyinversion!(
             gdub[name], gduq[name],
-            gA_vals, gc[name], c[name], cache,
+            gA_vals, gc[name], c[name], local_cache_adjoint, # Pass local_cache_adjoint here
             b_i, q_i, gA_rows, gA_cols, γ; r = r)
     end
 
