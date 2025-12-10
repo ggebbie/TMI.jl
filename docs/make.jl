@@ -18,6 +18,8 @@ makedocs(;
         "Configuration" => "config.md",
         "Grid" => "grid.md",
         "Boundary Conditions" => "boundaries.md",
+        "Observations" => "observations.md",
+        "Controls" => "controls.md",
         "Plots" => "plots.md",
         "Utilities" => "utils.md",
         "Function List" => "functions.md",

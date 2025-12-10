@@ -66,7 +66,8 @@ export config, download_file,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    massfractions, massfractions_isotropic, neighbors
+    massfractions, massfractions_isotropic, neighbors, 
+    Observations
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
@@ -101,6 +102,9 @@ include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
+include(pkgsrcdir("observations.jl"))
+include(pkgsrcdir("setup_inversion.jl"))
+
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)

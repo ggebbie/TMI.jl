@@ -22,5 +22,8 @@ end
 
     include("test_massfractions.jl")
 
+    include("test_observations.jl")
+    include("test_controls.jl")
+
     include("test_1d.jl")
 end

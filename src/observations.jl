@@ -1,0 +1,73 @@
+"""
+    Observations{T, V, WI}
+    Observations(values; locs=nothing, γ=nothing, W=nothing)
+
+Container for observation data with optional locations and weighting. If locations are provided,
+interpolation weights are precomputed via `interpindex(loc, γ)`.
+
+- `values::Union{Vector, Field}`: observation values (vector or grid Field)
+- `locs::Union{Vector, Nothing}`: observation locations (or `nothing`)
+- `γ::Grid`: grid used for interpolation (required when `locs` are given)
+- `W::Union{Symmetric, Diagonal, Nothing}`: optional weighting matrix
+"""
+struct Observations{T, V, WI}
+    values::Union{Vector{T}, Field{T}}
+    locs::Union{Vector{V}, Tuple{V}, Nothing}
+    wis::Union{Vector{WI}, Nothing}
+    W::Union{Symmetric, Diagonal, Nothing}
+    decay_rate::Union{T, Nothing}
+end
+
+"""
+    Observations(values; locs = nothing, γ = nothing, W = nothing) -> Observations
+
+Construct Observations from values with optional locations, grid, and weighting matrix.
+If locations are provided, interpolation weights are precomputed.
+"""
+function Observations(values::Union{Vector{T}, Field{T}};
+                      locs::Union{Vector{V}, Tuple{V}, Nothing} = nothing,
+                      γ::Union{Grid, Nothing} = nothing,
+                      W::Union{Symmetric, Diagonal, Nothing} = nothing,
+                      decay_rate::Union{T, Nothing} = nothing) where {T, V}
+
+    n = values isa Vector ? length(values) : length(vec(values)) # Use 'n' here, as it is consistent with the argument list
+
+    if !isnothing(W)
+        # Keep a quick sanity check that weights match the observation count.
+        size(W) == (n, n) || error("W must have dimensions ($n, $n) to match the length of values")
+    end
+
+    if isnothing(locs)
+        wis = nothing
+        VType = Nothing
+        WIType = Nothing
+    else
+        values isa Field && error("locs should be `nothing` when values is a Field")
+        length(values) == length(locs) || error("values and locs must have the same length")
+        isnothing(γ) && error("γ must be provided when locs are given")
+        # Precompute interpolation weights once; reused by observe/gobserve.
+        wis = [interpindex(loc, γ) for loc in locs]
+        VType = V
+        WIType = eltype(wis)
+    end
+
+    return Observations{T, VType, WIType}(values, locs, wis, W, decay_rate)
+end
+
+
+function observe(c::Field{T}, c_obs::Observations, γ)::Vector{T} where {T <: Real}
+    return observe(c, c_obs.wis, γ)
+end
+
+
+function gobserve(gy::Vector{T},c::Field{T}, c_obs::Observations, γ) where T <: Real
+
+    #initialize gc this sneaky way
+    gc = 0.0 * c
+    for ii in eachindex(gy)
+        # interpweights repeats some calculations
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ; wis = c_obs.wis)[c.γ.wet]
+    end
+
+    return gc
+end
