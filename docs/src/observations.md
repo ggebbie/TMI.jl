@@ -10,6 +10,9 @@ An `Observation` is created using the `Observations` constructor, which takes th
 Here's an example of how to create an `Observation` object for a temperature field:
 
 ```julia
+using TMI
+using LinearAlgebra
+
 # Load a gridded temperature data
 TMIversion = "modern_90x45x33_GH10_GH12"
 A, Alu, γ, TMIfile, L, B = config(TMIversion)
