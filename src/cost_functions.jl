@@ -1,12 +1,39 @@
 
 """
+    _write_gradient!(G, gu, gq, gm, controls)
+
+A helper function to flatten the structured gradients (`gu`, `gq`, `gm`) into a single vector `G`. This is used to prepare the gradient for consumption by an optimization algorithm. The function writes the components of the gradient in-place into the vector `G`.
+"""
+@inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
+    idx = 1
+    if !isnothing(controls.boundary.ub)
+        guv = vec(gu)
+        len = length(guv)
+        copyto!(G, idx, guv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.source.uq)
+        gqv = vec(gq)
+        len = length(gqv)
+        copyto!(G, idx, gqv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.massfrac.m)
+        gmv = vec(gm)
+        len = length(gmv)
+        copyto!(G, idx, gmv, 1, len)
+    end
+    return nothing
+end
+
+"""
     prior_mass_fraction_cost(m, m₀, Qⁱₘ) -> Real
 
 Calculate the quadratic cost associated with deviations of mass fractions `m` from a prior estimate `m₀`. This cost is weighted by the inverse covariance matrix `Qⁱₘ`, penalizing larger deviations from the prior. It is a core component of the objective function in an inverse problem.
 """
 function prior_mass_fraction_cost(m::Vector,m₀::Vector,Qⁱₘ::Union{Diagonal, Symmetric})
     Δm = (m .- m₀)
-    return Δm' * Qⁱₘ * Δm
+    return (1 / length(m)) * Δm' * Qⁱₘ * Δm
 end
 
 function prior_mass_fraction_cost(m::NamedTuple,m₀::NamedTuple,Qⁱₘ::Union{Diagonal, Symmetric})
@@ -20,7 +47,7 @@ Compute the gradient of the mass-fraction prior cost function. This gradient is 
 """
 function gprior_mass_fraction_cost(m::Vector,m₀::Vector,Qₘ::Union{Diagonal, Symmetric})
     Δm = (m .- m₀)
-    gmvec = 2 * Qₘ * Δm
+    gmvec = (2 / length(m)) * Qₘ * Δm
     return gmvec
 end
 
@@ -41,7 +68,7 @@ Calculate the quadratic cost for perturbations `du` to the boundary conditions r
 function prior_boundary_cost(duvec::AbstractVector,
                              u₀::Union{BoundaryCondition{T}, NamedTuple},
                              Qⁱᵤ::Union{Diagonal, Symmetric}) where {T}
-    return duvec' * Qⁱᵤ * duvec
+    return (1 / length(duvec)) * duvec' * Qⁱᵤ * duvec
 end
 
 function prior_boundary_cost(
@@ -67,7 +94,9 @@ function prior_boundary_cost(du::NamedTuple,u₀::NamedTuple,Qᵤ::NamedTuple)
     J = 0
     for (i, name) in enumerate(tracer_names)
         J += prior_boundary_cost(vec(du[name]), u₀[name], Qᵤ[name])
+
     end
+    
     return J
 end
 
@@ -79,7 +108,7 @@ Compute the gradient of the boundary condition prior cost. This provides the sen
 function gprior_boundary_cost(duvec::AbstractVector,
                               u₀::Union{BoundaryCondition{T}, NamedTuple},
                               Qⁱᵤ::Union{Diagonal, Symmetric}) where {T}
-    return 2 * Qⁱᵤ * duvec
+    return (2  / length(duvec)) * Qⁱᵤ * duvec
 end
 
 function gprior_boundary_cost(
@@ -131,7 +160,7 @@ Calculate the quadratic cost for perturbations `dq` to interior sources/sinks re
 function prior_source_cost(dqvec::Union{Vector, SubArray},
                            q₀::Union{Source{T}, NamedTuple},
                            Qⁱₛ::Union{Diagonal, Symmetric}) where {T}
-    return dqvec' * Qⁱₛ * dqvec
+    return (1 / length(dqvec)) * dqvec' * Qⁱₛ * dqvec
 end
 
 function prior_source_cost(
@@ -158,6 +187,7 @@ function prior_source_cost(dq::NamedTuple,q₀::NamedTuple,Qₛ::NamedTuple)
     J = 0
     for (i, name) in enumerate(tracer_names)
         if !isnothing(q₀[name])
+
             J += prior_source_cost(vec(dq[name]), q₀[name], Qₛ[name])
         end
     end
@@ -172,7 +202,7 @@ Compute the gradient of the interior source/sink prior cost. This provides the s
 function gprior_source_cost(dqvec::Union{Vector, SubArray},
                             q₀::Union{Source{T}, NamedTuple},
                             Qⁱₛ::Union{Diagonal, Symmetric}) where {T}
-    gdqvec = 2 * Qⁱₛ * dqvec
+    gdqvec = (2 / length(dqvec))  * Qⁱₛ * dqvec
     return gdqvec
 end
 
@@ -233,7 +263,7 @@ Calculate the quadratic cost of the model-data misfit `n`, weighted by the inver
 """
 function model_observation_cost(n::Union{Vector, Field{T}},
                                 Wⁱ::Union{Diagonal, Symmetric}) where {T}
-    return n ⋅ (Wⁱ * n)
+    return (1 / length(vec(n))) * (n ⋅ (Wⁱ * n))
 end
 
 function model_observation_cost(n::NamedTuple,c_obs::NamedTuple)
@@ -252,7 +282,7 @@ Compute the gradient of the model-observation misfit cost. This represents the s
 """
 function gmodel_observation_cost(n::Union{Vector, Field{T}},
                                  Wⁱ::Union{Diagonal, Symmetric}) where {T}
-    gnvec = 2 * Wⁱ * n
+    gnvec = (2 / length(vec(n))) * Wⁱ * n 
     return gnvec
 end
 
@@ -383,35 +413,34 @@ function unconstrained_global_forward(controls::ControlParameters,
                                       c_obs, γ; locs = nothing)
     
     b = controls.boundary.b
-    
-    # Update boundary conditions
-    du_names = keys(controls.boundary.ub)
-    @inbounds for key in keys(b)
-        setboundarycondition!(controls.boundary.b[key], controls.boundary.u₀[key])
-        if key ∈ du_names
-            setboundarycondition!(controls.boundary.dub[key], controls.boundary.ub[key])
-            adjustboundarycondition!(controls.boundary.dub[key], controls.boundary.u₀[key]; r = -1.0)
-            adjustboundarycondition!(b[key], controls.boundary.dub[key]; r = 1.0)
-        end
-    end
+
+    # Update all boundary fields (alyways independent)
+    update_b!(controls.boundary)
 
     # Update all source fields (independent and coupled)
     update_q!(controls.source)
     q = controls.source.q
 
     A = watermassmatrix(controls.massfrac.m, γ, controls.massfrac.steps)
-    
+    # Alu = lu(A)
     prob = LinearProblem(A, Vector{Float64}(undef, size(A,1)))
     P = ilu(A; τ=0.01)
     cache = init(prob, KrylovJL_GMRES(); Pl=P)
 
     c = steadyinversion(cache, b, q, γ; c_obs=c_obs)
+
+    # c = steadyinversion(Alu, b, q, γ)
     n = model_data_misfit(c, c_obs, γ; locs=locs)
 
-    J = model_observation_cost(n, c_obs) 
-    J += prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
-    J += prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
-    J += prior_mass_fraction_cost(controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
+    J_obs = model_observation_cost(n, c_obs) 
+    J_source = prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
+    J_boundary = prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
+    J_massfrac = prior_mass_fraction_cost(controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
+    println("J_obs = ", J_obs)
+    println("J_source = ", J_source)
+    println("J_boundary = ", J_boundary)
+    println("J_massfrac = ", J_massfrac)
+    J = J_obs + J_source + J_boundary + J_massfrac
 
     return (J=J, c=c, n=n, A=A)
 end
@@ -458,32 +487,7 @@ function unconstrained_global_backward!(state, controls::ControlParameters, c_ob
     gwatermassmatrix!(controls.massfrac.gm, gA_total, controls.massfrac.m, γ, controls.massfrac.steps)
 end
 
-"""
-    _write_gradient!(G, gu, gq, gm, controls)
 
-A helper function to flatten the structured gradients (`gu`, `gq`, `gm`) into a single vector `G`. This is used to prepare the gradient for consumption by an optimization algorithm. The function writes the components of the gradient in-place into the vector `G`.
-"""
-@inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
-    idx = 1
-    if !isnothing(controls.boundary.ub)
-        guv = vec(gu)
-        len = length(guv)
-        copyto!(G, idx, guv, 1, len)
-        idx += len
-    end
-    if !isnothing(controls.source.uq)
-        gqv = vec(gq)
-        len = length(gqv)
-        copyto!(G, idx, gqv, 1, len)
-        idx += len
-    end
-    if !isnothing(controls.massfrac.m)
-        gmv = vec(gm)
-        len = length(gmv)
-        copyto!(G, idx, gmv, 1, len)
-    end
-    return nothing
-end
 
 """
     optim_fg_constrained_global_costfunction!(F, G, control_vector, ...)
@@ -507,6 +511,43 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
         gx = gsoftmax_massfractions(controls.massfrac.gm, controls.massfrac.m; α = α)
         _write_gradient!(G, controls.boundary.gdub, controls.source.gduq, gx, controls)
         # GC.gc()
+    end
+
+    if F !== nothing
+        return state.J
+    end
+end
+
+function optim_fg_unconstrained_global_costfunction!(F::Union{Nothing, Float64}, G::Union{Nothing, Vector{T}}, control_vector::Vector{T},
+    controls::ControlParameters, c_obs, γ; locs = nothing, u₀_scale = nothing, q₀_scale = nothing ) where T
+
+    unvec!(controls, control_vector) 
+
+     # imposes a rescaling if desired by the user. in theory this should help improve the condition 
+     # number of an approximated Hessian. However, modern solver (e.g., Ipopt) 
+     # seem to deal with this quite well already.  
+    if !isnothing(u₀_scale)
+        rescale_parameter!(controls.boundary.ub, u₀_scale)
+    end
+
+    if !isnothing(q₀_scale)
+        rescale_parameter!(controls.source.uq, q₀_scale)
+    end
+    
+    state = unconstrained_global_forward(controls, c_obs, γ; locs = locs)
+
+    if G !== nothing
+        unconstrained_global_backward!(state, controls, c_obs, γ; locs = locs)
+
+        if !isnothing(u₀_scale)
+            rescale_parameter!(controls.boundary.gdub, u₀_scale)
+        end
+
+        if !isnothing(q₀_scale)
+            rescale_parameter!(controls.source.gduq, q₀_scale)
+        end       
+
+        _write_gradient!(G, controls.boundary.gdub, controls.source.gduq, controls.massfrac.gm, controls)
     end
 
     if F !== nothing

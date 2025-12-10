@@ -133,7 +133,7 @@ function setup_inversion(γ::Grid;
 
     # --- Boundary Conditions Setup ---
     u₀_b = get(boundary, :prior, NamedTuple())
-    ub_ig = get(boundary, :initial_guess, u₀_b)
+    ub_ig = deepcopy(get(boundary, :initial_guess, u₀_b))
     ub_controls = !isempty(u₀_b) ? (isempty(ub_ig) ? deepcopy(u₀_b) : ub_ig) : NamedTuple()
     Qᵤ_final = !isempty(u₀_b) ? _build_tracer_precision_matrix(boundary, ub_controls) : NamedTuple()
 
@@ -150,7 +150,7 @@ function setup_inversion(γ::Grid;
 
         # Build the `uq` tuple, which has `nothing` for non-controlled sources
         potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀_all))
-        uq_ig_full = get(source, :initial_guess, q₀_all)
+        uq_ig_full = deepcopy(get(source, :initial_guess, q₀_all))
 
         uq_controls_nt = NamedTuple{potential_ind_sources}(
              map(potential_ind_sources) do name
@@ -170,7 +170,7 @@ function setup_inversion(γ::Grid;
 
     # --- Mass Fraction Setup ---
     m₀_mf = get(mass_fraction, :prior, NamedTuple())
-    m_ig = get(mass_fraction, :initial_guess, m₀_mf)
+    m_ig = deepcopy(get(mass_fraction, :initial_guess, m₀_mf))
     m_controls = !isempty(m₀_mf) ? (isempty(m_ig) ? deepcopy(m₀_mf) : m_ig) : NamedTuple()
     Qₘ_final = !isempty(m₀_mf) ? _build_massfrac_precision_matrix(mass_fraction, m_controls) : NamedTuple()
 
@@ -196,7 +196,6 @@ function setup_inversion(γ::Grid;
     lower_bound_vec = vectorize_controls(lb_b_controls, lb_q_controls, lb_m_controls)
     upper_bound_vec = vectorize_controls(ub_b_controls, ub_q_controls, ub_m_controls)
 
-    # --- Final Assembly ---
     return ControlParameters(; γ = γ,
                              ub = ub_controls, uq = uq_controls, m = m_controls,
                              u₀ = u₀_b, q₀ = q₀_all, m₀ = m₀_mf,

@@ -25,7 +25,7 @@ export config, download_file,
     planview, 
     section,
     tracerinit,
-    watermassmatrix, watermassdistribution,
+    watermassmatrix, inverse_watermassmatrix, watermassdistribution,
     circulationmatrix, boundarymatrix,
     dirichletmatrix, mixedlayermatrix, 
     linearindex, nearestneighbor, updatelinearindex,
@@ -80,7 +80,8 @@ export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
     gmodel_data_misfit, gprior_mass_fraction_cost, gobserve, 
     optim_fg_constrained_global_costfunction!, 
     softmax_massfractions!, precompute_mass_fraction_steps, 
-    replacesource!, gprior_boundary_cost!, gprior_source_cost!
+    replacesource!, gprior_boundary_cost!, gprior_source_cost!, optim_fg_unconstrained_global_costfunction!
+export rescale_parameter!, descale_parameter!, descale_parameter, optim_fg_scaled_unconstrained_global_costfunction!
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
@@ -2249,7 +2250,8 @@ end
 
     steady inversion for b::NamedTuple with q as required positional argument
 """
-function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::NamedTuple{tracer_names, S}, q::NamedTuple,
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+                        b::NamedTuple{tracer_names, S}, q::NamedTuple,
                         γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
     # n_tracers = length(tracer_names)
     # c_results = Vector{Field}(undef, n_tracers)
@@ -2647,6 +2649,74 @@ function gsteadyinversion!(
     return gA_total
 end
 
+# In-place variant that accumulates gdu/gdq into provided buffers and does not return them.
+function gsteadyinversion!(
+    gdub::Union{Nothing,BoundaryCondition,NamedTuple},
+    gduq::Union{Nothing,Source,NamedTuple},
+    gA_vals::AbstractVector,
+    gc::Field, c::Field, 
+    Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    gd = Alu' \  gc
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]
+        jp = cols_offdiag[k]
+
+        il = wet_inds[ip]
+        jl = wet_inds[jp]
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    if !isnothing(gdub)
+        adjustboundarycondition!(gdub, gsetboundarycondition(gd, b); r = 1.0)
+    end
+    if !isnothing(gduq) && !isnothing(q)
+        adjustsource!(gduq, gsetsource(gd, q, r); r = 1.0)
+    end
+
+    return nothing
+end
+
+
+function gsteadyinversion!(
+    gdub::NamedTuple, gduq::NamedTuple,
+    gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs
+) where {b_names, B, q_names, Q} 
+
+    tracer_names = keys(gc)
+
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    for name in tracer_names
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gsteadyinversion!(
+            gdub[name], gduq[name],
+            gA_vals, gc[name], c[name], Alu, # Pass local_cache_adjoint here
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+    return gA_total
+end
 
 
 # """
@@ -2775,6 +2845,43 @@ function _read3d(file,tracername)
         
     close(ds)
     return c, units, longname
+end
+
+function descale_parameter(x::NamedTuple, scale::NamedTuple)
+    x_copy = deepcopy(x)
+    for k in keys(x)
+        v = x[k]
+        if !isnothing(v)
+            if v isa Number
+                x_copy = merge(x_copy, NamedTuple{(k,)}((v / scale[k],)))
+            elseif v isa Union{Field, BoundaryCondition, Source} 
+                x_copy[k].tracer ./= scale[k]
+            else
+                @error "X must only contain numbers" value=v key=k
+            end
+        end
+    end
+    return x_copy
+end
+
+function descale_parameter!(x::NamedTuple, scale::NamedTuple)
+    for name in eachindex(x)
+        if !isnothing(x[name])
+            if x[name] isa Union{Field, BoundaryCondition, Source}
+                x[name].tracer ./= scale[name]
+            end
+        end
+    end
+end
+
+function rescale_parameter!(x::NamedTuple, scale::NamedTuple)
+    for name in eachindex(x)
+        if !isnothing(x[name])
+            if x[name] isa Union{Field, BoundaryCondition} 
+                x[name].tracer .*= scale[name]
+            end
+        end
+    end
 end
 
 end

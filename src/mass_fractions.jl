@@ -300,6 +300,22 @@ massfractions_up(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,-1);
 massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
     longname = "mass fraction from lower neighbor")
 
+"""
+    inverse_watermassmatrix(A, γ)
+
+Recover the directional mass fractions from a water-mass matrix `A` on grid
+`γ`. Assumes the standard 6-neighbor stencil and returns a NamedTuple with the
+north/east/south/west/up/down `MassFraction` fields.
+"""
+function inverse_watermassmatrix(A::AbstractMatrix, γ::Grid{R,3}) where R
+    return (north = massfractions_north(A,γ),
+        east   = massfractions_east(A,γ),
+        south  = massfractions_south(A,γ),
+        west   = massfractions_west(A,γ),
+        up     = massfractions_up(A,γ),
+        down   = massfractions_down(A,γ))
+end
+
 function tracer_contribution(c::Field,m::Union{MassFraction,NamedTuple})
 
     # allocate masks
@@ -784,4 +800,39 @@ function local_watermass_matrix(c::NamedTuple,
         end
     end
     return A, single_connection
+end
+
+"""
+    sum_massfractions(m)
+
+Sum the mass-fraction weights across all supplied `MassFraction`s on their grid.
+Returns a `Field` whose `tracer` is the per-cell total; dry points are `NaN`.
+"""
+function sum_massfractions(m::Union{NamedTuple,Vector})
+    firstm = first(m)
+    γ = firstm.γ
+    T = eltype(firstm.fraction)
+    nint = sum(γ.interior)
+    ngrid = size(γ.wet)
+
+    total = zeros(T, ngrid)
+    Iint = cartesianindex(γ.interior)
+    for m1 in m
+        sum(m1.γ.interior) == nint || error("mass fraction grids do not match")
+    end
+    for I in Iint
+        s = zero(T)
+        for m1 in m
+            m1.γ.wet[I] || continue
+            s += m1.fraction[I]
+        end
+        total[I] = s
+    end
+    total[.!γ.wet] .= zero(T)/zero(T) # NaN on dry points
+
+    return Field(total,
+        γ,
+        :sum_massfraction,
+        "sum of mass fractions",
+        "unitless")
 end
