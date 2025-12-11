@@ -1,6 +1,6 @@
 
 """
-    struct BoundaryControls{U, U0, QU, D, G, B}
+    struct BoundaryControls{U, U0, QU, D, G, B, LB, UB}
 
 A container for control parameters related to model boundary conditions. This
 includes the boundary conditions being optimized, their prior estimates, error
@@ -17,14 +17,76 @@ covariances, and cached values for gradients and perturbations.
           boundary condition perturbations.
 - `b`: A cache for storing the full boundary condition field, initialized from
        the prior `u₀`.
+- `lower_bound`: A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: A `NamedTuple` of upper bounds for each control variable.
 """
-struct BoundaryControls{U, U0, QU, D, G, B}
+struct BoundaryControls{U, U0, QU, D, G, B, LB, UB}
     ub::U
     u₀::U0
     Qᵤ::QU
     dub::D
     gdub::G
     b::B
+    lower_bound::LB
+    upper_bound::UB
+end
+
+"""
+    BoundaryControls(u₀::Union{NamedTuple, Nothing};
+        ub=nothing,
+        variance=nothing,
+        covariance=nothing,
+        lower_bound=nothing,
+        upper_bound=nothing
+    )
+
+Constructs a `BoundaryControls` object. `u₀` is a required positional argument, but can be `nothing`.
+
+If `u₀` is `nothing` or an empty `NamedTuple`, a null `BoundaryControls` object is returned where all fields are `nothing`.
+
+# Arguments
+- `u₀`: (Required) A `NamedTuple` of `BoundaryCondition` objects for the prior state, or `nothing`.
+- `ub`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of `u₀`.
+- `variance`: (Optional) A `NamedTuple` of scalar variances for each tracer.
+- `covariance`: (Optional) A `NamedTuple` of full covariance matrices.
+- `lower_bound`: (Optional) A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: (Optional) A `NamedTuple` of upper bounds for each control variable.
+"""
+function BoundaryControls(u₀::Union{NamedTuple, Nothing};
+    ub=nothing,
+    variance=nothing,
+    covariance=nothing,
+    lower_bound=nothing,
+    upper_bound=nothing
+)
+    
+    if isnothing(u₀) || isempty(u₀)
+        @warn "No boundary controls (u₀) provided. Creating a null BoundaryControls object."
+        return BoundaryControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+    end
+
+    ub_controls = isnothing(ub) ? deepcopy(u₀) : deepcopy(ub)
+    
+    Qᵤ = _build_tracer_precision_matrix(ub_controls, variance, covariance)
+
+    check_shared_references(ub_controls, "ub")
+    check_shared_references(u₀, "u₀")
+    check_shared_references(Qᵤ, "Qᵤ")
+
+    # Bounds
+    lower = _generate_control_bounds(ub_controls, lower_bound, -Inf)
+    upper = _generate_control_bounds(ub_controls, upper_bound, +Inf)
+    
+    return BoundaryControls(
+        ub_controls,
+        u₀,
+        Qᵤ,
+        deepcopy(ub_controls), # dub
+        deepcopy(ub_controls), # gdub
+        deepcopy(u₀),  # b
+        lower,
+        upper
+    )
 end
 
 """

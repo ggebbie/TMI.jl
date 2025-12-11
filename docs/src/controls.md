@@ -2,68 +2,60 @@
 
 In the context of `TMI.jl`'s inverse modeling capabilities, "controls" refer to the parameters of the model that are adjusted to best fit the observations. These can include surface boundary conditions, interior sources/sinks of tracers, and water mass fractions.
 
-The `TMI.setup_inversion` function is used to define these controls, along with their prior estimates, uncertainties (variances), and optimization bounds.
+Use the `BoundaryControls`, `SourceControls`, and `MassFracControls` constructors to define priors, uncertainties (variances or covariances), and optimization bounds for each component. Assemble them into a single `Controls` object with `TMI.Controls`, which handles vectorization and bounds for the optimizer.
 
 ## Setting up Controls
 
-The `TMI.setup_inversion` function takes keyword arguments for `boundary`, `source`, and `mass_fraction`. Each of these arguments is a `NamedTuple` that can contain:
+Each control constructor accepts optional keyword arguments for `variance` or `covariance`, `lower_bound`, `upper_bound`, and (for sources) `dependencies`. If you pass `nothing` or an empty `NamedTuple` for a component, the corresponding control block is skipped.
 
--   `prior`: The initial estimate for the control variable.
--   `variance`: The variance of the prior estimate, representing our confidence in the prior.
--   `lower_bound`: The lower bound for the control variable during optimization.
--   `upper_bound`: The upper bound for the control variable during optimization.
-
-Here's an example of how to set up controls for a simple inversion:
+Here's an example of how to set up controls for a simple inversion using the current API:
 
 ```julia
-#load in gridded fields
+using TMI, LinearAlgebra
 TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 cobs = (θ =  readfield(TMIfile, "θ", γ), S = readfield(TMIfile, "Sp", γ))  
 
-# Priors for surface boundary conditions are taken from observations
 u₀ = map(v -> getsurfaceboundary(v), cobs)
 
-# If you want to constrain a new boundary condition according to a 
-# prior, you must specify a prior uncertainty 
-u₀_uncertainty_variance = (θ = 0.1, S = 0.01)
+tracer_error = (θ = 0.1, S = 0.01)
+tracer_error_variance = map(x -> x^2, tracer_error)
 
-# Priors for interior sources are set to nothing (no sources)
-q₀ = (θ = nothing, S = nothing)
+q₀ = (θ = nothing, S = nothing) # no interior sources
+m0 = massfractions_isotropic(γ)  # isotropic mass fractions
 
-# Isotropic mass fractions as a prior estimate
-m0 = massfractions_isotropic(γ)
-
-# Define optimization bounds for the boundary control variables
 u_lower = (θ = -2.0, S = 0.0)
 u_upper = (θ = 35.0, S = 45.0)
 
-# Set up the controls using setup_inversion
-controls = TMI.setup_inversion(γ;
-    boundary = (
-        prior = u₀,
-        variance = u₀_uncertainty_variance,
-        lower_bound = u_lower,
-        upper_bound = u_upper
-    ),
-    source = (
-        prior = q₀
-        # no variance or bounds needed if there are no sources
-    ),
-    mass_fraction = (
-        prior = m0,
-        variance = 1.0,
-        lower_bound = map(v -> 0.0, m0),
-        upper_bound = map(v -> 1.1, m0)
-    )
+boundary_controls = BoundaryControls(
+    u₀;
+    variance = tracer_error_variance,
+    lower_bound = u_lower,
+    upper_bound = u_upper
+)
+
+source_controls = SourceControls(q₀) # no variance/bounds needed when everything is fixed
+
+massfrac_controls = MassFracControls(
+    m0;
+    variance = 1.0,
+    lower_bound = map(v -> 0.0, m0),
+    upper_bound = map(v -> 1.1, m0),
+    γ = γ
+)
+
+controls = TMI.Controls(γ;
+    boundary = boundary_controls,
+    source = source_controls,
+    massfrac = massfrac_controls
 )
 ```
 
 In this example:
 
-1.  We define priors for the boundary conditions (`u₀`), sources (`q₀`), and mass fractions (`m0`).
-2.  We define lower and upper bounds for the boundary conditions.
-3.  We then pass all this information to `TMI.setup_inversion` to create the `controls` object.
+1.  Priors are defined for boundary conditions (`u₀`) and mass fractions (`m0`); sources are disabled by setting `q₀` fields to `nothing`.
+2.  Variances and bounds are supplied directly to each constructor.
+3.  The component controls are combined into a single `Controls` object, which provides vectorized parameters and bounds for your optimizer.
 
-This `controls` object, along with the `Observations`, is then passed to the optimization routine to find the optimal set of control parameters.
+This `controls` object, along with `Observations`, is then passed to the optimization routine to find the optimal set of control parameters.

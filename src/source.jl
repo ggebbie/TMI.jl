@@ -69,11 +69,11 @@ function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field
     return q
 end
     
-function adjustsource!(q::Field,u::Field)
+function adjustsource!(q::Field,u::Field; r::Real = 1.0)
     # write it out so b changes when returned
-    q.tracer[q.γ.wet] += u.tracer[u.γ.wet] 
+    q.tracer[q.γ.wet] += r .* u.tracer[u.γ.wet] 
 end
-function adjustsource!(q::Source,u::Source)
+function adjustsource!(q::Source,u::Source; r::Real = 1.0)
     if q.logscale && u.logscale
         q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
         q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
@@ -88,32 +88,59 @@ function adjustsource!(q::Source,u::Source)
         # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
         # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
     else 
-        q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
+        q.tracer[q.γ.interior] += r .* u.tracer[u.γ.interior]
     end        
 end
-function adjustsource!(q::NamedTuple,u::NamedTuple) #where {N1, N2, T <: Real}
+function adjustsource!(q::Source{T}, u::AbstractVector{T};
+                       idx::Int = 1,
+                       return_idx::Bool = false,
+                       r::Real = 1.0) where {T<:Real}
+    mask = q.γ.interior
+    data = q.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* u[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+function adjustsource!(q::NamedTuple,
+                       uvec::AbstractVector;
+                       idx::Int = 1,
+                       return_idx::Bool = false,
+                       r::Real = 1.0)
+    for v in q
+        if !isnothing(v)
+            idx = adjustsource!(v, uvec; idx = idx, return_idx = true, r = r)
+        end
+    end
+    return return_idx ? idx : nothing
+end
+function adjustsource!(q::NamedTuple,u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     for qkey in keys(q)
         if haskey(u,qkey)
-            adjustsource!(q[qkey],u[qkey])
+            adjustsource!(q[qkey],u[qkey]; r = r)
         else
             error("adjustsource!: u doesn't have qkey ",qkey)
         end
     end
 end
-function adjustsource!(q::Union{Field,Source},u::NamedTuple) #where {N1, N2, T <: Real}
+function adjustsource!(q::Union{Field,Source},u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     qkey = :source
     if haskey(u,qkey)
-        adjustsource!(q,u[qkey])
+        adjustsource!(q,u[qkey]; r = r)
     else
         error("adjustsource!: u doesn't have source info")
     end
 end
 
-function gadjustsource!(gu::Field,gq::Field)
+function gadjustsource!(gu::Field,gq::Field; r::Real = 1.0)
     # write it out so b changes when returned
-    gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
+    gu.tracer[gu.γ.wet] += r .* gq.tracer[gq.γ.wet] 
 end
-function gadjustsource!(gu::Source,gq::Source,q₀::Source)
+
+function gadjustsource!(gu::Source,gq::Source,q₀::Source; r::Real = 1.0)
     q = deepcopy(q₀)
     if gq.logscale && gu.logscale
         error("not implemented")
@@ -133,20 +160,21 @@ function gadjustsource!(gu::Source,gq::Source,q₀::Source)
         # q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
         # q.tracer[q.γ.interior] = exp.(q.tracer[q.γ.interior])
     else 
-        gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
+        gu.tracer[gu.γ.interior] += r .* gq.tracer[gq.γ.interior]
     end        
 end
 
-function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: Union{Source,Field}
+function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
     qkey = :source
     if haskey(gu,qkey)
-        gadjustsource!(gu[qkey],gq,q)
+        gadjustsource!(gu[qkey],gq,q; r = r)
     end
 end
-function gadjustsource!(gu::NamedTuple,gq::T,q::T) where T <: NamedTuple 
+
+function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: NamedTuple 
     for qkey in keys(gq)
         if haskey(gu,qkey)
-            gadjustsource!(gu[qkey],gq[qkey],q[qkey])
+            gadjustsource!(gu[qkey],gq[qkey],q[qkey]; r = r)
         end
     end
 end
