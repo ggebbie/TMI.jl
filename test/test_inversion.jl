@@ -145,7 +145,7 @@ percent_difference(a, b) = @. 100 * ((a - b) / b)
         # ### 3. Set up controls using the new helper function
         controls_coupled = TMI.setup_inversion(γ,
             boundary = (prior = u₀_prior, initial_guess = boundary_priors_coupled_all, variance = (p1=1.0, o2=1.0, p2=1.0)),
-            source = (prior = source_priors_coupled_all, initial_guess = source_controls_initial_guess_coupled, couplings = couplings, variance = (p1=1.0, p2=1.0)),
+            source = (prior = source_priors_coupled_all, initial_guess = source_controls_initial_guess_coupled, dependencies = couplings, variance = (p1=1.0, p2=1.0)),
             mass_fraction = (prior = m0, variance = (west=1.0, east=1.0))
         )
         

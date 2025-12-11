@@ -5,8 +5,8 @@
 A container for control parameters related to interior sources and sinks.
 
 This struct holds the source terms being optimized, their priors, error
-covariances, and cached buffers. It also stores optional coupling information
-to define dependencies between different tracer sources.
+covariances, and cached buffers. It also stores optional dependency information
+to define relationships between different tracer sources.
 
 # Fields
 - `uq`: `NamedTuple` of independent (optimizable) source terms.
@@ -17,11 +17,11 @@ to define dependencies between different tracer sources.
 - `gduq`: Cache for storing the final gradients with respect to the independent
           source controls.
 - `q`: Cache for storing the full source field for all tracers, including
-       the application of any couplings.
-- `couplings`: `NamedTuple` defining dependencies between sources, e.g.,
-               `(O2 = (:PO4, -170.0),)`.
+       the application of any dependencies.
+- `dependencies`: `NamedTuple` defining dependencies between sources, e.g.,
+                  `(O2 = (:PO4, -170.0),)`.
 - `gduq_cache`: A pre-allocated buffer to hold gradients for *all* sources
-                before the chain rule is applied for couplings.
+                before the chain rule is applied for dependencies.
 - `lower_bound`: A `NamedTuple` of lower bounds for each control variable.
 - `upper_bound`: A `NamedTuple` of upper bounds for each control variable.
 """
@@ -32,51 +32,50 @@ struct SourceControls{Q, Q0, QS, D, G, S, C, GC, LB, UB}
     duq::D
     gduq::G
     q::S
-    couplings::C
+    dependencies::C
     gduq_cache::GC
     lower_bound::LB
     upper_bound::UB
 end
 
 """
-    SourceControls(;
-        prior=NamedTuple(),
-        initial_guess=nothing,
+    SourceControls(q₀::Union{NamedTuple, Nothing};
+        uq=nothing,
         variance=nothing,
         covariance=nothing,
-        couplings=NamedTuple(),
+        dependencies=NamedTuple(),
         lower_bound=nothing,
         upper_bound=nothing
     )
 
-Constructs a `SourceControls` object using keyword arguments.
+Constructs a `SourceControls` object. `q₀` is a required positional argument, but can be `nothing`.
+
+If `q₀` is `nothing` or an empty `NamedTuple`, a null `SourceControls` object is returned where all fields are `nothing`.
 
 # Arguments
-- `prior`: (Required) A `NamedTuple` of `Source` objects representing the prior state for all sources.
-- `initial_guess`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of the `prior`.
+- `q₀`: (Required) A `NamedTuple` of `Source` objects representing the prior state for all sources, or `nothing`.
+- `uq`: (Optional) The starting values for the control variables (independent sources). Defaults to a `deepcopy` of `q₀`.
 - `variance`: (Optional) A `NamedTuple` of scalar variances for each independent tracer.
 - `covariance`: (Optional) A `NamedTuple` of full covariance matrices for independent tracers.
-- `couplings`: (Optional) A `NamedTuple` defining relationships between dependent and independent sources.
+- `dependencies`: (Optional) A `NamedTuple` defining relationships between dependent and independent sources, of the form `(dependent = (:independent, scaling_factor),)`.
 - `lower_bound`: (Optional) A `NamedTuple` of lower bounds for each control variable.
 - `upper_bound`: (Optional) A `NamedTuple` of upper bounds for each control variable.
 """
-function SourceControls(;
-    prior::NamedTuple=NamedTuple(),
-    initial_guess=nothing,
+function SourceControls(q₀::Union{NamedTuple, Nothing};
+    uq=nothing,
     variance=nothing,
     covariance=nothing,
-    couplings::NamedTuple=NamedTuple(),
+    dependencies::NamedTuple=NamedTuple(),
     lower_bound=nothing,
     upper_bound=nothing
 )
-    if isempty(prior)
+    if isnothing(q₀) || isempty(q₀)
+        @warn "No source controls (q₀) provided. Creating a null SourceControls object."
         return SourceControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
     end
 
-    q₀_all = prior
-    dependent_sources = keys(couplings)
+    dependent_sources = keys(dependencies)
     
-    # Determine the names of sources that are explicitly controlled (have uncertainty)
     uncertainty_vars = if !isnothing(covariance)
         keys(covariance)
     elseif !isnothing(variance)
@@ -85,20 +84,15 @@ function SourceControls(;
         ()
     end
 
-    # Independent sources are those that are not dependent on others
-    potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀_all))
+    potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀))
     
-    # Use initial guess if provided, otherwise default to the prior value
-    uq_ig_full = isnothing(initial_guess) ? q₀_all : initial_guess
+    uq_ig_full = isnothing(uq) ? q₀ : uq
 
-    # Build the `uq` tuple, which has `nothing` for non-controlled sources
     uq_controls_nt = NamedTuple{potential_ind_sources}(
         map(potential_ind_sources) do name
             if name in uncertainty_vars
-                # This is an independent control variable
-                deepcopy(get(uq_ig_full, name, q₀_all[name]))
+                deepcopy(get(uq_ig_full, name, q₀[name]))
             else
-                # This source is not being controlled
                 nothing
             end
         end
@@ -112,31 +106,30 @@ function SourceControls(;
     Qₛ_indep = isnothing(Qₛ_final) ? nothing : NamedTuple{independent_sources}(getproperty(Qₛ_final, k) for k in independent_sources)
 
     check_shared_references(uq_indep, "uq")
-    check_shared_references(q₀_all, "q₀")
+    check_shared_references(q₀, "q₀")
     check_shared_references(Qₛ_indep, "Qₛ")
 
     if !isnothing(uq_indep)
-        for dep_name in keys(couplings)
+        for dep_name in keys(dependencies)
             if haskey(uq_indep, dep_name) && !isnothing(uq_indep[dep_name])
-                error("Tracer :$(dep_name) is dependent in `source_couplings`\n" *
-                      "and independent in `uq`. Source cannot be both.")
+                error("Tracer :$(dep_name) is listed in `dependencies`\n" *
+                      "but is also an independent control variable in `uq`. A source cannot be both.")
             end
         end
     end
 
-    # Bounds
     lower = _generate_control_bounds(uq_indep, lower_bound, -Inf)
     upper = _generate_control_bounds(uq_indep, upper_bound, +Inf)
 
     return SourceControls(
         uq_indep,
-        q₀_all,
+        q₀,
         Qₛ_indep,
-        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # duq
-        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # gduq
-        deepcopy(q₀_all), # q
-        couplings,
-        zero(q₀_all), # gduq_cache
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep),
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep),
+        deepcopy(q₀),
+        dependencies,
+        zero(q₀),
         lower,
         upper
     )
@@ -151,7 +144,7 @@ Update the main source buffer `sc.q` and perturbation buffer `sc.duq`.
 This function orchestrates the application of source controls by:
 1. Initializing the buffer `sc.q` with the prior sources `sc.q₀`.
 2. Applying the independent (optimized) source perturbations from `sc.uq`.
-3. Calculating and applying any coupled sources defined in `sc.couplings`.
+3. Calculating and applying any dependent sources defined in `sc.dependencies`.
 """
 function update_q!(sc::SourceControls)
     # Return early if there are no sources to update
@@ -172,17 +165,17 @@ function update_q!(sc::SourceControls)
         end
     end
 
-    # 3. Apply coupled source logic
-    if !isnothing(sc.couplings)
-        for dep_name in keys(sc.couplings)
-            indep_name, alpha = sc.couplings[dep_name]
+    # 3. Apply dependent source logic
+    if !isnothing(sc.dependencies)
+        for dep_name in keys(sc.dependencies)
+            indep_name, alpha = sc.dependencies[dep_name]
             
             # Get the final source of the independent tracer
             independent_source_field = sc.q[indep_name]
 
             # Calculate and overwrite the dependent source
-            coupled_source_field = alpha * independent_source_field
-            replacesource!(sc.q[dep_name], coupled_source_field)
+            dependent_source_field = alpha * independent_source_field
+            replacesource!(sc.q[dep_name], dependent_source_field)
         end
     end
 
@@ -193,11 +186,11 @@ end
     update_gduq!(sc::SourceControls)
 
 Adjust the source gradient buffer `sc.gduq` to account for all gradient
-contributions, including priors, direct misfit, and coupled sources.
+contributions, including priors, direct misfit, and dependent sources.
 
 This function assumes `sc.gduq` already contains the prior gradient. It adds
 the direct model-data misfit gradient from `sc.gduq_cache`. Then, if
-couplings are defined, it applies the chain rule to accumulate the scaled
+dependencies are defined, it applies the chain rule to accumulate the scaled
 gradients from any dependent tracers.
 """
 function update_gduq!(sc::SourceControls)
@@ -210,10 +203,10 @@ function update_gduq!(sc::SourceControls)
         adjustsource!(sc.gduq[key], sc.gduq_cache[key])
     end
 
-    # 2. If couplings exist, add the coupled misfit gradients via the chain rule.
-    if !isnothing(sc.couplings)
-        for dep_name in keys(sc.couplings)
-            indep_name, alpha = sc.couplings[dep_name]
+    # 2. If dependencies exist, add the dependent misfit gradients via the chain rule.
+    if !isnothing(sc.dependencies)
+        for dep_name in keys(sc.dependencies)
+            indep_name, alpha = sc.dependencies[dep_name]
             
             if haskey(sc.gduq, indep_name)
                  # Accumulate: gduq[i] += alpha * gduq_cache[j]

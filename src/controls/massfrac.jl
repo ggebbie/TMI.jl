@@ -32,9 +32,8 @@ struct MassFracControls{M, M0, QM, G, S, A, LB, UB}
 end
 
 """
-    MassFracControls(;
-        prior=NamedTuple(),
-        initial_guess=nothing,
+    MassFracControls(m₀::Union{NamedTuple, Nothing};
+        m=nothing,
         variance=nothing,
         covariance=nothing,
         lower_bound=nothing,
@@ -42,52 +41,52 @@ end
         γ::Grid
     )
 
-Constructs a `MassFracControls` object using keyword arguments.
+Constructs a `MassFracControls` object. `m₀` is a required positional argument, but can be `nothing`.
+
+If `m₀` is `nothing` or an empty `NamedTuple`, a null `MassFracControls` object is returned where all fields are `nothing`.
 
 # Arguments
-- `prior`: (Required) A `NamedTuple` of `MassFraction` objects representing the prior state.
-- `initial_guess`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of the `prior`.
-- `variance`: (Optional) A `NamedTuple` of scalar variances for each component.
-- `covariance`: (Optional) A `NamedTuple` of full covariance matrices.
+- `m₀`: (Required) A `NamedTuple` of `MassFraction` objects representing the prior state, or `nothing`.
+- `m`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of `m₀`.
+- `variance`: (Optional) A scalar, `NamedTuple`, or vector of variances.
+- `covariance`: (Optional) A full covariance matrix.
 - `lower_bound`: (Optional) A `NamedTuple` of lower bounds for each control variable.
 - `upper_bound`: (Optional) A `NamedTuple` of upper bounds for each control variable.
 - `γ`: The TMI grid object.
 """
-function MassFracControls(;
-    prior::NamedTuple=NamedTuple(),
-    initial_guess=nothing,
+function MassFracControls(m₀::Union{NamedTuple, Nothing};
+    m=nothing,
     variance=nothing,
     covariance=nothing,
     lower_bound=nothing,
     upper_bound=nothing,
     γ::Grid
 )
-    if isempty(prior)
+    if isnothing(m₀) || isempty(m₀)
+        @warn "No mass fraction controls (m₀) provided. Creating a null MassFracControls object."
         return MassFracControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
     end
 
-    m₀ = prior
-    ig = isnothing(initial_guess) ? m₀ : initial_guess
-    m = deepcopy(ig)
+    m_controls = isnothing(m) ? deepcopy(m₀) : deepcopy(m)
     
-    Qₘ = _build_massfrac_precision_matrix(m, variance, covariance)
+    Qₘ = _build_massfrac_precision_matrix(m_controls, variance, covariance)
 
-    check_shared_references(m, "m")
+    check_shared_references(m_controls, "m")
     check_shared_references(m₀, "m₀")
 
     # Precompute steps and cache the transport matrix
-    m_steps = precompute_mass_fraction_steps(m, γ)
-    A_cached = watermassmatrix(m, γ, m_steps)
+    m_steps = precompute_mass_fraction_steps(m_controls, γ)
+    A_cached = watermassmatrix(m_controls, γ, m_steps)
 
     # Bounds
-    lower = _generate_control_bounds(m, lower_bound, 0.0)
-    upper = _generate_control_bounds(m, upper_bound, 1.0)
+    lower = _generate_control_bounds(m_controls, lower_bound, 0.0)
+    upper = _generate_control_bounds(m_controls, upper_bound, 1.0)
     
     return MassFracControls(
-        m,
+        m_controls,
         m₀,
         Qₘ,
-        deepcopy(m), # gm
+        deepcopy(m_controls), # gm
         m_steps,
         A_cached,
         lower,
