@@ -196,15 +196,15 @@ function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Nam
     end
 end
 
-# """
-#     gadjustsource!(gu::NamedTuple, gq::Union{Source,Field}, q::Union{Source,Field}; r::Real = 1.0)
+"""
+    gadjustsource!(gu::NamedTuple, gq::Union{Source,Field}, q::Union{Source,Field}; r::Real = 1.0)
 
-# Pick out the `:source` entry from a gradient NamedTuple and accumulate the
-# provided gradient there (used when only a single tracer is present).
-# """
-# function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
-#     qkey = :source
-#     if haskey(gu,qkey)
-#         gadjustsource!(gu[qkey],gq,q; r = r)
-#     end
-# end
+Pick out the `:source` entry from a gradient NamedTuple and accumulate the
+provided gradient there (used when only a single tracer is present).
+"""
+function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
+    qkey = :source
+    if haskey(gu,qkey)
+        gadjustsource!(gu[qkey],gq,q; r = r)
+    end
+end

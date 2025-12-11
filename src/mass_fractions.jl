@@ -63,10 +63,112 @@ function MassFraction(A,
 end
 
 
+
 Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
 Base.length(m::MassFraction) = sum(m.γ.wet)
 Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
 Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
+
+wet(m::MassFraction) = m.γ.wet
+
+function Base.vec(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    if isempty(u)
+        return Float64[]
+    end
+    T = eltype(values(u)[1].fraction)
+    #T = eltype(u)
+    uvec = Vector{T}(undef,0)
+    for v in u
+        #append!(uvec,v.tracer[v.wet])
+        append!(uvec,vec(v))
+    end
+    return uvec
+end
+
+function unvec!(u::MassFraction, uvec::Vector{T}; idx::Int = 1, return_idx::Bool = false) where T <: Real
+    mask = wet(u)
+    data = u.fraction
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] = uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+
+function unvec!(u::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}, uvec::Vector; idx::Int = 1, return_idx::Bool = false) where names
+    for v in u
+        idx = unvec!(v, uvec; idx = idx, return_idx = true)
+    end
+    return return_idx ? idx : nothing
+end
+
+function adjustmassfraction!(m::MassFraction{T}, uvec::AbstractVector{T};
+                             idx::Int = 1,
+                             return_idx::Bool = false,
+                             r::Real = 1.0) where {T<:Real}
+    mask = wet(m)
+    data = m.fraction
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+
+function adjustmassfraction!(m::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}, uvec::AbstractVector;
+                             idx::Int = 1,
+                             return_idx::Bool = false,
+                             r::Real = 1.0) where {names}
+    for v in m
+        idx = adjustmassfraction!(v, uvec; idx = idx, return_idx = true, r = r)
+    end
+    return return_idx ? idx : nothing
+end
+
+function unvec(u₀::NamedTuple{names, <:Tuple{Vararg{MassFraction}}},uvec::Vector) where names
+    u = deepcopy(u₀)
+    unvec!(u,uvec)
+    return u
+end
+
+function zero!(m::MassFraction)
+    m.fraction[m.γ.wet] .= 0
+    return m
+end
+
+function zero!(m::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    for v in m
+        zero!(v)
+    end
+    return m
+end
+
+function Base.similar(v::Vector{<:MassFraction})
+    # return MassFraction[similar(mf) for mf in v]
+    return map(similar, v)
+end
+
+function Base.similar(nt::NamedTuple{names, <:Tuple{Vararg{MassFraction}}}) where names
+    return map(similar, nt)
+end
+
+function Base.similar(mf::MassFraction)
+    similar_m_fraction = similar(mf.fraction)
+    similar_m_fraction[.!(mf.γ.interior)] .= NaN
+
+    return MassFraction(
+        similar_m_fraction,
+        mf.γ,
+        mf.name,
+        mf.longname,
+        mf.units,
+        mf.position
+    )
+end
 
 """
 function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)
@@ -197,6 +299,22 @@ massfractions_up(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,-1);
     
 massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
     longname = "mass fraction from lower neighbor")
+
+"""
+    inverse_watermassmatrix(A, γ)
+
+Recover the directional mass fractions from a water-mass matrix `A` on grid
+`γ`. Assumes the standard 6-neighbor stencil and returns a NamedTuple with the
+north/east/south/west/up/down `MassFraction` fields.
+"""
+function inverse_watermassmatrix(A::AbstractMatrix, γ::Grid{R,3}) where R
+    return (north = massfractions_north(A,γ),
+        east   = massfractions_east(A,γ),
+        south  = massfractions_south(A,γ),
+        west   = massfractions_west(A,γ),
+        up     = massfractions_up(A,γ),
+        down   = massfractions_down(A,γ))
+end
 
 function tracer_contribution(c::Field,m::Union{MassFraction,NamedTuple})
 
@@ -389,7 +507,7 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
     mlist = Array{Float64}(undef,nm+nfield)
 
     # ones on diagonal
-    for ii in 1:nfield
+    @inbounds @simd for ii in 1:nfield
         ilist[ii] = ii
         jlist[ii] = ii
         mlist[ii] = 1.0
@@ -414,6 +532,7 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
         #for I in Iint
             nrow = R[I]
             if m1.γ.wet[I]
+                #can this be precomputed? 
                 Istep, _ = step_cartesian(I, m1.position, γ)
                 counter += 1
                 ilist[counter] = nrow
@@ -424,6 +543,186 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
         end
     end
     return sparse(ilist,jlist,mlist)
+end
+
+"""
+    precompute_cartesian_steps(m, γ)
+
+Precompute `R[Istep]` targets for each mass fraction in `m`, returning a container
+mirroring `m` (NamedTuple or Vector) where each entry is an array of the same size
+as `γ.R`. Entries are zero for dry/invalid steps.
+"""
+function precompute_cartesian_steps(m::Union{NamedTuple,Vector}, γ::Grid)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    function build_targets(m1)
+        steps = zeros(Int, size(R))
+        for I in Iint
+            if m1.γ.wet[I]
+                Istep, inbounds = step_cartesian(I, m1.position, γ)
+                steps[I] = inbounds ? R[Istep] : 0
+            end
+        end
+        return steps
+    end
+
+    return map(build_targets, m)
+end
+
+"""
+    watermassmatrix(m, γ, cartesian_steps)
+
+Construct water-mass matrix using precomputed step targets, avoiding repeated
+calls to `step_cartesian`. `cartesian_steps` should mirror `m` and contain
+integer step targets for each fraction; dry/invalid entries are zero.
+"""
+function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid,
+    cartesian_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    nfield = sum(γ.wet)
+    nm = 0
+    for m1 in m
+        nm += length(m1)
+    end
+
+    ilist = Array{Int64}(undef,nm+nfield)
+    jlist = Array{Int64}(undef,nm+nfield)
+    mlist = Array{Float64}(undef,nm+nfield)
+
+    # ones on diagonal
+    @inbounds for ii in 1:nfield
+        ilist[ii] = ii
+        jlist[ii] = ii
+        mlist[ii] = 1.0
+    end
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    counter = nfield
+    for I in Iint
+        for (i, m1) in enumerate(m)
+            m1.γ.wet[I] || continue
+            steps_i = cartesian_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            counter += 1
+            ilist[counter] = R[I]
+            jlist[counter] = col
+            mlist[counter] = -m1.fraction[I]
+        end
+    end
+    return sparse(ilist,jlist,mlist)
+end
+
+"""
+    gwatermassmatrix(gA, m, γ)
+
+Form gradients of mass fractions from a water-mass matrix `gA` without any
+precomputed step targets. For each interior cell, applies the stencil defined
+in `m` to pull `gA` entries back into a `NamedTuple`/`Vector` of
+`MassFraction`s matching `m`.
+"""
+function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid)
+
+    # nfield = sum(γ.wet)
+
+    # for bounds checking
+    Rfull = CartesianIndices(γ.wet)
+    Ifirst, Ilast = first(Rfull), last(Rfull)
+
+    # loop over interior points (dirichlet bc at surface)
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    # allocate water mass matrix
+    # nfield = sum(γ.wet)
+    # Note, flipped sign of interior points
+    #A = spdiagm(nfield,nfield,ones(nfield))
+    gm = deepcopy(m)
+    [gm1.fraction .= NaN for gm1 in gm]
+
+    # counter = nfield
+    for I in Iint
+        for gm1 in gm
+        #for I in Iint
+            nrow = R[I]
+            if gm1.γ.wet[I]
+                Istep, _ = step_cartesian(I, gm1.position, γ)
+                # counter += 1
+                gm1.fraction[I] = -gA[nrow,R[Istep]]
+            end
+        end
+    end
+
+    return gm
+end
+
+"""
+    gwatermassmatrix(gA, m, γ, cartesian_steps)
+
+Use precomputed step targets when forming the gradient-version of the
+water-mass matrix. `cartesian_steps` mirrors `m` and holds integer step
+targets (see `watermassmatrix(m, γ, cartesian_steps)`).
+"""
+function gwatermassmatrix(gA, m::Union{NamedTuple,Vector}, γ::Grid,
+    cartesian_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    gm = deepcopy(m)
+    [gm1.fraction .= NaN for gm1 in gm]
+
+    for I in Iint
+        for (i, gm1) in enumerate(gm)
+            gm1.γ.wet[I] || continue
+            steps_i = cartesian_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            nrow = R[I]
+            gm1.fraction[I] = -gA[nrow, col]
+        end
+    end
+
+    return gm
+end
+
+"""
+    gwatermassmatrix!(gm, gA, m, γ, cartesian_steps)
+
+In-place accumulation variant: adds contributions from `gA` into `gm` using
+the precomputed step targets `cartesian_steps` (same layout as in
+`watermassmatrix(m, γ, cartesian_steps)`).
+"""
+function gwatermassmatrix!(gm, gA, m::Union{NamedTuple,Vector}, γ::Grid,
+    cartesian_steps::Union{
+        NamedTuple{<:Any,<:Tuple{Vararg{AbstractArray{<:Integer}}}},
+        Vector{<:AbstractArray{<:Integer}}
+    })
+
+    R = copy(γ.R)
+    Iint = cartesianindex(γ.interior)
+
+    for I in Iint
+        for (i, gm1) in enumerate(gm)
+            gm1.γ.wet[I] || continue
+            steps_i = cartesian_steps[i]
+            col = steps_i[I]
+            col == 0 && continue
+            nrow = R[I]
+            gm1.fraction[I] += -gA[nrow, col]
+        end
+    end
+
+    return gm
 end
 
 
@@ -443,7 +742,6 @@ function local_watermass_matrix(c::NamedTuple,
     #for i1 in eachindex(m)
     i = 0; j = 0
     for m1 in m
-
         if m1.γ.wet[I]
             j += 1
             i = 0
@@ -513,4 +811,39 @@ function local_watermass_matrix(c::NamedTuple,
         end
     end
     return A, single_connection
+end
+
+"""
+    sum_massfractions(m)
+
+Sum the mass-fraction weights across all supplied `MassFraction`s on their grid.
+Returns a `Field` whose `tracer` is the per-cell total; dry points are `NaN`.
+"""
+function sum_massfractions(m::Union{NamedTuple,Vector})
+    firstm = first(m)
+    γ = firstm.γ
+    T = eltype(firstm.fraction)
+    nint = sum(γ.interior)
+    ngrid = size(γ.wet)
+
+    total = zeros(T, ngrid)
+    Iint = cartesianindex(γ.interior)
+    for m1 in m
+        sum(m1.γ.interior) == nint || error("mass fraction grids do not match")
+    end
+    for I in Iint
+        s = zero(T)
+        for m1 in m
+            m1.γ.wet[I] || continue
+            s += m1.fraction[I]
+        end
+        total[I] = s
+    end
+    total[.!γ.wet] .= zero(T)/zero(T) # NaN on dry points
+
+    return Field(total,
+        γ,
+        :sum_massfraction,
+        "sum of mass fractions",
+        "unitless")
 end

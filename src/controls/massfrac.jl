@@ -75,7 +75,7 @@ function MassFracControls(m₀::Union{NamedTuple, Nothing};
     check_shared_references(m₀, "m₀")
 
     # Precompute steps and cache the transport matrix
-    m_steps = precompute_mass_fraction_steps(m_controls, γ)
+    m_steps = precompute_cartesian_steps(m_controls, γ)
     A_cached = watermassmatrix(m_controls, γ, m_steps)
 
     # Bounds
