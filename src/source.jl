@@ -201,6 +201,8 @@ end
 
 Pick out the `:source` entry from a gradient NamedTuple and accumulate the
 provided gradient there (used when only a single tracer is present).
+
+Used in sourcemap. 
 """
 function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
     qkey = :source

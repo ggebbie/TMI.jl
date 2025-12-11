@@ -12,6 +12,7 @@ makedocs(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://ggebbie.github.io/TMI.jl",
         assets=String[],
+        size_threshold = 250 * 2^10,
     ),
     pages=[
         "Top-level functions" => "index.md",
