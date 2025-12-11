@@ -404,7 +404,12 @@ function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: R
     #gb = 0.0 * b # initialize to zero
     if b.dim == 1
         #gb.tracer = gd.tracer[b.dimval,:,:]
-        gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.axes,b.k,b.dim,b.dimval,b.wet)
+        if length(b) > 1
+            gb = BoundaryCondition(gd.tracer[b.dimval,:,:],b.axes,b.k,b.dim,b.dimval,b.wet)
+        elseif length(b) == 1
+            gb = deepcopy(b) # a hacky fix. in the 1-d case b.axes returns () 
+            gb.tracer .= [gd.tracer[b.dimval]]
+        end
     elseif b.dim == 2
         #gb.tracer = gd.tracer[:,b.dimval,:]
         gb = BoundaryCondition(gd.tracer[:,b.dimval,:],b.axes,b.k,b.dim,b.dimval,b.wet)
@@ -417,6 +422,30 @@ function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: R
     return gb
 end
 
+""" 
+    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
+
+    ADJOINT: apply boundary condition to the equation constraints
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `b`::BoundaryCondition
+"""
+function gsetboundarycondition(gd::Field{T},b::NamedTuple{names, S}) where {T <: Real, names, S}
+    E = Union{S.parameters...} # element type = union of all field types
+    gb1 = Vector{E}(undef, length(names))
+    
+    for (ii,vv) in enumerate(b)
+        # println(typeof(vv))
+        gb1[ii] = gsetboundarycondition(gd,vv)
+    end
+
+    # https://discourse.julialang.org/t/construct-namedtuple-dynamically/15394/7
+    gb = (;zip(keys(b), gb1)...)
+                                       
+    return gb
+end
+
+
 """
     function setboundarycondition!(d::Field{T},b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}}) where {N, T <: Real}
 
@@ -428,38 +457,64 @@ function setboundarycondition!(d::Field,b::NamedTuple)
     end
 end
 
-""" 
-    function gsetboundarycondition(gd::Field{T},b::BoundaryCondition{T}) where T<: Real
-
-    ADJOINT: apply boundary condition to the equation constraints
-# Arguments
-- `d`::Field, equation constraints (i.e., right hand side)
-- `b`::BoundaryCondition
+# Overwrite/augment an existing boundary condition with another boundary condition.
 """
-function gsetboundarycondition(gd::Field{T},b::NamedTuple) where T <: Real
+    setboundarycondition!(dest::BoundaryCondition, src::BoundaryCondition)
 
-    gb1 = Vector{BoundaryCondition{T}}(undef,length(keys(b)))
-    for (ii,vv) in enumerate(b)
-        gb1[ii] = gsetboundarycondition(gd,vv)
-    end
-
-    # https://discourse.julialang.org/t/construct-namedtuple-dynamically/15394/7
-    gb = (;zip(keys(b), gb1)...)
-                                       
-    return gb
+Overwrite `dest` values on its wet mask with those from `src`. Useful for
+injecting optimized boundary fields back into a container.
+"""
+function setboundarycondition!(b::BoundaryCondition, u::BoundaryCondition)
+    b.tracer[b.wet] .= u.tracer[u.wet]
+    return b
 end
 
+# Apply a collection of boundary conditions to a collection of boundaries.
 """
-    function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
+    setboundarycondition!(dest::NamedTuple, src::NamedTuple)
 
-    adjust all boundary conditions b that are described in u
+Elementwise apply `setboundarycondition!` across tracer keys. Only keys
+present in `src` are updated.
 """
-adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
-function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple}) 
+function setboundarycondition!(b::NamedTuple, u::NamedTuple)
+    for key in keys(u)
+        haskey(b, key) && setboundarycondition!(b[key], u[key])
+    end
+    return b
+end
+
+function setboundarycondition(d::Field,b::NamedTuple)
     bnew = deepcopy(b)
-    adjustboundarycondition!(bnew,u)
+    for b1 in bnew
+        setboundarycondition!(d,b1)
+    end
+    bnew
+end
+
+
+"""
+    adjustboundarycondition(b::BoundaryCondition, u::BoundaryCondition; r=1.0)
+    adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},
+                            u::Union{BoundaryCondition,NamedTuple}; r=1.0)
+
+Return a copy of `b` with scaled adjustments from `u` applied. Handy wrapper
+around the mutating `adjustboundarycondition!`.
+"""
+function adjustboundarycondition(b::BoundaryCondition,
+                                 u::BoundaryCondition;
+                                 r::Real = 1.0)
+    bnew = deepcopy(b)
+    adjustboundarycondition!(bnew, u; r = r)
     return bnew
 end
+function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},
+                                 u::Union{BoundaryCondition,NamedTuple};
+                                 r::Real = 1.0)
+    bnew = deepcopy(b)
+    adjustboundarycondition!(bnew, u; r = r)
+    return bnew
+end
+
 
 """
     function adjustboundarycondition!(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple})
@@ -469,23 +524,68 @@ end
     warning: if u doesn't contain any boundary condition adjustments,
     nothing will change.
 """
-function adjustboundarycondition!(b::BoundaryCondition,u::BoundaryCondition)
-    # write it out so b changes when returned
-    b.tracer[b.wet] += u.tracer[u.wet] 
+function adjustboundarycondition!(b::BoundaryCondition{T},
+                                  u::BoundaryCondition{T};
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0) where {T<:Real}
+    b.tracer[b.wet] .+= r .* u.tracer[u.wet]
+    return return_idx ? idx + count(b.wet) : nothing
 end
-function adjustboundarycondition!(b::NamedTuple,u::NamedTuple)
+
+"""
+    adjustboundarycondition!(b::BoundaryCondition, uvec::AbstractVector;
+                             idx=1, return_idx=false, r=1.0)
+
+Apply a flat vector of perturbations into `b` (using its wet mask), useful
+when mapping optimizer vectors back to BoundaryCondition shapes.
+"""
+function adjustboundarycondition!(b::BoundaryCondition{T},
+                                  uvec::AbstractVector{T};
+                                  idx::Int = 1,
+                                  return_idx::Bool = false,
+                                  r::Real = 1.0) where {T<:Real}
+    mask = wet(b)
+    data = b.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] += r .* uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+function adjustboundarycondition!(b::NamedTuple, u::NamedTuple;
+                                  idx::Int = 1, return_idx::Bool = false,
+                                  r::Real = 1.0)
+    # Add selected tracer adjustments from `u` into `b`, keeping track of the
+    # running flat-index `idx` for mixed vector/tuple workflows.
     # only the bkeys are certain to be type BoundaryCondition
     for bkey in keys(b)
-        haskey(u,bkey) && adjustboundarycondition!(b[bkey],u[bkey]) 
+        if haskey(u, bkey) && !isnothing(u[bkey])
+            idx = adjustboundarycondition!(b[bkey], u[bkey]; idx = idx, return_idx = true, r = r)
+        end
     end
+    return return_idx ? idx : nothing
+end
+function adjustboundarycondition!(b::NamedTuple, uvec::AbstractVector;
+                                  idx::Int = 1, return_idx::Bool = false,
+                                  r::Real = 1.0)
+    # Apply a flat vector of perturbations across all BoundaryConditions in `b`.
+    for v in b
+        if !isnothing(v)
+            idx = adjustboundarycondition!(v, uvec; idx = idx, return_idx = true, r = r)
+        end
+    end
+    return return_idx ? idx : nothing
 end
 
 # Seems not to be general because gu overwritten.
 """
     function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
 """
-function gadjustboundarycondition(gb::BoundaryCondition{T},u::BoundaryCondition{T}) where T <: Real
-    gu  = gb
+function gadjustboundarycondition(gb::BoundaryCondition{T}, u::BoundaryCondition{T}; r::Real = 1.0) where T <: Real
+    gu = gb
     return gu
 end
 
@@ -497,18 +597,31 @@ end
     Keep this function so that calling functions can look alike.
     Could probably combine with lower function, use Union type
 """
-function gadjustboundarycondition!(gu::BoundaryCondition,gb::BoundaryCondition) 
-    gu.tracer[gu.wet] += gb.tracer[gb.wet]
+function gadjustboundarycondition!(gu::BoundaryCondition, gb::BoundaryCondition; r::Real = 1.0)
+    gu.tracer[gu.wet] += r .* gb.tracer[gb.wet]
 end
-function gadjustboundarycondition!(gu::NamedTuple,gb::NamedTuple)
+
+"""
+    gadjustboundarycondition!(gu::NamedTuple, gb::NamedTuple; r::Real = 1.0)
+
+Accumulate adjoint contributions per tracer key, scaling by `r`. Keys missing
+from `gu` are skipped.
+"""
+function gadjustboundarycondition!(gu::NamedTuple, gb::NamedTuple; r::Real = 1.0)
     for bkey in keys(gb)
         #gadjustboundarycondition!(gu,gb[bkey])
-        haskey(gu,bkey) && gadjustboundarycondition!(gu[bkey],gb[bkey]) 
+        haskey(gu, bkey) && gadjustboundarycondition!(gu[bkey], gb[bkey]; r = r) 
     end
 end
 
 #function gadjustboundarycondition(gb::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T}}},u::NamedTuple{<:Any, NTuple{N2,BoundaryCondition{T}}}) where {N1, N2, T <: Real}
-function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition},u::NamedTuple) #where {N1, N2, T <: Real}
+"""
+    gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition}, u::NamedTuple; r::Real = 1.0)
+
+Return the subset of `gb` corresponding to the keys in `u` (non-mutating
+adjoint helper).
+"""
+function gadjustboundarycondition(gb::Union{NamedTuple,BoundaryCondition}, u::NamedTuple; r::Real = 1.0) #where {N1, N2, T <: Real}
     gu = gb[keys(u)] # grab the parts of the named tuple corresponding to u
     return gu
 end
