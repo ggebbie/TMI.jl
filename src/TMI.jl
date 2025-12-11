@@ -102,8 +102,13 @@ include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
-include(pkgsrcdir("observations.jl"))
 
+include(pkgsrcdir("observations.jl"))
+include(pkgsrcdir("controls", "utils.jl"))
+include(pkgsrcdir("controls", "boundary.jl"))
+include(pkgsrcdir("controls", "source.jl"))
+include(pkgsrcdir("controls", "massfrac.jl"))
+include(pkgsrcdir("controls", "control_parameters.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
