@@ -1,6 +1,6 @@
 
 """
-    struct BoundaryControls{U, U0, QU, D, G, B}
+    struct BoundaryControls{U, U0, QU, D, G, B, LB, UB}
 
 A container for control parameters related to model boundary conditions. This
 includes the boundary conditions being optimized, their prior estimates, error
@@ -17,39 +17,76 @@ covariances, and cached values for gradients and perturbations.
           boundary condition perturbations.
 - `b`: A cache for storing the full boundary condition field, initialized from
        the prior `u₀`.
+- `lower_bound`: A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: A `NamedTuple` of upper bounds for each control variable.
 """
-struct BoundaryControls{U, U0, QU, D, G, B}
+struct BoundaryControls{U, U0, QU, D, G, B, LB, UB}
     ub::U
     u₀::U0
     Qᵤ::QU
     dub::D
     gdub::G
     b::B
+    lower_bound::LB
+    upper_bound::UB
 end
 
-function BoundaryControls(config::NamedTuple)
-    u₀ = get(config, :prior, NamedTuple())
+"""
+    BoundaryControls(;
+        prior=NamedTuple(),
+        initial_guess=nothing,
+        variance=nothing,
+        covariance=nothing,
+        lower_bound=nothing,
+        upper_bound=nothing
+    )
+
+Constructs a `BoundaryControls` object using keyword arguments.
+
+# Arguments
+- `prior`: (Required) A `NamedTuple` of `BoundaryCondition` objects representing the prior state.
+- `initial_guess`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of the `prior`.
+- `variance`: (Optional) A `NamedTuple` of scalar variances for each tracer.
+- `covariance`: (Optional) A `NamedTuple` of full covariance matrices.
+- `lower_bound`: (Optional) A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: (Optional) A `NamedTuple` of upper bounds for each control variable.
+"""
+function BoundaryControls(;
+    prior::NamedTuple=NamedTuple(),
+    initial_guess=nothing,
+    variance=nothing,
+    covariance=nothing,
+    lower_bound=nothing,
+    upper_bound=nothing
+)
     
-    if isempty(u₀)
-        return BoundaryControls(nothing, nothing, nothing, nothing, nothing, nothing)
+    if isempty(prior)
+        return BoundaryControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
     end
 
-    ig = deepcopy(get(config, :initial_guess, u₀))
-    ub = isempty(ig) ? deepcopy(u₀) : ig
+    u₀ = prior
+    ig = isnothing(initial_guess) ? u₀ : initial_guess
+    ub_controls = deepcopy(ig)
     
-    Qᵤ = _build_tracer_precision_matrix(config, ub)
+    Qᵤ = _build_tracer_precision_matrix(ub_controls, variance, covariance)
 
-    check_shared_references(ub, "ub")
+    check_shared_references(ub_controls, "ub")
     check_shared_references(u₀, "u₀")
     check_shared_references(Qᵤ, "Qᵤ")
+
+    # Bounds
+    lower = _generate_control_bounds(ub_controls, lower_bound, -Inf)
+    upper = _generate_control_bounds(ub_controls, upper_bound, +Inf)
     
     return BoundaryControls(
-        ub,
+        ub_controls,
         u₀,
         Qᵤ,
-        deepcopy(ub), # dub
-        deepcopy(ub), # gdub
-        deepcopy(u₀)  # b
+        deepcopy(ub_controls), # dub
+        deepcopy(ub_controls), # gdub
+        deepcopy(u₀),  # b
+        lower,
+        upper
     )
 end
 

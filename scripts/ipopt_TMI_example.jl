@@ -5,7 +5,7 @@ using LinearAlgebra
 using TMI
 using Statistics
 using Test
-using Optim, LineSearches, BenchmarkTools
+# using Optim, LineSearches, BenchmarkTools
 using LinearSolve, IncompleteLU
 using NCDatasets
 using SparseArrays
@@ -27,6 +27,7 @@ cobs = (
     # δ¹³C★ = TMI.preformedcarbon13(TMIversion,Alu,γ)
 )
 
+c0 = deepcopy(cobs)
 # Define tracer standard deviations (σ) for boundary conditions and observations.
 # These represent our confidence in the prior values.
 tracer_error = (θ = 0.1, S = 0.01, 
@@ -198,7 +199,7 @@ function eval_g!(x, g; m0)
 end
 
 gtmp = zeros(sum(γ.interior))
-eval_g(x0_scaled, gtmp; m0)
+eval_g!(x0_scaled, gtmp; m0)
 gtmp
 # Correct signature: (x, rows, cols, values)
 
@@ -287,15 +288,15 @@ eval_jac_g(x0_scaled, rows_chk, cols_chk, vals_chk; m0 = m0)
 # Create Ipopt problem
 prob = Ipopt.CreateIpoptProblem(
     n,                              # number of variables
-    controls.lower_bound,           # lower bounds
-    controls.upper_bound,           # upper bounds
+    Float64.(controls.lower_bound),           # lower bounds
+    Float64.(controls.upper_bound),           # upper bounds
     nconstr,                              # number of constraints (0 if only box constraints)
     g_L,                      # constraint lower bounds = 1 for mass conservation
     g_U,                      # constraint upper bounds
     nnz_jac_g,                              # nnz in constraint Jacobian (0 if no constraints)
     0,                              # nnz in Hessian (0 = use approximation)
     f,
-   (x,g) -> eval_g(x, g; m0 = m0), #mass conservation constraint vector
+   (x,g) -> eval_g!(x, g; m0 = m0), #mass conservation constraint vector
     grad,
    (x, rows, cols, vals) -> eval_jac_g(x, rows, cols, vals; m0 = m0), #jacobian of cosntraint
     nothing
@@ -306,7 +307,7 @@ prob = Ipopt.CreateIpoptProblem(
 # Set Ipopt options
 Ipopt.AddIpoptIntOption(prob, "print_level", 5)
 Ipopt.AddIpoptStrOption(prob, "print_timing_statistics", "yes")
-Ipopt.AddIpoptIntOption(prob, "max_iter", 50)
+Ipopt.AddIpoptIntOption(prob, "max_iter", 5)
 Ipopt.AddIpoptNumOption(prob, "acceptable_tol", 1e-6)
 # # Barrier / Hessian
 Ipopt.AddIpoptStrOption(prob, "mu_strategy", "adaptive")

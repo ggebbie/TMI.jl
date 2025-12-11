@@ -31,13 +31,19 @@ Constructs precision matrices for tracer-like control variables.
 - `config`: Configuration for a specific control component.
 - `controls_nt`: `NamedTuple` of control variables.
 """
-function _build_tracer_precision_matrix(config::NamedTuple, controls_nt::NamedTuple)
-    Q_config = get(config, :covariance, get(config, :variance, nothing))
+function _build_tracer_precision_matrix(
+    controls_nt::NamedTuple,
+    variance::Union{NamedTuple, Nothing},
+    covariance::Union{NamedTuple, Nothing}
+)
+    Q_config = isnothing(covariance) ? variance : covariance
     ctrl_keys = filter(k -> !isnothing(controls_nt[k]), keys(controls_nt))
 
     if isnothing(Q_config)
-        @warn "No uncertainty config. Defaulting components to variance 1.0."
-        return NamedTuple{ctrl_keys}(map(name -> Diagonal(ones(length(vec(controls_nt[name])))), ctrl_keys))
+        @warn "No uncertainty config provided. Defaulting all tracer components to variance 1.0."
+        return NamedTuple{ctrl_keys}(
+            map(name -> Diagonal(ones(length(vec(controls_nt[name])))), ctrl_keys)
+        )
     end
 
     return NamedTuple{ctrl_keys}(
@@ -51,19 +57,28 @@ function _build_tracer_precision_matrix(config::NamedTuple, controls_nt::NamedTu
 end
 
 """
-    _build_massfrac_precision_matrix(config::NamedTuple, controls_nt::NamedTuple) -> AbstractMatrix
+    _build_massfrac_precision_matrix(
+    controls_nt::NamedTuple,
+    variance::Union{Real, NamedTuple, Nothing},
+    covariance::Union{AbstractMatrix, Nothing}
+) -> AbstractMatrix
 
 Constructs the precision matrix for mass fraction control variables.
 
 # Arguments
-- `config`: `mass_fraction` configuration tuple.
 - `controls_nt`: `NamedTuple` of `MassFraction` control variables.
+- `variance`: Scalar or `NamedTuple` of variances.
+- `covariance`: Full covariance matrix.
 """
-function _build_massfrac_precision_matrix(config::NamedTuple, controls_nt::NamedTuple)
-    Q_config = get(config, :covariance, get(config, :variance, nothing))
+function _build_massfrac_precision_matrix(
+    controls_nt::NamedTuple,
+    variance::Union{Real, NamedTuple, Nothing},
+    covariance::Union{AbstractMatrix, Nothing}
+)
+    Q_config = isnothing(covariance) ? variance : covariance
     
     if isnothing(Q_config)
-        @warn "No uncertainty config for mass_fraction. Defaulting variance 1.0."
+        @warn "No uncertainty config for mass_fraction. Defaulting variance to 1.0."
         return Diagonal(ones(length(vec(controls_nt))))
     end
 
@@ -71,11 +86,16 @@ function _build_massfrac_precision_matrix(config::NamedTuple, controls_nt::Named
         return _assemble_precision_matrix(Q_config, length(vec(controls_nt)); name="mass_fraction")
     
     elseif Q_config isa NamedTuple
+        # Handle a NamedTuple of variances, one for each mass fraction component
         vars_vecs = map(keys(controls_nt)) do name
             len = length(vec(controls_nt[name]))
             val = get(Q_config, name, 1.0)
-            !haskey(Q_config, name) && @warn "No uncertainty config for mass fraction '$name'. Defaulting variance 1.0."
-            !(val isa Real) && error("Mass fraction NamedTuple variance: values must be scalar.")
+            if !haskey(Q_config, name)
+                @warn "No uncertainty config for mass fraction '$name'. Defaulting to variance 1.0."
+            end
+            if !(val isa Real)
+                error("For mass fraction, if variance is a NamedTuple, its values must be scalar.")
+            end
             (1.0 / val) .* ones(len)
         end
         return Diagonal(vcat(vars_vecs...))

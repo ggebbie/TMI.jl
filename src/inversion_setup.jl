@@ -34,31 +34,13 @@ function setup_inversion(γ::Grid;
                         )
 
     # --- Set up the main control structures ---
-    boundary_controls = BoundaryControls(boundary)
-    source_controls = SourceControls(source)
-    massfrac_controls = MassFracControls(mass_fraction, γ)
+    boundary_controls = BoundaryControls(; boundary...)
+    source_controls = SourceControls(; source...)
+    massfrac_controls = MassFracControls(; mass_fraction..., γ=γ)
 
-    # --- Bounds Setup ---
-    raw_lb_b = get(boundary, :lower_bound, nothing)
-    raw_ub_b = get(boundary, :upper_bound, nothing)
-    lb_b_controls = _generate_control_bounds(boundary_controls.ub, raw_lb_b, -Inf)
-    ub_b_controls = _generate_control_bounds(boundary_controls.ub, raw_ub_b, +Inf)
-
-    raw_lb_q = get(source, :lower_bound, nothing)
-    raw_ub_q = get(source, :upper_bound, nothing)
-    lb_q_controls = _generate_control_bounds(source_controls.uq, raw_lb_q, -Inf)
-    ub_q_controls = _generate_control_bounds(source_controls.uq, raw_ub_q, +Inf)
-
-    raw_lb_m = get(mass_fraction, :lower_bound, nothing)
-    raw_ub_m = get(mass_fraction, :upper_bound, nothing)
-    if isnothing(raw_lb_m) && isnothing(raw_ub_m) && !isempty(massfrac_controls.m)
-        @warn "No explicit bounds provided for mass fractions. Defaulting to (-Inf, +Inf)."
-    end
-    lb_m_controls = _generate_control_bounds(massfrac_controls.m, raw_lb_m, -Inf)
-    ub_m_controls = _generate_control_bounds(massfrac_controls.m, raw_ub_m, +Inf)
-    
-    lower_bound_vec = vectorize_controls(lb_b_controls, lb_q_controls, lb_m_controls)
-    upper_bound_vec = vectorize_controls(ub_b_controls, ub_q_controls, ub_m_controls)
+    # --- Vectorize Bounds ---
+    lower_bound_vec = vectorize_controls(boundary_controls.lower_bound, source_controls.lower_bound, massfrac_controls.lower_bound)
+    upper_bound_vec = vectorize_controls(boundary_controls.upper_bound, source_controls.upper_bound, massfrac_controls.upper_bound)
 
     return ControlParameters(
         boundary_controls,

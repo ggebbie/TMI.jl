@@ -1,6 +1,6 @@
 
 """
-    struct SourceControls{Q, Q0, QS, D, G, S, C, GC}
+    struct SourceControls{Q, Q0, QS, D, G, S, C, GC, LB, UB}
 
 A container for control parameters related to interior sources and sinks.
 
@@ -22,8 +22,10 @@ to define dependencies between different tracer sources.
                `(O2 = (:PO4, -170.0),)`.
 - `gduq_cache`: A pre-allocated buffer to hold gradients for *all* sources
                 before the chain rule is applied for couplings.
+- `lower_bound`: A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: A `NamedTuple` of upper bounds for each control variable.
 """
-struct SourceControls{Q, Q0, QS, D, G, S, C, GC}
+struct SourceControls{Q, Q0, QS, D, G, S, C, GC, LB, UB}
     uq::Q
     q₀::Q0
     Qₛ::QS
@@ -32,45 +34,79 @@ struct SourceControls{Q, Q0, QS, D, G, S, C, GC}
     q::S
     couplings::C
     gduq_cache::GC
+    lower_bound::LB
+    upper_bound::UB
 end
 
-function SourceControls(config::NamedTuple)
-    q₀_all = get(config, :prior, NamedTuple())
-    
-    if isempty(q₀_all)
-        return SourceControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+"""
+    SourceControls(;
+        prior=NamedTuple(),
+        initial_guess=nothing,
+        variance=nothing,
+        covariance=nothing,
+        couplings=NamedTuple(),
+        lower_bound=nothing,
+        upper_bound=nothing
+    )
+
+Constructs a `SourceControls` object using keyword arguments.
+
+# Arguments
+- `prior`: (Required) A `NamedTuple` of `Source` objects representing the prior state for all sources.
+- `initial_guess`: (Optional) The starting values for the control variables. Defaults to a `deepcopy` of the `prior`.
+- `variance`: (Optional) A `NamedTuple` of scalar variances for each independent tracer.
+- `covariance`: (Optional) A `NamedTuple` of full covariance matrices for independent tracers.
+- `couplings`: (Optional) A `NamedTuple` defining relationships between dependent and independent sources.
+- `lower_bound`: (Optional) A `NamedTuple` of lower bounds for each control variable.
+- `upper_bound`: (Optional) A `NamedTuple` of upper bounds for each control variable.
+"""
+function SourceControls(;
+    prior::NamedTuple=NamedTuple(),
+    initial_guess=nothing,
+    variance=nothing,
+    covariance=nothing,
+    couplings::NamedTuple=NamedTuple(),
+    lower_bound=nothing,
+    upper_bound=nothing
+)
+    if isempty(prior)
+        return SourceControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
     end
 
-    couplings = get(config, :couplings, NamedTuple())
+    q₀_all = prior
+    dependent_sources = keys(couplings)
     
-    uq_controls_nt = NamedTuple()
-    if !isempty(q₀_all)
-        dependent_sources = keys(couplings)
-        
-        uncertainty_config = get(config, :covariance, get(config, :variance, nothing))
-        independent_controls_names = isnothing(uncertainty_config) ? () : keys(uncertainty_config)
+    # Determine the names of sources that are explicitly controlled (have uncertainty)
+    uncertainty_vars = if !isnothing(covariance)
+        keys(covariance)
+    elseif !isnothing(variance)
+        keys(variance)
+    else
+        ()
+    end
 
-        # Build the `uq` tuple, which has `nothing` for non-controlled sources
-        potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀_all))
-        uq_ig_full = deepcopy(get(config, :initial_guess, q₀_all))
+    # Independent sources are those that are not dependent on others
+    potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀_all))
+    
+    # Use initial guess if provided, otherwise default to the prior value
+    uq_ig_full = isnothing(initial_guess) ? q₀_all : initial_guess
 
-        uq_controls_nt = NamedTuple{potential_ind_sources}(
-             map(potential_ind_sources) do name
-                if name in independent_controls_names
-                    # Use initial guess if provided, otherwise default to the prior value.
-                    get(uq_ig_full, name, q₀_all[name])
-                else
-                    # This source is not being controlled.
-                    nothing
-                end
+    # Build the `uq` tuple, which has `nothing` for non-controlled sources
+    uq_controls_nt = NamedTuple{potential_ind_sources}(
+        map(potential_ind_sources) do name
+            if name in uncertainty_vars
+                # This is an independent control variable
+                deepcopy(get(uq_ig_full, name, q₀_all[name]))
+            else
+                # This source is not being controlled
+                nothing
             end
-        )
-    end
+        end
+    )
     
     uq_controls = isempty(uq_controls_nt) ? nothing : uq_controls_nt
-    Qₛ_final = !isnothing(uq_controls) ? _build_tracer_precision_matrix(config, uq_controls) : NamedTuple()
+    Qₛ_final = !isnothing(uq_controls) ? _build_tracer_precision_matrix(uq_controls, variance, covariance) : NamedTuple()
 
-    # from ControlParameters constructor
     independent_sources = isnothing(uq_controls) ? () : filter(k -> !isnothing(uq_controls[k]), keys(uq_controls))
     uq_indep = isnothing(uq_controls) ? nothing : NamedTuple{independent_sources}(getproperty(uq_controls, k) for k in independent_sources)
     Qₛ_indep = isnothing(Qₛ_final) ? nothing : NamedTuple{independent_sources}(getproperty(Qₛ_final, k) for k in independent_sources)
@@ -88,15 +124,21 @@ function SourceControls(config::NamedTuple)
         end
     end
 
+    # Bounds
+    lower = _generate_control_bounds(uq_indep, lower_bound, -Inf)
+    upper = _generate_control_bounds(uq_indep, upper_bound, +Inf)
+
     return SourceControls(
         uq_indep,
         q₀_all,
         Qₛ_indep,
         isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # duq
         isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # gduq
-        isnothing(q₀_all) ? nothing : deepcopy(q₀_all),             # q
+        deepcopy(q₀_all), # q
         couplings,
-        isnothing(q₀_all) ? nothing : zero(q₀_all)                   # gduq_cache
+        zero(q₀_all), # gduq_cache
+        lower,
+        upper
     )
 end
 
