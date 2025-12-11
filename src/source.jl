@@ -135,11 +135,29 @@ function adjustsource!(q::Union{Field,Source},u::NamedTuple; r::Real = 1.0) #whe
     end
 end
 
+"""
+    gadjustsource!(gu::Union{Field,Source,NamedTuple},
+                   gq::Union{Field,Source,NamedTuple},
+                   q₀::Union{Source,NamedTuple};
+                   r::Real = 1.0)
+
+Accumulate source gradients in-place. Adds `r * gq` into `gu`, applying the
+correct domain mask (wet or interior). For `Source` inputs with `logscale`
+the prior `q₀` is used to linearize the log transform before accumulation.
+`NamedTuple` methods dispatch over tracers.
+"""
 function gadjustsource!(gu::Field,gq::Field; r::Real = 1.0)
     # write it out so b changes when returned
     gu.tracer[gu.γ.wet] += r .* gq.tracer[gq.γ.wet] 
 end
 
+"""
+    gadjustsource!(gu::Source, gq::Source, q₀::Source; r::Real = 1.0)
+
+Accumulate gradients for a log-scaled `Source`. Uses the prior `q₀` to
+linearize the exponential transform when `gu.logscale` is true; otherwise
+adds `r * gq` over the interior mask.
+"""
 function gadjustsource!(gu::Source,gq::Source,q₀::Source; r::Real = 1.0)
     q = deepcopy(q₀)
     if gq.logscale && gu.logscale
@@ -164,13 +182,12 @@ function gadjustsource!(gu::Source,gq::Source,q₀::Source; r::Real = 1.0)
     end        
 end
 
-function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
-    qkey = :source
-    if haskey(gu,qkey)
-        gadjustsource!(gu[qkey],gq,q; r = r)
-    end
-end
+"""
+    gadjustsource!(gu::NamedTuple, gq::NamedTuple, q::NamedTuple; r::Real = 1.0)
 
+Loop over tracers in a NamedTuple, accumulating `r * gq[key]` into
+`gu[key]` with the appropriate per-tracer handling (logscale or field).
+"""
 function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: NamedTuple 
     for qkey in keys(gq)
         if haskey(gu,qkey)
@@ -178,3 +195,16 @@ function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Nam
         end
     end
 end
+
+# """
+#     gadjustsource!(gu::NamedTuple, gq::Union{Source,Field}, q::Union{Source,Field}; r::Real = 1.0)
+
+# Pick out the `:source` entry from a gradient NamedTuple and accumulate the
+# provided gradient there (used when only a single tracer is present).
+# """
+# function gadjustsource!(gu::NamedTuple,gq::T,q::T; r::Real = 1.0) where T <: Union{Source,Field}
+#     qkey = :source
+#     if haskey(gu,qkey)
+#         gadjustsource!(gu[qkey],gq,q; r = r)
+#     end
+# end
