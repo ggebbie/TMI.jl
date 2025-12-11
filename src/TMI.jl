@@ -15,6 +15,8 @@ using NCDatasets
 using UnicodePlots
 using OrderedCollections
 using Downloads
+using LinearSolve
+using IncompleteLU
 
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
@@ -936,6 +938,46 @@ end
 
 
 """
+    function interpindex(loc::T, γ::Grid{R,1}) where {T,R}
+
+    1D grid specialization of `interpindex`.
+    See the 3D version for more details.
+# Arguments
+- `loc`: location
+- `γ`: TMI grid
+# Output
+- `wis`: weighted indexes for interpolation
+"""
+function interpindex(loc::T, γ::Grid{R,1}) where {T,R}
+    loc_on_grid = shiftloc(loc, γ)
+    nodes = (γ.axes[1],)
+    return Interpolations.weightedindexes(
+        (Interpolations.value_weights,),
+        (Gridded(Linear()),),
+        nodes,
+        (loc_on_grid,),
+    )
+end
+
+"""
+    function interpindex(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+
+    1D grid specialization of `interpindex` for a vector location.
+    See the 3D version for more details.
+# Arguments
+- `loc`: a 1-element vector location
+- `γ`: TMI grid
+# Output
+- `wis`: weighted indexes for interpolation
+"""
+function interpindex(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("interpindex 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return interpindex(loc[1], γ)
+end
+
+"""
 function interpindex(loc,γ)
     Weights for linear interpolation.
     The derivative of linear interpolation is needed in sensitivity studies.
@@ -948,7 +990,7 @@ function interpindex(loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function interpindex(loc,γ)
+function interpindex(loc::Tuple{T, T, T},γ) where T
 
     # Handle a grid mismatch.
     loc_on_grid = shiftloc(loc,γ)
@@ -968,12 +1010,57 @@ function interpindex(loc,γ)
 end
 
 """
-function  shiftloc(loc)
-
-    sometimes loc longitudes are outside of grid due to different conventions
-    assumption: 360° shift is enough to get back on grid
+    function shiftloc(loc::T, γ::Grid{R,1}) where {T,R}
+    1D grid specialization of `shiftloc`.
+    Check if location is on the 1D grid.
+# Arguments
+- `loc`: location
+- `γ`: TMI grid
+# Output
+- `loc`: original location if on grid
 """
-function shiftloc(loc,γ)
+function shiftloc(loc::T, γ::Grid{R,1}) where {T,R}
+    x = γ.axes[1]
+
+    if length(x) == 1
+        if !isapprox(loc, x[1]; atol = zero(T))
+            error("location not on grid")
+        end
+        return loc
+    end
+
+    xmin, xmax = extrema(x)
+    if loc < xmin || loc > xmax
+        error("location not on grid")
+    end
+
+    return loc
+end
+
+"""
+    function shiftloc(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+    1D grid specialization of `shiftloc` for a vector location.
+# Arguments
+- `loc`: a 1-element vector location
+- `γ`: TMI grid
+# Output
+- `loc`: original location if on grid
+"""
+function shiftloc(loc::AbstractVector{T}, γ::Grid{R,1}) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("shiftloc 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return shiftloc(loc[1], γ)
+end
+
+"""
+    shiftloc(loc::Tuple, γ)
+
+Wrap longitudes into the grid domain (allowing a half-cell overlap) while
+leaving latitude/depth untouched. Errors if the adjusted longitude is still
+off-grid.
+"""
+function shiftloc(loc::Tuple{T, T, T},γ) where T
     # accounts for a half grid cell of overlap space
     newlon = loc[1]
     westlon = (3/2)*γ.lon[1] - (1/2)*γ.lon[2]
@@ -994,6 +1081,52 @@ function shiftloc(loc,γ)
 end
 
 """
+    function interpweights(loc::T, γ::Grid{R,1}; wis = nothing) where {T,R}
+    1D grid specialization of `interpweights`.
+# Arguments
+- `loc`: location
+- `γ`: TMI grid
+- `wis`: pre-computed weighted indexes
+# Output
+- `δ`: weights on a 1D tracer field grid
+"""
+function interpweights(loc::T, γ::Grid{R,1}; wis = nothing) where {T,R}
+    if isnothing(wis)
+        wis = interpindex(loc, γ)
+    end
+
+    δ = zeros(γ.wet)
+    for ii in 1:length(wis[1].weights)
+        δ[wis[1].istart + ii - 1] += wis[1].weights[ii]
+    end
+
+    if iszero(sum(filter(!isnan,δ)))
+        δ = nothing
+    elseif sum(filter(!isnan,δ)) < 1.0
+        δ ./= sum(filter(!isnan,δ))
+    end
+    
+    return δ
+end
+
+"""
+    function interpweights(loc::AbstractVector{T}, γ::Grid{R,1}; wis = nothing) where {T,R}
+    1D grid specialization of `interpweights` for a vector location.
+# Arguments
+- `loc`: 1-element vector location
+- `γ`: TMI grid
+- `wis`: pre-computed weighted indexes
+# Output
+- `δ`: weights on a 1D tracer field grid
+"""
+function interpweights(loc::AbstractVector{T}, γ::Grid{R,1}; wis = nothing) where {T,R}
+    if length(loc) != 1
+        throw(ArgumentError("interpweights 1D expects a length-1 vector, got length $(length(loc))"))
+    end
+    return interpweights(loc[1], γ; wis)
+end
+
+"""
 function interpweights(loc,γ)
     Weights for linear interpolation.
     The derivative of linear interpolation is needed in sensitivity studies.
@@ -1005,14 +1138,15 @@ function interpweights(loc,γ)
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
-function interpweights(loc,γ)
+function interpweights(loc::Tuple{T, T, T},γ; wis = nothing) where T
 
     # handle wraparound
     # repeated (unnecessarily?) in interpindex
     lon = vcat(copy(γ.lon),γ.lon[1]+360)
     list = vcat(1:length(γ.lon),1)
-
-    wis = interpindex(loc,γ)
+    if isnothing(wis)
+        wis = interpindex(loc,γ)
+    end
 
     # translate to weights via
     #http://juliamath.github.io/Interpolations.jl/latest/devdocs/
@@ -1352,38 +1486,6 @@ function dot(c::Field{T},d::Field{T})::T where T <: Real
     return e
 end
 
-""" 
-    function setsource!(d::Field,q::Field,r::Number)
-    apply interior source q to the equation constraints d
-# Arguments
-- `d`::Field, equation constraints (i.e., right hand side)
-- `q`::Field, interior source
-- `r`::Number, default = 1.0, stoichiometric ratio
-"""
-function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
-    d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
-end
-function setsource!(d::Field{T},q::Source{T},r=1.0) where T<: Real
-    d.tracer[d.γ.interior] -= r * q.tracer[q.γ.interior]
-end
-
-"""
-    function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
-
-    Adjoint to `setsource!`
-"""
-function gsetsource!(gq::Field{T},gd::Field{T},r) where T<: Real
-    gq.tracer[gq.γ.wet] -= r * gd.tracer[gd.γ.wet]
-end
-function gsetsource!(gq::Source{T},gd::Field{T},r) where T<: Real
-    gq.tracer[gq.γ.interior] -= r * gd.tracer[gd.γ.interior]
-end
-function gsetsource(gd::Field{T},q::Union{Field,Source},r) where T<: Real
-    gq = 0.0 * q
-    gsetsource!(gq,gd,r)
-    return gq
-end
-
 """
     function vec(u)
 
@@ -1393,54 +1495,198 @@ end
 """
 vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
+"""
+    vec(u::NamedTuple)
+Turn a NamedTuple of `Field`, `BoundaryCondition`, or `Source` structs into a single vector.
+Skips `nothing` values. Recursively unwraps nested NamedTuples.
+"""
 function vec(u::NamedTuple) 
+    # grab all non-nothing values
+    nn = collect(filter(!isnothing, values(u)))
 
-    T = eltype(values(u)[1].tracer)
-    #T = eltype(u)
+    # if everything is `nothing`, return an empty vector
+    if isempty(nn)
+        return Float64[]   # or Float64[] or whatever element type you prefer
+    end
+
+    # use the first non-nothing entry to figure out T
+    ufirst = first(nn)
+
+    if ufirst isa Union{Field, BoundaryCondition, Source}
+        T = eltype(ufirst.tracer)
+    elseif ufirst isa AbstractVector # Added this clause to handle NamedTuple of Vectors
+        T = eltype(ufirst)
+    elseif ufirst isa NamedTuple 
+        #handling the case of tuples of tuples
+        uufirst = first(filter(!isnothing, values(ufirst)))
+        T = eltype(uufirst.tracer)
+    end
+    #println(typeof(ufirst)) # Commented out debug print
+    # T = eltype(u)
     uvec = Vector{T}(undef,0)
     for v in u
+        if !isnothing(v)
         #append!(uvec,v.tracer[v.wet])
-        append!(uvec,vec(v))
+            append!(uvec,vec(v))
+        end
     end
     return uvec
 end
 
 """
-    function unvec(u,uvec)
-
-    Replace u with new u
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
+    unvec(u₀, uvec) -> u
+Create a new object `u` of the same type as `u₀` (`Field`, `BoundaryCondition`, `Source`, or `NamedTuple`) and fill it with the values from `uvec`.
+This is the inverse of `vec`.
+# Arguments
+- `u₀`: A `Field`, `BoundaryCondition`, `Source`, or `NamedTuple` to use as a template.
+- `uvec`: A vector of values.
+# Output
+- `u`: A new object with values from `uvec`.
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition, Source},uvec::Vector) #where T <: Real
     u = deepcopy(u₀)
     unvec!(u,uvec)
     return u
 end
 
 """
-    function unvec!(u,uvec)
-
-    Undo the operations by vec(u)
-    Needs to update u because attributes of 
-    u need to be known at runtime.
+    unvec(u₀::Source, uvec::Vector)
+Specialization of `unvec` for `Source` types. Zeros out the tracer field before filling.
 """
-function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
-    I = findall(wet(u)) # findall seems slow
-    for (ii,vv) in enumerate(I)
-        u.tracer[vv] = uvec[ii]
-    end
+function unvec(u₀::Source,uvec::Vector) #where T <: Real
+    u = deepcopy(u₀)
+    u.tracer .= 0.0
+    unvec!(u,uvec)
+    return u
 end
-function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-    nlo = 1
-    nhi = 0
+
+
+"""
+    wet(u::NamedTuple) -> Vector{Bool}
+
+Return a concatenated boolean vector indicating wet points for all `Field`, `BoundaryCondition`, or `Source` structs within a `NamedTuple`.
+Recursively handles nested `NamedTuple`s.
+"""
+function wet(u::NamedTuple)
+    result = Bool[]
     for v in u
-        nhi += sum(wet(v))
-        unvec!(v,uvec[nlo:nhi])
-        nlo = nhi + 1
+        if !isnothing(v)
+            append!(result, wet(v))
+        end
+    end
+    return result
+end
+
+"""
+    unvec!(u, uvec)
+Fill an object `u` (`Field`, `BoundaryCondition`, `Source`, or `NamedTuple`) in-place with values from `uvec`.
+This is the inverse of `vec`.
+# Arguments
+- `u`: A `Field`, `BoundaryCondition`, `Source`, or `NamedTuple` to be modified.
+- `uvec`: A vector of values.
+"""
+function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}}, uvec::Vector{T}; idx::Int = 1, return_idx::Bool = false) where T <: Real
+    mask = wet(u)
+    data = u.tracer
+    @inbounds for I in eachindex(mask)
+        if mask[I]
+            data[I] = uvec[idx]
+            idx += 1
+        end
+    end
+    return return_idx ? idx : nothing
+end
+
+"""
+    unvec!(u::NamedTuple, uvec::Vector; ...)
+In-place `unvec!` for a `NamedTuple` of `Field`, `BoundaryCondition`, or `Source` structs. Recursively fills each non-nothing element.
+"""
+function unvec!(u::NamedTuple, uvec::Vector; idx::Int = 1, return_idx::Bool = false) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            idx = unvec!(v, uvec; idx = idx, return_idx = true)
+        end
+    end
+    return return_idx ? idx : nothing
+end
+
+"""
+    one!(u::NamedTuple)
+Set all wet points of all `Field`, `BoundaryCondition`, or `Source` structs within a `NamedTuple` to one, in-place.
+"""
+function one!(u::NamedTuple) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            one!(v)
+        end          
     end
 end
+
+"""
+    one!(u::Union{BoundaryCondition, Field, Source})
+Set all wet points of a `BoundaryCondition`, `Field`, or `Source` struct to one, in-place.
+"""
+function one!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
+    if length(u) > 1
+       u.tracer[u.γ.wet] .= 1.0
+    else 
+        u.tracer .= 1.0
+    end
+end
+
+"""
+    one(u::NamedTuple) -> NamedTuple
+Create a new `NamedTuple` of the same structure as `u` where all wet points of all `Field`, `BoundaryCondition`, or `Source` structs are set to one.
+"""
+function Base.one(u::NamedTuple) #where {N, T <: Real}
+    uz = deepcopy(u)
+    for v in uz
+        if !isnothing(v)
+            one!(v)  
+        end          
+    end
+    return uz
+end
+
+"""
+    zero!(u::NamedTuple)
+Set all wet points of all `Field`, `BoundaryCondition`, or `Source` structs within a `NamedTuple` to zero, in-place. Land points are set to `NaN`.
+"""
+function zero!(u::NamedTuple) #where {N, T <: Real}
+    for v in u
+        if !isnothing(v)
+            zero!(v)
+        end          
+    end
+end
+
+"""
+    zero!(u::Union{BoundaryCondition, Field, Source})
+Set all wet points of a `BoundaryCondition`, `Field`, or `Source` struct to zero, in-place. Land points are set to `NaN`.
+"""
+function zero!(u::Union{BoundaryCondition, Field, Source}) #where {N, T <: Real}
+    if length(u) > 1
+       u.tracer .= NaN
+       u.tracer[wet(u)] .= 0.0
+    else 
+        u.tracer .= 0.0
+    end
+end
+
+"""
+    zero(u::NamedTuple) -> NamedTuple
+Create a new `NamedTuple` of the same structure as `u` where all wet points of all `Field`, `BoundaryCondition`, or `Source` structs are set to zero.
+"""
+function Base.zero(u::NamedTuple) #where {N, T <: Real}
+    uz = deepcopy(u)
+    for v in uz
+        if !isnothing(v)
+            zero!(v)  
+        end          
+    end
+    return uz
+end
+
 
 """ 
     function synthetic_observations(TMIversion,variable)
@@ -1576,22 +1822,72 @@ function observe(c::Field{T},loc::Vector{Tuple{T,T,T}},γ::Grid) where T <: Real
 end
 
 """
-    function gobserve(gy::Vector{T},c::Field{T},wis,γ) where T <: Real
+    observe(c::Field{T}, wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}}}, γ::Grid{R,1}) where {T<:Real,R}
 
-    ADJOINT Take a observation at location given by weights wis
-    Arguments not symmetric with `observe` due to splat operator
+1D grid specialization of `observe` when interpolation weights have already
+been computed. Normalizes by the wet-mask weight to avoid bias near land.
+# Arguments
+- `c`: tracer `Field`.
+- `wis`: weighted interpolation indices (1D).
+- `γ`: grid.
+# Output
+- `y`: interpolated tracer values.
 """
-function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
+function observe(c::Field{T}, wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}}}, γ::Grid{R,1})::Vector{T} where {T <: Real,R}
+
+    sumwis = Vector{Float64}(undef,length(wis))
+    [sumwis[i] = Interpolations.InterpGetindex(γ.wet)[wis[i]...] for i in eachindex(wis)]
+
+    y = Vector{Float64}(undef,length(wis))
+    replace!(c.tracer,NaN=>0.0)
+    [y[i] = Interpolations.InterpGetindex(c.tracer)[wis[i]...]/sumwis[i] for i in eachindex(wis)]
+
+    return y
+end
+
+"""
+    observe(c::Field{T}, loc::Vector{T}, γ::Grid{R,1}) where {T <: Real,R}
+    1D grid specialization of `observe` to use locations rather than weighted interpolations.
+# Arguments
+- `c`: a `Field` of tracer values.
+- `loc`: a vector of 1D locations.
+- `γ`: TMI grid.
+# Output
+- `y`: observed tracer values at specified locations.
+"""
+function observe(c::Field{T}, loc::Vector{T}, γ::Grid{R,1}) where {T <: Real,R}
+    N = length(loc)
+    wis = Vector{Tuple{Interpolations.WeightedAdjIndex{2,T}}}(undef,N)
+    [wis[i] = interpindex(loc[i],γ) for i in 1:N]
+    return observe(c,wis,γ)
+end
+
+"""
+    function gobserve(gy::Vector{T}, c::Field{T}, locs; wis = nothing) where T <: Real
+
+Adjoint of `observe`: back-propagate observation sensitivities `gy` to a field
+using provided interpolation weights `wis` or by computing them from `locs`.
+# Arguments
+- `gy`: observation gradients.
+- `c`: tracer `Field`.
+- `locs`: observation locations (used if `wis` is not provided).
+- `wis`: optional precomputed interpolation weights.
+# Output
+- `gc`: gradient field.
+"""
+function gobserve(gy::Vector{T},c::Field{T},locs; wis =nothing) where T <: Real
 
     #initialize gc this sneaky way
     gc = 0.0 * c
     for ii in eachindex(gy)
         # interpweights repeats some calculations
-        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ)[c.γ.wet]
+        gc.tracer[c.γ.wet] .+= gy[ii] * interpweights(locs[ii],c.γ; wis = nothing)[c.γ.wet]
     end
 
     return gc
 end
+
+
 
 """
     function location_obs(field, locs, γ)
@@ -1924,7 +2220,7 @@ end
 # Output
 - `c`::Field, steady-state tracer distribution
 """
-function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
 
     # preallocate Field for equation constraints
     d = zeros(γ,b.name,b.longname,b.units)
@@ -1941,6 +2237,7 @@ function steadyinversion(Alu,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::
     c = Alu \ d
     return c
 end
+
 
 """ 
     function gsteadyinversion(gc,Alu,b;q=nothing,r=1.0)
@@ -1971,13 +2268,9 @@ function gsteadyinversion(gc::Field,Alu,b::Union{BoundaryCondition,NamedTuple},�
 
 end
 
-"""
-    function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 
-    steady inversion for b::NamedTuple
-"""
-#function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
-function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+# function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
 
     # preallocate Field for equation constraints
     d = zeros(γ,first(b).name,first(b).longname,first(b).units)
@@ -1991,14 +2284,714 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
         setsource!(d,q,r)
     end
 
-    # Warning: doesn't this need to loop over the NamedTuple?
-
     # define ldiv with fields
     #c = zeros(d.γ,b.name,b.longname,b.units)
     c = Alu \ d
 
     return c
 end
+
+"""
+    steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+                    b::NamedTuple{tracer_names}, q::NamedTuple, γ; r=1.0)
+
+Multi-tracer steady inversion using an LU/UMFPACK factorization of the
+watermassmatrix. Applies per-tracer boundary conditions and sources, returning
+a `NamedTuple` of steady tracer fields.
+# Arguments
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: `NamedTuple` of boundary conditions keyed by tracer.
+- `q`: `NamedTuple` of interior sources keyed by tracer.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `c_nt`: `NamedTuple` of steady tracer `Field`s.
+"""
+function steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+                        b::NamedTuple{tracer_names, S}, q::NamedTuple,
+                        γ::Grid{T}; r=1.0) where {T <: Real, tracer_names, S}
+                        
+    c_nt = map(b, q) do b_i, q_i
+            steadyinversion(Alu, b_i, γ; q = q_i, r = r)
+            end
+    return c_nt
+
+end
+
+
+"""
+    lsolve(cache::LinearSolve.LinearCache, d::Field, γ) -> Field
+
+Solve `A * c = d` with LinearSolve (using the supplied `LinearCache`, which may
+wrap a preconditioner such as IncompleteLU). Inserts the solution into a new
+`Field`, placing values only on wet points.
+# Arguments
+- `cache`: `LinearSolve.LinearCache` containing operator/preconditioner.
+- `d`: right-hand-side `Field`.
+- `γ`: grid.
+# Output
+- `c`: solution `Field`.
+"""
+function lsolve(cache::LinearSolve.LinearCache, d::Field{T}, γ) where T
+    c = zeros(γ,d.name,d.longname,d.units)
+    cache.b .= vec(d)
+    sol = solve!(cache)
+    c.tracer[wet(c)] .= sol.u
+    return c
+end
+
+"""
+    steadyinversion(cache::LinearSolve.LinearCache, b::BoundaryCondition, γ; q=nothing, r=1.0)
+
+Steady-state tracer inversion solved with LinearSolve/Iterative solvers (via
+the provided `LinearCache`, often with an ILU preconditioner) instead of a
+direct `\\` on an LU factorization. Applies boundary conditions `b`, optional
+interior sources `q` scaled by `r`, then solves for the steady tracer field.
+# Arguments
+- `cache`: `LinearSolve.LinearCache` (operator and preconditioner).
+- `b`: surface `BoundaryCondition`.
+- `γ`: grid.
+# Optional Arguments
+- `q`: interior sources/sinks.
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `c`: steady-state tracer `Field`.
+"""
+function steadyinversion(cache::LinearSolve.LinearCache,b::BoundaryCondition,γ::Grid{T};q=nothing,r=1.0)::Field{T} where T <: Real
+
+    # preallocate Field for equation constraints
+    d = zeros(γ,b.name,b.longname,b.units)
+    
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    return lsolve(cache, d, γ)
+end
+
+
+
+# function steadyinversion(Alu,b::NamedTuple{<:Any, NTuple{N1,BoundaryCondition{T,R,N2,B}}},γ::Grid{R};q=nothing,r=1.0)::Field{R} where {N1, N2 <: Integer, T <: Real, R <: Real, B <: AbstractMatrix{T}}
+"""
+    steadyinversion(cache::LinearSolve.LinearCache, b::NamedTuple, γ; q=nothing, r=1.0)
+
+NamedTuple overload of the LinearSolve-based steady inversion; applies each
+boundary condition and optional source before solving with the provided
+`LinearCache` (e.g., iterative solve with ILU preconditioner).
+# Arguments
+- `cache`: `LinearSolve.LinearCache`.
+- `b`: `NamedTuple` of boundary conditions.
+- `γ`: grid.
+# Optional Arguments
+- `q`: `NamedTuple` of interior sources/sinks.
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `c`: steady-state tracer `Field`.
+"""
+function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T} where {T <: Real}
+
+    # preallocate Field for equation constraints
+    d = zeros(γ,first(b).name,first(b).longname,first(b).units)
+
+    # update d with the boundary condition b
+    setboundarycondition!(d,b)
+
+    if !isnothing(q)
+        # apply interior sources
+        # negative because of equation arrangement
+        setsource!(d,q,r)
+    end
+
+    return lsolve(cache, d, γ)
+
+end
+
+"""
+    steadyinversion(cache::LinearSolve.LinearCache, b::NamedTuple{tracer_names}, q::NamedTuple,
+                    γ; r=1.0, c_obs=nothing)
+
+Multi-tracer steady inversion using LinearSolve/Iterative methods. Optionally
+modifies the operator per tracer (e.g., subtracting a decay matrix) and builds
+a new `LinearCache` with ILU preconditioning when needed. Returns a
+`NamedTuple` of steady tracer fields.
+# Arguments
+- `cache`: `LinearSolve.LinearCache` (base operator/preconditioner).
+- `b`: `NamedTuple` of boundary conditions keyed by tracer.
+- `q`: `NamedTuple` of interior sources keyed by tracer.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+- `c_obs`: optional observations that may supply a per-tracer `decay_rate_matrix`.
+# Output
+- `c_nt`: `NamedTuple` of steady tracer `Field`s.
+"""
+function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple{tracer_names, S}, q::NamedTuple,
+                        γ::Grid{T}; r=1.0, c_obs = nothing) where {T <: Real, tracer_names, S} # c_obs is now OPTIONAL
+    n_tracers = length(tracer_names)
+    c_results = Vector{Field}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)
+        local_cache = cache # Start with the original cache
+
+        # Check for decay rate for this specific tracer, with !isnothing(c_obs)
+        if !isnothing(c_obs) && haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = cache.A - c_obs[name].decay_rate_matrix # Modify A from the original cache
+            prob = LinearProblem(A_modified, Vector{Float64}(undef, size(A_modified,1)))
+            P = ilu(A_modified; τ=0.01)
+            local_cache = init(prob, KrylovJL_GMRES(); Pl=P) # Create a new local_cache
+        end
+
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)  # q is a NamedTuple
+        c_results[i] = steadyinversion(local_cache, b_i, γ; q = q_i, r = r) # Use the potentially modified local_cache
+    end
+    c_nt = NamedTuple{tracer_names}(Tuple(c_results))
+    return c_nt
+
+end
+
+"""
+    gsteadyinversion(gc::Field, c::Field, A, Alu, b, q, γ; r=1.0)
+
+Adjoint of `steadyinversion` for a single tracer using a direct factorization
+(`lu`/UMFPACK). Returns gradients with respect to boundary conditions `b`,
+optional sources `q`, and the watermassmatrix `A`.
+# Arguments
+- `gc`: adjoint `Field` of the solution.
+- `c`: forward solution `Field`.
+- `A`: watermassmatrix.
+- `Alu`: LU/UMFPACK factorization of `A`.
+- `b`: boundary condition(s) used in the forward solve.
+- `q`: optional interior sources/sinks.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `gb`, `gq`, `gA`: gradients w.r.t. boundary, sources, and `A` (with `gq` possibly `nothing`).
+"""
+function gsteadyinversion(gc::Field,c::Field,A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU}, 
+                        b::Union{BoundaryCondition,NamedTuple}, q::Union{Nothing,Source},γ::Grid; r=1.0) #where T <: Real
+    #println("running adjoint steady inversion")
+    gd = Alu' \ gc
+
+    #ga = gd * c', but some A entries are fixed (1 or 0)
+    #we just need to consider the entries that propogate into the adjoint
+    rows, cols, _ = findnz(A) 
+    offdiag_mask = rows .!= cols 
+    #may need to call the other steady inversion
+    # only consider the off-diagonal entries
+    rows_offdiag = rows[offdiag_mask]
+    cols_offdiag = cols[offdiag_mask]
+
+    vals_offdiag = -vec(gd)[rows_offdiag] .* vec(c)[cols_offdiag]
+    gA = sparse(rows_offdiag, cols_offdiag, vals_offdiag, size(A,1), size(A,2))
+
+    gb = gsetboundarycondition(gd,b)  #update bc based on preexisting object
+
+    if !isnothing(q)
+        gq = gsetsource(gd,q,r) #update source based on preexisting object
+        return gb,gq, gA
+    else
+        return gb, nothing, gA
+    end
+end
+
+"""
+    gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu, b, q, γ; r=1.0)
+
+Multi-tracer adjoint of `steadyinversion` using a direct factorization
+(`lu`/UMFPACK). Aggregates `gA` across tracers and returns per-tracer gradients
+for boundary conditions and sources.
+# Arguments
+- `gc`: `NamedTuple` of adjoint fields.
+- `c`: `NamedTuple` of forward solutions.
+- `A`: watermassmatrix.
+- `Alu`: LU/UMFPACK factorization of `A`.
+- `b`: `NamedTuple` of boundary conditions.
+- `q`: `NamedTuple` of interior sources/sinks.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `gb`, `gq`, `gA`: per-tracer boundary/source gradients and aggregated `gA`.
+"""
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU}, 
+                          b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, 
+                          γ::Grid; r=1.0) where {b_names, B, q_names, Q}
+
+    tracer_names = keys(gc)
+    gA_total = spzeros(size(A,1), size(A,2))
+
+    #should i preallocate here?
+    gA_rows = Int[]
+    gA_cols = Int[]
+    gA_vals = Float64[]
+
+    n_tracers = length(tracer_names)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)  # Added enumerate
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)  # q is a NamedTuple
+
+        gb_i, gq_i, gA_i = gsteadyinversion(gc[name], c[name], A, Alu, b_i, q_i, γ; r=r)
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
+
+        # appending will be equivalent to gA_total += gA_i
+        rows, cols, vals = findnz(gA_i)
+        append!(gA_rows, rows)
+        append!(gA_cols, cols)
+        append!(gA_vals, vals)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+
+    # gb = NamedTuple{tracer_names}(Tuple(gb_results))
+    # gq = NamedTuple{tracer_names}(Tuple(gq_results))
+    gb = (;zip(tracer_names, gb_results)...)
+    gq = (;zip(tracer_names, gq_results)...)
+    return gb, gq, gA_total
+end
+
+
+"""
+    gsteadyinversion!(gA_vals, gc, c, Alu, b, q, rows_offdiag, cols_offdiag; r=1.0)
+
+In-place adjoint of `steadyinversion` using a direct factorization. Accumulates
+`gA_vals` on the off-diagonal structure of the watermassmatrix and returns
+boundary/source gradients.
+# Arguments
+- `gA_vals`: buffer for gradients of the watermassmatrix (off-diagonal entries).
+- `gc`: adjoint `Field` of the solution.
+- `c`: forward solution `Field`.
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: boundary condition(s).
+- `q`: optional interior sources/sinks.
+- `rows_offdiag`, `cols_offdiag`: off-diagonal structure of the watermassmatrix.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `gb`, `gq`: gradients for boundary conditions and sources.
+"""
+function gsteadyinversion!(
+    gA_vals::AbstractVector,     # preallocated, length == length(rows_offdiag)
+    gc::Field, c::Field, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer};
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    # Solve adjoint system
+    gd = Alu' \ gc    # later you could make this ldiv! if you have a workspace
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]     # row index of wet point 
+        jp = cols_offdiag[k]     # col index of wet point 
+
+        il = wet_inds[ip]        # full-grid index for gd
+        jl = wet_inds[jp]        # full-grid index for c
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    gb = gsetboundarycondition(gd, b)
+    gq = isnothing(q) ? nothing : gsetsource(gd, q, r)
+
+    return gb, gq
+end
+
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}; r = 1.0) where {b_names, B, q_names, Q}
+
+    tracer_names = keys(gc)
+
+    # Get off-diagonal structure of A once
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    # Allocate gA_vals, to be accumulated by each tracer
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    n_tracers = length(tracer_names)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gb_i, gq_i = gsteadyinversion!(
+            gA_vals, gc[name], c[name], Alu,
+            b_i, q_i, gA_rows, gA_cols; r = r)
+
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+
+    gb = (; zip(tracer_names, gb_results)...)
+    gq = (; zip(tracer_names, gq_results)...)
+
+    return gb, gq, gA_total
+end
+
+
+"""
+    gsteadyinversion!(gA_vals, gc, c, cache, b, q, rows_offdiag, cols_offdiag, γ; r=1.0)
+
+In-place adjoint of `steadyinversion` solved with LinearSolve (e.g., iterative +
+ILU). Uses precomputed off-diagonal structure of the watermassmatrix to
+accumulate `gA_vals` and returns boundary/source gradients.
+# Arguments
+- `gA_vals`: buffer for gradients of the watermassmatrix (off-diagonal entries).
+- `gc`: adjoint `Field` of the solution.
+- `c`: forward solution `Field`.
+- `cache`: `LinearSolve.LinearCache` for the watermassmatrix (or variant).
+- `b`: boundary condition(s).
+- `q`: optional interior sources/sinks.
+- `rows_offdiag`, `cols_offdiag`: off-diagonal structure indices of the watermassmatrix.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `gb`, `gq`: gradients for boundary conditions and sources.
+"""
+function gsteadyinversion!(
+    gA_vals::AbstractVector,     # preallocated, length == length(rows_offdiag)
+    gc::Field, c::Field, 
+    cache::LinearSolve.LinearCache,
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    # Solve adjoint system
+    gd = lsolve(cache, gc, γ) #Alu' \ gc    # later you could make this ldiv! if you have a workspace
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]     # row index of wet point 
+        jp = cols_offdiag[k]     # col index of wet point 
+
+        il = wet_inds[ip]        # full-grid index for gd
+        jl = wet_inds[jp]        # full-grid index for c
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    gb = gsetboundarycondition(gd, b)
+    gq = isnothing(q) ? nothing : gsetsource(gd, q, r)
+
+    return gb, gq
+end
+
+"""
+    gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
+                     b::NamedTuple, q::NamedTuple, γ; r=1.0, c_obs)
+
+Multi-tracer adjoint for a LinearSolve-based steady inversion. Supports
+per-tracer decay via `c_obs[name].decay_rate_matrix` by building tracer-specific
+adjoint caches. Aggregates `gA` across tracers.
+# Arguments
+- `gc`: `NamedTuple` of adjoint fields.
+- `c`: `NamedTuple` of forward solutions.
+- `A`: watermassmatrix.
+- `cache`: `LinearSolve.LinearCache` (base adjoint operator/preconditioner).
+- `b`: `NamedTuple` of boundary conditions.
+- `q`: `NamedTuple` of interior sources/sinks.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+- `c_obs`: observation info containing optional `decay_rate_matrix` per tracer.
+# Output
+- `gb`, `gq`, `gA`: per-tracer boundary/source gradients and aggregated `gA`.
+"""
+function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs) where {b_names, B, q_names, Q} # c_obs is now REQUIRED
+
+    tracer_names = keys(gc)
+
+    # Get off-diagonal structure of A once
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    # Allocate gA_vals, to be accumulated by each tracer
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    n_tracers = length(tracer_names)
+    gb_results = Vector{Union{B.parameters...}}(undef, n_tracers)
+    gq_results = Vector{Union{Q.parameters...}}(undef, n_tracers)
+
+    for (i, name) in enumerate(tracer_names)
+        local_cache_adjoint = cache # Start with the original adjoint cache
+        if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = A - c_obs[name].decay_rate_matrix
+            A_modified_t = sparse(transpose(A_modified))
+            prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
+            P_t = ilu(A_modified_t; τ=0.01)
+            local_cache_adjoint = init(prob_t, KrylovJL_GMRES(); Pl=P_t)
+        end
+
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gb_i, gq_i = gsteadyinversion!(
+            gA_vals, gc[name], c[name], local_cache_adjoint, # Pass local_cache_adjoint here
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+
+        gb_results[i] = gb_i
+        gq_results[i] = gq_i
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+
+    gb = (; zip(tracer_names, gb_results)...)
+    gq = (; zip(tracer_names, gq_results)...)
+
+    return gb, gq, gA_total
+end
+
+
+"""
+    gsteadyinversion!(gdub, gduq, gA_vals, gc, c, Alu, b, q, rows_offdiag, cols_offdiag, γ; r=1.0)
+
+In-place adjoint of `steadyinversion` using a direct LU/UMFPACK factorization of
+the watermassmatrix. Accumulates `gA_vals` on the off-diagonal structure and
+writes boundary/source adjoints into provided buffers.
+# Arguments
+- `gdub`: destination buffer for boundary-condition adjoints (`BoundaryCondition` or `NamedTuple`, or `nothing` to skip).
+- `gduq`: destination buffer for source adjoints (`Source`/`NamedTuple`, or `nothing`).
+- `gA_vals`: buffer for gradients of the watermassmatrix (off-diagonal entries).
+- `gc`: adjoint `Field` of the solution.
+- `c`: forward solution `Field`.
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: boundary condition(s).
+- `q`: optional interior sources/sinks.
+- `rows_offdiag`, `cols_offdiag`: off-diagonal structure of the watermassmatrix.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- None (buffers mutated in-place).
+"""
+function gsteadyinversion!(
+    gdub::Union{Nothing,BoundaryCondition,NamedTuple},
+    gduq::Union{Nothing,Source,NamedTuple},
+    gA_vals::AbstractVector,
+    gc::Field, c::Field, 
+    cache::LinearSolve.LinearCache,
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    gd = lsolve(cache, gc, γ)
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]
+        jp = cols_offdiag[k]
+
+        il = wet_inds[ip]
+        jl = wet_inds[jp]
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    if !isnothing(gdub)
+        adjustboundarycondition!(gdub, gsetboundarycondition(gd, b); r = 1.0)
+    end
+    if !isnothing(gduq) && !isnothing(q)
+        adjustsource!(gduq, gsetsource(gd, q, r); r = 1.0)
+    end
+
+    return nothing
+end
+
+
+"""
+    gsteadyinversion!(gb_dest, gq_dest, gA_vals, gc, c, A, cache, b, q, γ; r=1.0)
+
+In-place variant that writes boundary/source adjoints directly into preallocated
+`gb_dest`/`gq_dest` buffers (e.g., `controls.gdub`/`controls.gduq`). Accumulates
+`gA_vals` in the same way as the allocating version. Does not return `gb_dest`/`gq_dest`.
+"""
+function gsteadyinversion!(
+    gdub::NamedTuple, gduq::NamedTuple,
+    gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.LinearCache,
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs
+) where {b_names, B, q_names, Q} 
+
+    tracer_names = keys(gc)
+
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    for name in tracer_names
+        local_cache_adjoint = cache # Start with the original adjoint cache
+        if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate_matrix)
+            A_modified = A - c_obs[name].decay_rate_matrix
+            A_modified_t = sparse(transpose(A_modified))
+            prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
+            P_t = ilu(A_modified_t; τ=0.01)
+            local_cache_adjoint = init(prob_t, KrylovJL_GMRES(); Pl=P_t)
+        end
+
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gsteadyinversion!(
+            gdub[name], gduq[name],
+            gA_vals, gc[name], c[name], local_cache_adjoint, # Pass local_cache_adjoint here
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+    return gA_total
+end
+
+"""
+    gsteadyinversion!(gdub, gduq, gA_vals, gc, c, Alu, b, q, rows_offdiag, cols_offdiag, γ; r=1.0)
+
+In-place adjoint of `steadyinversion` using a direct LU/UMFPACK factorization of
+the watermassmatrix. Accumulates `gA_vals` on the off-diagonal structure and
+writes boundary/source adjoints into provided buffers.
+# Arguments
+- `gdub`: destination buffer for boundary-condition adjoints (`BoundaryCondition`/`NamedTuple` or `nothing`).
+- `gduq`: destination buffer for source adjoints (`Source`/`NamedTuple` or `nothing`).
+- `gA_vals`: buffer for gradients of the watermassmatrix (off-diagonal entries).
+- `gc`: adjoint `Field` of the solution.
+- `c`: forward solution `Field`.
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: boundary condition(s).
+- `q`: optional interior sources/sinks.
+- `rows_offdiag`, `cols_offdiag`: off-diagonal structure of the watermassmatrix.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- None (buffers mutated in-place).
+"""
+function gsteadyinversion!(
+    gdub::Union{Nothing,BoundaryCondition,NamedTuple},
+    gduq::Union{Nothing,Source,NamedTuple},
+    gA_vals::AbstractVector,
+    gc::Field, c::Field, 
+    Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::Union{BoundaryCondition,NamedTuple},
+    q::Union{Nothing,Source},
+    rows_offdiag::AbstractVector{<:Integer},
+    cols_offdiag::AbstractVector{<:Integer}, 
+    γ::Grid;
+    r::Real = 1.0,
+)
+    wet_inds = findall(wet(gc))
+
+    gd = Alu' \  gc
+
+    @inbounds @simd for k in eachindex(rows_offdiag)
+        ip = rows_offdiag[k]
+        jp = cols_offdiag[k]
+
+        il = wet_inds[ip]
+        jl = wet_inds[jp]
+
+        gA_vals[k] += -gd.tracer[il] * c.tracer[jl]
+    end
+
+    if !isnothing(gdub)
+        adjustboundarycondition!(gdub, gsetboundarycondition(gd, b); r = 1.0)
+    end
+    if !isnothing(gduq) && !isnothing(q)
+        adjustsource!(gduq, gsetsource(gd, q, r); r = 1.0)
+    end
+
+    return nothing
+end
+
+
+"""
+    gsteadyinversion!(gdub, gduq, gA_vals, gc, c, A, Alu, b, q, γ; r=1.0, c_obs)
+
+Multi-tracer in-place adjoint using a direct LU/UMFPACK factorization of the
+watermassmatrix. Accumulates `gA_vals` over off-diagonal entries and writes
+per-tracer boundary/source adjoints into provided buffers.
+# Arguments
+- `gdub`: `NamedTuple` of boundary-condition adjoint buffers.
+- `gduq`: `NamedTuple` of source adjoint buffers.
+- `gA_vals`: buffer for gradients of the watermassmatrix (off-diagonal entries).
+- `gc`: `NamedTuple` of adjoint fields.
+- `c`: `NamedTuple` of forward solutions.
+- `A`: watermassmatrix.
+- `Alu`: LU/UMFPACK factorization of `A`.
+- `b`: `NamedTuple` of boundary conditions.
+- `q`: `NamedTuple` of interior sources/sinks.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+- `c_obs`: unused (kept for API symmetry with LinearSolve variant).
+# Output
+- `gA_total`: sparse matrix of accumulated watermassmatrix gradients.
+"""
+function gsteadyinversion!(
+    gdub::NamedTuple, gduq::NamedTuple,
+    gc::NamedTuple, c::NamedTuple, A, Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
+    b::NamedTuple{b_names, B}, q::NamedTuple{q_names, Q}, γ::Grid; r = 1.0, c_obs
+) where {b_names, B, q_names, Q} 
+
+    tracer_names = keys(gc)
+
+    rows, cols, _ = findnz(A)
+    offdiag_mask = rows .!= cols
+    gA_rows = rows[offdiag_mask]
+    gA_cols = cols[offdiag_mask]
+
+    Tval = eltype(gc[first(tracer_names)].tracer)
+    gA_vals = zeros(Tval, length(gA_rows))
+
+    for name in tracer_names
+        b_i = get(b, name, nothing)
+        q_i = get(q, name, nothing)
+
+        gsteadyinversion!(
+            gdub[name], gduq[name],
+            gA_vals, gc[name], c[name], Alu, # Pass local_cache_adjoint here
+            b_i, q_i, gA_rows, gA_cols, γ; r = r)
+    end
+
+    gA_total = sparse(gA_rows, gA_cols, gA_vals, size(A,1), size(A,2))
+    return gA_total
+end
+
 
 # """
 #     function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}

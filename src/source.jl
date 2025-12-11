@@ -63,6 +63,106 @@ readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsou
 
 writesource(file,q::Source) = write(file,q) 
 
+
+""" 
+    function setsource!(d::Field,q::Field,r::Number)
+    apply interior source q to the equation constraints d
+# Arguments
+- `d`::Field, equation constraints (i.e., right hand side)
+- `q`::Field, interior source
+- `r`::Number, default = 1.0, stoichiometric ratio
+"""
+function setsource!(d::Field{T},q::Field{T},r=1.0) where T<: Real
+    d.tracer[d.γ.wet] -= r * q.tracer[q.γ.wet]
+end
+function setsource!(d::Field{T},q::Source{T},r=1.0) where T<: Real
+    d.tracer[d.γ.interior] -= r * q.tracer[q.γ.interior]
+end
+
+"""
+    setsource!(d::Source, q::Source; r=1.0)
+
+Apply one `Source` onto another in-place, scaling by `r` and respecting the
+interior mask.
+"""
+function setsource!(d::Source{T}, q::Source{T}; r=1.0) where T<: Real
+    d.tracer[d.γ.interior] .-= r .* q.tracer[q.γ.interior]
+end
+
+"""
+    setsource!(d::NamedTuple, q::NamedTuple; r=1.0)
+
+Apply a collection of sources to a collection of fields/sources with matching
+keys. Skips entries where `q[key]` is `nothing`.
+"""
+function setsource!(d::NamedTuple, q::NamedTuple; r=1.0)
+    for key in keys(q)
+        if haskey(d, key) && isnothing(q[key])
+            setsource!(d[key], q[key]; r)
+        end
+    end
+end
+
+"""
+    replacesource!(d::Source, q::Source)
+
+Overwrite the tracer values of `d` with those of `q` (in-place).
+"""
+function replacesource!(d::Source{T}, q::Source{T}) where T<: Real
+    d.tracer .= q.tracer
+end
+
+"""
+    replacesource!(d::NamedTuple, q::NamedTuple)
+
+Overwrite a collection of sources/fields in `d` with matching entries from `q`.
+"""
+function replacesource!(d::NamedTuple, q::NamedTuple)
+    for key in keys(q)
+        if haskey(d, key) && !isnothing(q[key])
+            replacesource!(d[key], q[key])
+        end
+    end
+end
+
+
+"""
+    setsource!(d::NamedTuple, q::NamedTuple, r::NamedTuple)
+
+Apply a collection of sources with per-key ratios. Requires `keys(q) == keys(r)`;
+only keys present in `d` are updated.
+"""
+function setsource!(d::NamedTuple, q::NamedTuple, r::NamedTuple)
+    keys(q) == keys(r) || error("setsource!: key mismatch between q and r")
+    for key in keys(q)
+        haskey(d, key) && setsource!(d[key], q[key], r[key])
+    end
+    return d
+end
+
+"""
+    function gsetsource!(gq::Field{T},gd::Field{T},r=1.0)
+
+    Adjoint to `setsource!`
+"""
+function gsetsource!(gq::Field{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.wet] -= r * gd.tracer[gd.γ.wet]
+end
+function gsetsource!(gq::Source{T},gd::Field{T},r) where T<: Real
+    gq.tracer[gq.γ.interior] -= r * gd.tracer[gd.γ.interior]
+end
+"""
+    gsetsource(gd, q, r)
+
+Allocate and return the adjoint of `setsource!`, producing a gradient object of
+the same type as `q` with values `-r * gd` on the appropriate mask.
+"""
+function gsetsource(gd::Field{T},q::Union{Field,Source},r) where T<: Real
+    gq = 0.0 * q
+    gsetsource!(gq,gd,r)
+    return gq
+end
+
 function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
     q = deepcopy(q₀)
     adjustsource!(q,u)

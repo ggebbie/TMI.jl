@@ -187,3 +187,58 @@ function unvec!(cp::Controls, vector::AbstractVector)
     return cp.boundary.ub, cp.source.uq, cp.massfrac.m
 end
 
+"""
+    descale_parameter(x::NamedTuple, scale::NamedTuple)
+
+Return a deepcopy of `x` with each entry divided by its corresponding scale.
+Supports numeric entries and `Field`/`BoundaryCondition`/`Source` via their
+`tracer` arrays; `nothing` entries are left untouched.
+"""
+function descale_parameter(x::NamedTuple, scale::NamedTuple)
+    x_copy = deepcopy(x)
+    for k in keys(x)
+        v = x[k]
+        if !isnothing(v)
+            if v isa Number
+                x_copy = merge(x_copy, NamedTuple{(k,)}((v / scale[k],)))
+            elseif v isa Union{Field, BoundaryCondition, Source} 
+                x_copy[k].tracer ./= scale[k]
+            else
+                @error "X must only contain numbers" value=v key=k
+            end
+        end
+    end
+    return x_copy
+end
+
+"""
+    descale_parameter!(x::NamedTuple, scale::NamedTuple)
+
+In-place version of `descale_parameter`, dividing supported entries of `x`
+by the provided per-key scale factors.
+"""
+function descale_parameter!(x::NamedTuple, scale::NamedTuple)
+    for name in eachindex(x)
+        if !isnothing(x[name])
+            if x[name] isa Union{Field, BoundaryCondition, Source}
+                x[name].tracer ./= scale[name]
+            end
+        end
+    end
+end
+
+"""
+    rescale_parameter!(x::NamedTuple, scale::NamedTuple)
+
+In-place inverse of `descale_parameter!`: multiply supported entries of `x`
+by the provided per-key scale factors.
+"""
+function rescale_parameter!(x::NamedTuple, scale::NamedTuple)
+    for name in eachindex(x)
+        if !isnothing(x[name])
+            if x[name] isa Union{Field, BoundaryCondition} 
+                x[name].tracer .*= scale[name]
+            end
+        end
+    end
+end
