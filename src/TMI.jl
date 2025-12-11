@@ -103,7 +103,6 @@ include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
 include(pkgsrcdir("observations.jl"))
-include(pkgsrcdir("setup_inversion.jl"))
 
 
 """ 
