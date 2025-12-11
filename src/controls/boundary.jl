@@ -27,6 +27,32 @@ struct BoundaryControls{U, U0, QU, D, G, B}
     b::B
 end
 
+function BoundaryControls(config::NamedTuple)
+    u₀ = get(config, :prior, NamedTuple())
+    
+    if isempty(u₀)
+        return BoundaryControls(nothing, nothing, nothing, nothing, nothing, nothing)
+    end
+
+    ig = deepcopy(get(config, :initial_guess, u₀))
+    ub = isempty(ig) ? deepcopy(u₀) : ig
+    
+    Qᵤ = _build_tracer_precision_matrix(config, ub)
+
+    check_shared_references(ub, "ub")
+    check_shared_references(u₀, "u₀")
+    check_shared_references(Qᵤ, "Qᵤ")
+    
+    return BoundaryControls(
+        ub,
+        u₀,
+        Qᵤ,
+        deepcopy(ub), # dub
+        deepcopy(ub), # gdub
+        deepcopy(u₀)  # b
+    )
+end
+
 """
     update_b!(bc::BoundaryControls)
 

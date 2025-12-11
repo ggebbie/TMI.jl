@@ -34,6 +34,73 @@ struct SourceControls{Q, Q0, QS, D, G, S, C, GC}
     gduq_cache::GC
 end
 
+function SourceControls(config::NamedTuple)
+    q₀_all = get(config, :prior, NamedTuple())
+    
+    if isempty(q₀_all)
+        return SourceControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+    end
+
+    couplings = get(config, :couplings, NamedTuple())
+    
+    uq_controls_nt = NamedTuple()
+    if !isempty(q₀_all)
+        dependent_sources = keys(couplings)
+        
+        uncertainty_config = get(config, :covariance, get(config, :variance, nothing))
+        independent_controls_names = isnothing(uncertainty_config) ? () : keys(uncertainty_config)
+
+        # Build the `uq` tuple, which has `nothing` for non-controlled sources
+        potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀_all))
+        uq_ig_full = deepcopy(get(config, :initial_guess, q₀_all))
+
+        uq_controls_nt = NamedTuple{potential_ind_sources}(
+             map(potential_ind_sources) do name
+                if name in independent_controls_names
+                    # Use initial guess if provided, otherwise default to the prior value.
+                    get(uq_ig_full, name, q₀_all[name])
+                else
+                    # This source is not being controlled.
+                    nothing
+                end
+            end
+        )
+    end
+    
+    uq_controls = isempty(uq_controls_nt) ? nothing : uq_controls_nt
+    Qₛ_final = !isnothing(uq_controls) ? _build_tracer_precision_matrix(config, uq_controls) : NamedTuple()
+
+    # from ControlParameters constructor
+    independent_sources = isnothing(uq_controls) ? () : filter(k -> !isnothing(uq_controls[k]), keys(uq_controls))
+    uq_indep = isnothing(uq_controls) ? nothing : NamedTuple{independent_sources}(getproperty(uq_controls, k) for k in independent_sources)
+    Qₛ_indep = isnothing(Qₛ_final) ? nothing : NamedTuple{independent_sources}(getproperty(Qₛ_final, k) for k in independent_sources)
+
+    check_shared_references(uq_indep, "uq")
+    check_shared_references(q₀_all, "q₀")
+    check_shared_references(Qₛ_indep, "Qₛ")
+
+    if !isnothing(uq_indep)
+        for dep_name in keys(couplings)
+            if haskey(uq_indep, dep_name) && !isnothing(uq_indep[dep_name])
+                error("Tracer :$(dep_name) is dependent in `source_couplings`\n" *
+                      "and independent in `uq`. Source cannot be both.")
+            end
+        end
+    end
+
+    return SourceControls(
+        uq_indep,
+        q₀_all,
+        Qₛ_indep,
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # duq
+        isnothing(uq_indep) ? nothing : deepcopy(uq_indep), # gduq
+        isnothing(q₀_all) ? nothing : deepcopy(q₀_all),             # q
+        couplings,
+        isnothing(q₀_all) ? nothing : zero(q₀_all)                   # gduq_cache
+    )
+end
+
+
 """
     update_q!(sc::SourceControls)
 

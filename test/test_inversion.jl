@@ -47,16 +47,21 @@ percent_difference(a, b) = @. 100 * ((a - b) / b)
     ## Generic Gradient Check Function Helper
     # This function compares the analytical gradient from the adjoint model
     # with a numerical gradient from finite differences.
-    function gradient_check(controls, obs, γ; seed = 1, atol = 1e-1)
+    function gradient_check(controls, obs, γ; seed = 1)
         Random.seed!(seed)
         control_vector = randn(length(vec(controls)))
-        objective(x) = optim_fg_constrained_global_costfunction!(NaN, nothing, x, controls, obs, γ)
+        objective(x) = optim_fg_unconstrained_global_costfunction!(NaN, nothing, x, controls, obs, γ)
         
-        fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-2)
+        fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-4)
         analytic = zero(control_vector)
-        optim_fg_constrained_global_costfunction!(NaN, analytic, control_vector, controls, obs, γ)
+        optim_fg_unconstrained_global_costfunction!(NaN, analytic, control_vector, controls, obs, γ)
         
         abspdiff = abs.(percent_difference(fd_grad, analytic))
+        if !all(abspdiff .< 0.1)
+            println(fd_grad[abspdiff .> 0.1])
+            println(analytic[abspdiff .> 0.1])
+            println(findall(analytic[abspdiff .> 0.1]))
+        end
         @test all(abspdiff .< 0.1)
     end
 

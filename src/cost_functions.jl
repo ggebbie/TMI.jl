@@ -436,10 +436,10 @@ function unconstrained_global_forward(controls::ControlParameters,
     J_source = prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) 
     J_boundary = prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
     J_massfrac = prior_mass_fraction_cost(controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
-    println("J_obs = ", J_obs)
-    println("J_source = ", J_source)
-    println("J_boundary = ", J_boundary)
-    println("J_massfrac = ", J_massfrac)
+    # println("J_obs = ", J_obs)
+    # println("J_source = ", J_source)
+    # println("J_boundary = ", J_boundary)
+    # println("J_massfrac = ", J_massfrac)
     J = J_obs + J_source + J_boundary + J_massfrac
 
     return (J=J, c=c, n=n, A=A)

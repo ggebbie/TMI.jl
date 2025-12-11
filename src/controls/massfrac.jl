@@ -26,3 +26,32 @@ struct MassFracControls{M, M0, QM, G, S, A}
     steps::S
     A::A
 end
+
+function MassFracControls(config::NamedTuple, γ::Grid)
+    m₀ = get(config, :prior, NamedTuple())
+
+    if isempty(m₀)
+        return MassFracControls(nothing, nothing, nothing, nothing, nothing, nothing)
+    end
+
+    ig = deepcopy(get(config, :initial_guess, m₀))
+    m = isempty(ig) ? deepcopy(m₀) : ig
+    
+    Qₘ = _build_massfrac_precision_matrix(config, m)
+
+    check_shared_references(m, "m")
+    check_shared_references(m₀, "m₀")
+
+    # from ControlParameters constructor
+    m_steps = precompute_mass_fraction_steps(m, γ)
+    A_cached = watermassmatrix(m, γ, m_steps)
+    
+    return MassFracControls(
+        m,
+        m₀,
+        Qₘ,
+        deepcopy(m), # gm
+        m_steps,
+        A_cached
+    )
+end
