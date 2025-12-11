@@ -97,10 +97,20 @@ percent_difference(a, b) = @. 100 * ((a - b) / b)
         # For the inversion, we will use a zero-value prior for the boundary condition
         u₀_prior = zero(u₀_template)
 
-        controls = TMI.setup_inversion(γ,
-            boundary = (prior = u₀_prior, variance = (tracer_boundary=1.0, tracer_source=1.0)),
-            source = (prior = q₀_template, variance = (tracer_source = 1.0,)),
-            mass_fraction = (prior = m0, variance = (west=1.0, east=1.0))
+        boundary_controls = BoundaryControls(u₀_prior;
+            variance = (tracer_boundary=1.0, tracer_source=1.0)
+        )
+        source_controls = SourceControls(q₀_template;
+            variance = (tracer_source = 1.0,)
+        )
+        massfrac_controls = MassFracControls(m0;
+            variance = (west=1.0, east=1.0),
+            γ = γ
+        )
+        controls = Controls(γ,
+            boundary = boundary_controls,
+            source = source_controls,
+            massfrac = massfrac_controls
         )
 
         ## Gradient Check for Observation Types
@@ -143,10 +153,23 @@ percent_difference(a, b) = @. 100 * ((a - b) / b)
         couplings = (o2 = (:p1, -170.0),) # Defines that Source(:o2) = -170.0 * Source(:p1)
 
         # ### 3. Set up controls using the new helper function
-        controls_coupled = TMI.setup_inversion(γ,
-            boundary = (prior = u₀_prior, initial_guess = boundary_priors_coupled_all, variance = (p1=1.0, o2=1.0, p2=1.0)),
-            source = (prior = source_priors_coupled_all, initial_guess = source_controls_initial_guess_coupled, dependencies = couplings, variance = (p1=1.0, p2=1.0)),
-            mass_fraction = (prior = m0, variance = (west=1.0, east=1.0))
+        boundary_controls_coupled = BoundaryControls(u₀_prior;
+            ub = boundary_priors_coupled_all,
+            variance = (p1=1.0, o2=1.0, p2=1.0)
+        )
+        source_controls_coupled = SourceControls(source_priors_coupled_all;
+            uq = source_controls_initial_guess_coupled,
+            dependencies = couplings,
+            variance = (p1=1.0, p2=1.0)
+        )
+        massfrac_controls_coupled = MassFracControls(m0;
+            variance = (west=1.0, east=1.0),
+            γ = γ
+        )
+        controls_coupled = Controls(γ;
+            boundary = boundary_controls_coupled,
+            source = source_controls_coupled,
+            massfrac = massfrac_controls_coupled
         )
         
         # Test that the structure of the control parameter gradients is correct for coupled sources
@@ -192,10 +215,21 @@ percent_difference(a, b) = @. 100 * ((a - b) / b)
         boundary_p1_prior = zero(boundary_p1_initial_guess)
 
         # ### 2. Set up controls using the new helper function
-        controls_single_tracer = TMI.setup_inversion(γ,
-            boundary = (prior = boundary_p1_prior, initial_guess = boundary_p1_initial_guess, variance = (p1=1.0,)),
-            source = (prior = source_p1_prior, variance = (p1=1.0,)),
-            mass_fraction = (prior = m0, variance = (west=1.0, east=1.0))
+        boundary_controls_single = BoundaryControls(boundary_p1_prior;
+            ub = boundary_p1_initial_guess,
+            variance = (p1=1.0,)
+        )
+        source_controls_single = TMI.SourceControls(source_p1_prior;
+            variance = (p1=1.0,)
+        )
+        massfrac_controls_single = MassFracControls(m0;
+            variance = (west=1.0, east=1.0),
+            γ = γ
+        )
+        controls_single_tracer = Controls(γ;
+            boundary = boundary_controls_single,
+            source = source_controls_single,
+            massfrac = massfrac_controls_single
         )
 
         # ### 3. Create synthetic observations with a decay rate

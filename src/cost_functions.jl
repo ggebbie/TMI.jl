@@ -4,7 +4,7 @@
 
 A helper function to flatten the structured gradients (`gu`, `gq`, `gm`) into a single vector `G`. This is used to prepare the gradient for consumption by an optimization algorithm. The function writes the components of the gradient in-place into the vector `G`.
 """
-@inline function _write_gradient!(G, gu, gq, gm, controls::ControlParameters)
+@inline function _write_gradient!(G, gu, gq, gm, controls::Controls)
     idx = 1
     if !isnothing(controls.boundary.ub)
         guv = vec(gu)
@@ -409,7 +409,7 @@ end
 
 Execute the forward pass for the full cost function evaluation. This involves applying the current control parameters to solve for the steady-state tracer distribution and then calculating the total cost. It returns the total cost `J` and intermediate state variables needed for the corresponding backward pass.
 """
-function unconstrained_global_forward(controls::ControlParameters,
+function unconstrained_global_forward(controls::Controls,
                                       c_obs, γ; locs = nothing)
     
     b = controls.boundary.b
@@ -450,7 +450,7 @@ end
 
 Execute the backward pass of the adjoint model to compute gradients of the cost function. This function takes the state from the forward pass and propagates sensitivities backward through the model equations. It calculates the gradients with respect to all control variables and stores them in the `controls` object.
 """
-function unconstrained_global_backward!(state, controls::ControlParameters, c_obs, γ; locs = nothing)
+function unconstrained_global_backward!(state, controls::Controls, c_obs, γ; locs = nothing)
     c = state.c
     n = state.n
     A = state.A
@@ -495,7 +495,7 @@ end
 This function provides the core interface to `Optim.jl` for cost function and gradient evaluation. It takes a flat `control_vector`, reconstructs the structured control parameters, runs the forward and backward passes, and returns the cost `F` and gradient `G`. It also handles transformations (e.g., softmax for mass fractions) required by the optimization.
 """
 function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G::Union{Nothing, Vector{T}}, control_vector::Vector{T},
-    controls::ControlParameters, c_obs, γ; locs = nothing) where T
+    controls::Controls, c_obs, γ; locs = nothing) where T
 
     unvec!(controls, control_vector) 
     #should make alpha an optional varibale, then check and apply transfomrationatins if needed
@@ -519,7 +519,7 @@ function optim_fg_constrained_global_costfunction!(F::Union{Nothing, Float64}, G
 end
 
 function optim_fg_unconstrained_global_costfunction!(F::Union{Nothing, Float64}, G::Union{Nothing, Vector{T}}, control_vector::Vector{T},
-    controls::ControlParameters, c_obs, γ; locs = nothing, u₀_scale = nothing, q₀_scale = nothing ) where T
+    controls::Controls, c_obs, γ; locs = nothing, u₀_scale = nothing, q₀_scale = nothing ) where T
 
     unvec!(controls, control_vector) 
 

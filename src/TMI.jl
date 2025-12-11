@@ -71,7 +71,7 @@ export config, download_file,
     massfractions, massfractions_isotropic, neighbors
 
 export softmax_massfractions, gsoftmax_massfractions, invsoftmax_massfractions,
-    Observations, ControlParameters, vectorize_controls, setup_inversion,
+    Observations, Controls, vectorize_controls, BoundaryControls, SourceControls, MassFracControls,
     gsteadyinversion, gwatermassmatrix, gwatermassmatrix!, gadjustboundarycondition, 
     gadjustboundarycondition!, gadjustsource!, 
     model_data_misfit, model_observation_cost, prior_mass_fraction_cost, 
@@ -123,7 +123,6 @@ include(pkgsrcdir("controls", "source.jl"))
 include(pkgsrcdir("controls", "massfrac.jl"))
 include(pkgsrcdir("controls", "control_parameters.jl"))
 include(pkgsrcdir("cost_functions.jl"))
-include(pkgsrcdir("inversion_setup.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 

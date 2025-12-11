@@ -89,26 +89,33 @@ u_upper = (θ = 35.0, S = 45.0,
 m0 = massfractions_isotropic(γ)
 # m0 = inverse_watermassmatrix(A, γ)
 
-
-
 # This bundles all priors, uncertainties, and bounds into a single object
-# for the optimization routine, using the new `setup_inversion` API.
-controls = TMI.setup_inversion(γ;
-    boundary = (
-        prior = u₀, 
-        #variances should take the shape of the controls 
-        variance = tracer_error_variance,
-        lower_bound = descale_parameter(u_lower, u₀_scale),
-        upper_bound = descale_parameter(u_upper, u₀_scale)
-    ),
-    source = (prior = q₀, 
+# for the optimization routine, using the new direct construction API.
+boundary_controls = BoundaryControls(
+    u₀;
+    variance = tracer_error_variance,
+    lower_bound = descale_parameter(u_lower, u₀_scale),
+    upper_bound = descale_parameter(u_upper, u₀_scale)
+)
+source_controls = SourceControls(
+    q₀;
     # variance = source_error_variance, 
     # lower_bound = descale_parameter(q_lower, q₀_scale),
     # upper_bound = descale_parameter(q_upper, q₀_scale)
-    ),
+)
+massfrac_controls = MassFracControls(
+    m0;
+    variance = 1.0,
+    lower_bound = map(v -> 0.0, m0),
+    upper_bound = map(v -> 1.1, m0),
+    γ = γ
+)
 
-    mass_fraction = (prior = m0, variance = 1.0, lower_bound = map(v -> 0.0, m0), upper_bound = map(v -> 1.1, m0))
-);
+controls = TMI.Controls(γ;
+    boundary = boundary_controls,
+    source = source_controls,
+    massfrac = massfrac_controls
+)
 
 
 

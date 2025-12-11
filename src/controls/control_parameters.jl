@@ -1,13 +1,13 @@
 
 
 """
-    struct ControlParameters{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
+    struct Controls{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
 
 A top-level container for all control variables in an optimization problem. It
 aggregates boundary, source, and mass fraction controls, along with the grid,
 cached data, and optimization bounds for efficient computation.
 """
-struct ControlParameters{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
+struct Controls{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
     boundary::BC
     source::SC
     massfrac::MC
@@ -20,16 +20,61 @@ struct ControlParameters{BC, SC, MC, V, LB, UB, UBL, QL, ML, G <: Grid}
     γ::G
 end
 
+"""
+    Controls(γ::Grid;
+        boundary::BoundaryControls = BoundaryControls(nothing),
+        source::SourceControls = SourceControls(nothing),
+        massfrac::MassFracControls = MassFracControls(nothing, γ=γ),
+        cache_vector=false,
+        cache_lengths=true
+    ) -> Controls
+
+A user-friendly, outer constructor that assembles the main `Controls` object from its constituent control-variable parts.
+
+This constructor takes pre-built `BoundaryControls`, `SourceControls`, and `MassFracControls` objects, automatically extracts and vectorizes their bounds, and then calls the inner constructor to build the final `Controls` object.
+
+# Arguments
+- `γ::Grid`: The TMI Grid object.
+- `boundary`: A `BoundaryControls` object.
+- `source`: A `SourceControls` object.
+- `massfrac`: A `MassFracControls` object.
+- `cache_vector`, `cache_lengths`: (Optional) Flags for caching internal vector representations.
+
+# Returns
+- `controls::Controls`: An initialized `Controls` object ready for optimization.
+"""
+function Controls(γ::Grid;
+    boundary::BoundaryControls = BoundaryControls(nothing),
+    source::SourceControls = SourceControls(nothing),
+    massfrac::MassFracControls = MassFracControls(nothing, γ=γ),
+    cache_vector=false,
+    cache_lengths=true
+)
+    # --- Vectorize Bounds ---
+    lower_bound_vec = vectorize_controls(boundary.lower_bound, source.lower_bound, massfrac.lower_bound)
+    upper_bound_vec = vectorize_controls(boundary.upper_bound, source.upper_bound, massfrac.upper_bound)
+
+    return Controls(
+        boundary,
+        source,
+        massfrac,
+        lower_bound_vec,
+        upper_bound_vec,
+        γ,
+        cache_vector=cache_vector,
+        cache_lengths=cache_lengths
+    )
+end
 
 """
-    ControlParameters(boundary_controls, source_controls, massfrac_controls, lower_bound, upper_bound, γ; cache_vector=false, cache_lengths=true)
+    Controls(boundary_controls, source_controls, massfrac_controls, lower_bound, upper_bound, γ; cache_vector=false, cache_lengths=true)
 
-Construct and initialize the `ControlParameters` object for an optimization.
+Construct and initialize the `Controls` object for an optimization.
 This function takes all individual control components (boundary conditions,
 sources, etc.), organizes them into the appropriate sub-structs, and performs
 necessary pre-caching.
 """
-function ControlParameters(boundary_controls::BoundaryControls,
+function Controls(boundary_controls::BoundaryControls,
                            source_controls::SourceControls,
                            massfrac_controls::MassFracControls,
                            lower_bound::AbstractVector,
@@ -46,7 +91,7 @@ function ControlParameters(boundary_controls::BoundaryControls,
                                                source_controls.uq,
                                                massfrac_controls.m) : nothing
     
-    return ControlParameters(boundary_controls, source_controls, massfrac_controls,
+    return Controls(boundary_controls, source_controls, massfrac_controls,
                              vector, lower_bound, upper_bound,
                              ub_length, uq_length, m_length, γ)
 end
@@ -68,13 +113,13 @@ function vectorize_controls(ub, uq, m)
 end
 
 """
-    vec(cp::ControlParameters) -> Vector
+    vec(cp::Controls) -> Vector
 
 Extract or compute the flattened vector representation of the control
 parameters. If the vector has been cached in `cp.vector`, it is returned
 directly; otherwise, it is computed by calling `vectorize_controls`.
 """
-function vec(cp::ControlParameters)
+function vec(cp::Controls)
     if !isnothing(cp.vector)
         return cp.vector
     else
@@ -83,14 +128,14 @@ function vec(cp::ControlParameters)
 end
 
 """
-    unvec(cp::ControlParameters, vector::AbstractVector) -> (ub, uq, m)
+    unvec(cp::Controls, vector::AbstractVector) -> (ub, uq, m)
 
 Reconstruct the structured control variables (`ub`, `uq`, `m`) from a flat
 state vector. This function uses the cached lengths in `cp` to correctly
 partition the vector and reshape the components back into their original
 `NamedTuple` format.
 """
-function unvec(cp::ControlParameters, vector::AbstractVector)
+function unvec(cp::Controls, vector::AbstractVector)
     # Calculate boundaries
     u_len = cp.ub_length
     q_len = cp.uq_length
@@ -117,14 +162,14 @@ function unvec(cp::ControlParameters, vector::AbstractVector)
 end
 
 """
-    unvec!(cp::ControlParameters, vector::AbstractVector)
+    unvec!(cp::Controls, vector::AbstractVector)
 
 Perform an in-place update of the control variables stored within `cp` from a
 flat state vector. This is a performance-optimized version of `unvec` that
 modifies the `ub`, `uq`, and `m` fields directly, avoiding extra memory
 allocations.
 """
-function unvec!(cp::ControlParameters, vector::AbstractVector)
+function unvec!(cp::Controls, vector::AbstractVector)
     idx = 1
 
     if !isnothing(cp.boundary.ub)
