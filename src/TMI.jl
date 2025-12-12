@@ -69,7 +69,8 @@ export config, download_file,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors, 
-    Observations
+    Observations, SourceControls, BoundaryControls, 
+    MassFracControls, Controls
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum

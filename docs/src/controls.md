@@ -33,9 +33,9 @@ boundary_controls = BoundaryControls(
     variance = tracer_error_variance,
     lower_bound = u_lower,
     upper_bound = u_upper
-)
+);
 
-source_controls = SourceControls(q₀) # no variance/bounds needed when everything is fixed
+source_controls = SourceControls(q₀); # no variance/bounds needed when everything is fixed
 
 massfrac_controls = MassFracControls(
     m0;
@@ -43,13 +43,18 @@ massfrac_controls = MassFracControls(
     lower_bound = map(v -> 0.0, m0),
     upper_bound = map(v -> 1.1, m0),
     γ = γ
-)
+);
 
 controls = TMI.Controls(γ;
     boundary = boundary_controls,
     source = source_controls,
     massfrac = massfrac_controls
-)
+);
+
+#returns the controls vector. in this case, 
+#these are the θ and S boundary conditions 
+#as well as mass fractions, all to be optimized. 
+vec(controls); 
 ```
 
 In this example:
