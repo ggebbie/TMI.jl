@@ -2442,7 +2442,7 @@ function steadyinversion(cache::LinearSolve.LinearCache,b::NamedTuple{tracer_nam
 
         # Check for decay rate for this specific tracer, with !isnothing(c_obs)
         if !isnothing(c_obs) && haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate)
-            @error "Decay rates in steady inversion not implemented yet"
+            @error "steady_inversion with decay rates not yet implemented"
             # A_modified = cache.A - c_obs[name].decay_rate_matrix # Modify A from the original cache
             # prob = LinearProblem(A_modified, Vector{Float64}(undef, size(A_modified,1)))
             # P = ilu(A_modified; τ=0.01)
@@ -2748,7 +2748,7 @@ function gsteadyinversion(gc::NamedTuple, c::NamedTuple, A, cache::LinearSolve.L
     for (i, name) in enumerate(tracer_names)
         local_cache_adjoint = cache # Start with the original adjoint cache
         if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate)
-            @error "Decay rates in gsteadyinversion not yet implemented" 
+            @error "gsteadyinversion cannot handle decay rates yet. "
             # A_modified = A - c_obs[name].decay_rate_matrix
             # A_modified_t = sparse(transpose(A_modified))
             # prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
@@ -2862,7 +2862,7 @@ function gsteadyinversion!(
     for name in tracer_names
         local_cache_adjoint = cache # Start with the original adjoint cache
         if haskey(c_obs, name) && !isnothing(c_obs[name].decay_rate)
-            @error "Decay rates in gsteadyinversion not yet impleme
+            @error "steady_inversion with decay rates not yet implemented"
             # A_modified = A - c_obs[name].decay_rate_matrix
             # A_modified_t = sparse(transpose(A_modified))
             # prob_t = LinearProblem(A_modified_t, Vector{Float64}(undef, size(A_modified_t,1)))
