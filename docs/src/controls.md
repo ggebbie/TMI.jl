@@ -51,10 +51,15 @@ controls = TMI.Controls(γ;
     massfrac = massfrac_controls
 );
 
-#returns the controls vector. in this case, 
-#these are the θ and S boundary conditions 
-#as well as mass fractions, all to be optimized. 
-vec(controls); 
+#returns the controls Vector
+control_vector = vec(controls);  # a vector of θ and S boundary conditions and mass fractions, all to be optimized. 
+ncontrols = length(control_vector); 
+
+#in-place updates are also a feature (useful for packages like Optim.jl)
+new_x = rand(ncontrols)
+unvec!(controls, new_x); 
+vec(controls.boundary.ub.θ)[10] == vec(controls)[10]
+
 ```
 
 In this example:
