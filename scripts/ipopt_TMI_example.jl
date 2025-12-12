@@ -7,11 +7,9 @@ using Statistics
 using Test
 # using Optim, LineSearches, BenchmarkTools
 using LinearSolve, IncompleteLU
-using NCDatasets
 using SparseArrays
-# Load a pre-configured TMI model and grid.
-# This sets up the transport matrix `A`, its LU factorization `Alu`,
-# the grid `γ`, and other model parameters.
+
+
 TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
@@ -94,8 +92,8 @@ m0 = massfractions_isotropic(γ)
 boundary_controls = BoundaryControls(
     u₀;
     variance = tracer_error_variance,
-    lower_bound = descale_parameter(u_lower, u₀_scale),
-    upper_bound = descale_parameter(u_upper, u₀_scale)
+    lower_bound = u_lower,
+    upper_bound = u_upper,
 )
 source_controls = SourceControls(
     q₀;
@@ -145,33 +143,35 @@ function cache_f_and_g!(f_and_g!, dimension)
 end
 
 # The `fg!` function calculates the objective (F) and gradient (G) for Optim.
-function fg_scaled!(F, G, x; u₀_scale, q₀_scale)
-    optim_fg_unconstrained_global_costfunction!(F, G, x, controls, c_obs, γ; locs=nothing, 
-                                                u₀_scale = u₀_scale, q₀_scale = q₀_scale)
+function fg_scaled!(F, G, x)
+    optim_fg_unconstrained_global_costfunction!(F, G, x, controls, c_obs, γ; locs=nothing)
 end
 
-x0_scaled = vcat([vec(descale_parameter(controls.boundary.u₀, u₀_scale)), 
-                  vec(descale_parameter(controls.source.q₀, q₀_scale)), 
-                  vec(controls.massfrac.m₀)]...)
+
+x0 = Float64.(vec(controls))
 
 
-f, grad = cache_f_and_g!((F, G, x) -> fg_scaled!(F, G, x; u₀_scale = u₀_scale, q₀_scale = q₀_scale), length(x0_scaled))
+f, grad = cache_f_and_g!((F, G, x) -> fg_scaled!(F, G, x), length(x0))
 
 
-f(x0_scaled)
-grad(x0_scaled, zero(x0_scaled))
+f(x0)
+grad(x0, zero(x0))
 
-f(x0_scaled .+ 1e-16) 
-# idx = 489800
-# ee = 1e-3
-# x01 = deepcopy(x0_scaled); x01[idx] += ee
-# x02 = deepcopy(x0_scaled); x02[idx] -= ee
+# f(x0 .+ 1e-16) 
+idx = rand(1:length(x0))
+ee = 1e-3
+x01 = deepcopy(x0); x01[idx] += ee
+x02 = deepcopy(x0); x02[idx] -= ee
 
-unique(vec(controls.boundary.u₀) ./ vec(descale_parameter(controls.boundary.u₀, u₀_scale)))
+g_finite = (f(x01) - f(x02)) / (2ee)
+g_analytic = zero(x0)
+grad(x0, g_analytic)
+
+100 * abs((g_analytic[idx] .- g_finite) ./ g_analytic[idx])
 
 using Ipopt
 # Ipopt.PrintAvailableOptions()
-n = length(x0_scaled)
+n = length(x0)
 
 # Define constraints (empty if only box constraints)
 function eval_g!(x, g; m0)
@@ -206,7 +206,7 @@ function eval_g!(x, g; m0)
 end
 
 gtmp = zeros(sum(γ.interior))
-eval_g!(x0_scaled, gtmp; m0)
+eval_g!(x0, gtmp; m0)
 gtmp
 # Correct signature: (x, rows, cols, values)
 
@@ -290,7 +290,7 @@ nnz_jac_g = jac_stats.nnz # number non-zeros in sparse
 rows_chk = zeros(Int, nnz_jac_g)
 cols_chk = similar(rows_chk)
 vals_chk = zeros(Float64, nnz_jac_g)
-eval_jac_g(x0_scaled, rows_chk, cols_chk, vals_chk; m0 = m0)
+eval_jac_g(x0, rows_chk, cols_chk, vals_chk; m0 = m0)
 
 # Create Ipopt problem
 prob = Ipopt.CreateIpoptProblem(
@@ -325,7 +325,7 @@ Ipopt.AddIpoptIntOption(prob, "limited_memory_max_history", 10)
 Ipopt.AddIpoptStrOption(prob, "nlp_scaling_method", "gradient-based")
 
 # Set starting point
-prob.x = deepcopy(x0_scaled)
+prob.x = deepcopy(x0)
 
 # Solve
 Ipopt.AddIpoptStrOption(prob, "output_file", "./ipopt_trace.log")

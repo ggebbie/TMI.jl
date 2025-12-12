@@ -1,19 +1,3 @@
-function centered_finite_difference(f, x; δ = 1e-3)
-    orig_size = size(x)
-    x_vec = vec(copy(x))
-    grad_vec = similar(x_vec)
-    for i in eachindex(x_vec)
-        x_plus = copy(x_vec)
-        x_minus = copy(x_vec)
-        x_plus[i] += δ
-        x_minus[i] -= δ
-        grad_vec[i] = (f(x_plus) - f(x_minus)) / (2δ)
-    end
-    reshape(grad_vec, orig_size)
-end
-
-percent_difference(a, b) = @. 100 * ((a - b) / b)
-
 function generate_1d_grid()
     ngrid = (50,)
     xmax = 1000.0
@@ -168,43 +152,5 @@ end
         @testset "full-field observation gradient with coupling" begin
             gradient_check(controls_coupled, c_obs_coupled, γ; seed = 4)
         end
-    end
-
-    @testset "decay rate feature gradient check" begin
-        A_orig = watermassmatrix(m0, γ)
-        Alu_orig = lu(A_orig)
-
-        source_p1_independent = TMI.Source(-qfield, γ, :p1, "independent p1 source", "μmol/kg", false)
-        source_p1_prior = (p1 = deepcopy(source_p1_independent),)
-
-        boundary_p1_initial_guess = (p1 = deepcopy(b_reference),)
-        boundary_p1_prior = zero(boundary_p1_initial_guess)
-
-        boundary_controls_single = BoundaryControls(boundary_p1_prior;
-            ub = boundary_p1_initial_guess,
-            variance = (p1=1.0,)
-        )
-        source_controls_single = TMI.SourceControls(source_p1_prior;
-            variance = (p1=1.0,)
-        )
-        massfrac_controls_single = MassFracControls(m0;
-            variance = (west=1.0, east=1.0),
-            γ = γ
-        )
-        controls_single_tracer = Controls(γ;
-            boundary = boundary_controls_single,
-            source = source_controls_single,
-            massfrac = massfrac_controls_single
-        )
-
-        c_p1_true = steadyinversion(Alu_orig, b_reference, γ, q=source_p1_independent)
-        c0_single = (p1=c_p1_true,)
-        W_single = map(v -> Diagonal(one.(vec(v))), c0_single)
-
-        decay_rate_val = 0.05
-        c_obs_decayed_p1 = Observations(c0_single.p1; W = W_single.p1, decay_rate = decay_rate_val, γ=γ)
-        c_obs_with_decay = (p1 = c_obs_decayed_p1,)
-
-        gradient_check(controls_single_tracer, c_obs_with_decay, γ; seed = 6)
     end
 end

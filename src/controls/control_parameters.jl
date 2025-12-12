@@ -188,6 +188,40 @@ function unvec!(cp::Controls, vector::AbstractVector)
 end
 
 """
+    write_gradient!(G, gu, gq, gm, controls)
+    Flatten structured gradients into a single vector.
+# Arguments
+- `G::Vector`: flat gradient vector to be populated in-place.
+- `gu`: gradient of the boundary controls.
+- `gq`: gradient of the source controls.
+- `gm`: gradient of the mass-fraction controls.
+- `controls::Controls`: container describing which control blocks are active and their shapes.
+# Output
+- `nothing`: operates in-place, mutating `G`.
+"""
+@inline function write_gradient!(G, gu, gq, gm, controls::Controls)
+    idx = 1
+    if !isnothing(controls.boundary.ub)
+        guv = vec(gu)
+        len = length(guv)
+        copyto!(G, idx, guv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.source.uq)
+        gqv = vec(gq)
+        len = length(gqv)
+        copyto!(G, idx, gqv, 1, len)
+        idx += len
+    end
+    if !isnothing(controls.massfrac.m)
+        gmv = vec(gm)
+        len = length(gmv)
+        copyto!(G, idx, gmv, 1, len)
+    end
+    return nothing
+end
+
+"""
     descale_parameter(x::NamedTuple, scale::NamedTuple)
 
 Return a deepcopy of `x` with each entry divided by its corresponding scale.
