@@ -2,7 +2,7 @@
 
 julia_version = "1.12.2"
 manifest_format = "2.0"
-project_hash = "9c06db38307e4ff89cfc9d1a6470fb80843abde2"
+project_hash = "8bf247f1b743632d00d2652e76db16bc4b45fd85"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "8b2b045b22740e4be20654175cc38291d48539db"
@@ -727,6 +727,7 @@ version = "1.12.0"
 [[deps.LinearSolve]]
 deps = ["ArrayInterface", "ChainRulesCore", "ConcreteStructs", "DocStringExtensions", "EnumX", "GPUArraysCore", "InteractiveUtils", "Krylov", "LazyArrays", "Libdl", "LinearAlgebra", "MKL_jll", "Markdown", "PrecompileTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "SciMLOperators", "Setfield", "StaticArraysCore", "UnPack"]
 git-tree-sha1 = "1558b9404fb3f7d907af2a4ae8928e8274190b74"
+pinned = true
 uuid = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
 version = "3.29.0"
 
