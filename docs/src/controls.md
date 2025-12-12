@@ -56,9 +56,15 @@ control_vector = vec(controls);  # a vector of θ and S boundary conditions and 
 ncontrols = length(control_vector); 
 
 #in-place updates are also a feature (useful for packages like Optim.jl)
+θ_bc = deepcopy(controls.boundary.ub.θ) #copy boundary condition from controls
 new_x = rand(ncontrols)
-unvec!(controls, new_x); 
-vec(controls.boundary.ub.θ)[10] == vec(controls)[10]
+unvec!(controls, new_x);  #update controls with random vector
+
+vec(θ_bc)[10] != vec(controls)[10] #copied boundary condition is not modified
+vec(controls.boundary.ub.θ)[10] == vec(controls)[10] #boundary condition in control is modified
+
+controls.boundary.ub.θ #should see random noise in UnicodePlot
+
 
 ```
 
