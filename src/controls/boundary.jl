@@ -59,30 +59,64 @@ function BoundaryControls(u₀::Union{NamedTuple, Nothing};
     lower_bound=nothing,
     upper_bound=nothing
 )
-    
     if isnothing(u₀) || isempty(u₀)
         @warn "No boundary controls (u₀) provided. Creating a null BoundaryControls object."
-        return BoundaryControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+        return BoundaryControls(NamedTuple(), u₀, NamedTuple(), NamedTuple(), NamedTuple(), deepcopy(u₀), NamedTuple(), NamedTuple())
     end
 
-    ub_controls = isnothing(ub) ? deepcopy(u₀) : deepcopy(ub)
-    
-    Qᵤ = _build_tracer_precision_matrix(ub_controls, variance, covariance)
+    uncertainty_vars = if !isnothing(covariance)
+        keys(covariance)
+    elseif !isnothing(variance)
+        keys(variance)
+    else
+        ()
+    end
 
-    check_shared_references(ub_controls, "ub")
+    if isempty(uncertainty_vars)
+        @warn "No variance or covariance specified for boundary controls. Control vector will be empty."
+    end
+        
+    ub_ig_full = nothing
+    if isnothing(ub)
+        if !isempty(uncertainty_vars)
+             @warn "No `ub` (boundary control initial guess) provided. Controls for `b` will mirror the structure of `u₀` (prior boundary conditions)."
+        end
+        ub_ig_full = u₀
+    else
+        ub_ig_full = ub
+    end
+
+    # Only create controls for variables with uncertainty
+    ub_controls_nt = NamedTuple{keys(u₀)}(
+        map(keys(u₀)) do name
+            if name in uncertainty_vars
+                deepcopy(get(ub_ig_full, name, u₀[name]))
+            else
+                nothing
+            end
+        end
+    )
+
+    # Filter for non-nothing controls
+    active_control_keys = filter(k -> !isnothing(ub_controls_nt[k]), keys(ub_controls_nt))
+    ub_active = NamedTuple{active_control_keys}(getproperty(ub_controls_nt, k) for k in active_control_keys)
+
+    Qᵤ = isempty(ub_active) ? NamedTuple() : _build_tracer_precision_matrix(ub_active, variance, covariance)
+
+    check_shared_references(ub_active, "ub")
     check_shared_references(u₀, "u₀")
     check_shared_references(Qᵤ, "Qᵤ")
 
     # Bounds
-    lower = _generate_control_bounds(ub_controls, lower_bound, -Inf)
-    upper = _generate_control_bounds(ub_controls, upper_bound, +Inf)
+    lower = _generate_control_bounds(ub_active, lower_bound, -Inf)
+    upper = _generate_control_bounds(ub_active, upper_bound, +Inf)
     
     return BoundaryControls(
-        ub_controls,
+        ub_active,
         u₀,
         Qᵤ,
-        deepcopy(ub_controls), # dub
-        deepcopy(ub_controls), # gdub
+        isempty(ub_active) ? NamedTuple() : deepcopy(ub_active), # dub
+        isempty(ub_active) ? NamedTuple() : deepcopy(ub_active), # gdub
         deepcopy(u₀),  # b
         lower,
         upper

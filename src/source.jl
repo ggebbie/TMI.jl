@@ -15,6 +15,22 @@ struct Source{T <: Real, A <: Real, N, F<:AbstractArray{T,N}}
     logscale::Bool
 end
 
+"""
+    getsource(field::Field; logscale::Bool=false) -> Source
+
+Create a `Source` object from a `Field` object, preserving its tracer data,
+grid, and metadata. An optional `logscale` parameter can be set.
+"""
+function getsource(field::Field; logscale::Bool=false)
+    # Create a copy of the tracer data to modify it
+    tracer_data = copy(field.tracer)
+    
+    # Set non-interior points to NaN, similar to zerosource and onesource
+    tracer_data[.!field.γ.interior] .= eltype(tracer_data)(NaN) # Use eltype to ensure correct NaN type
+    
+    return Source(tracer_data, field.γ, field.name, field.longname, field.units, logscale)
+end
+
 function readsource(file,tracername,γ::Grid;logscale=false) 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
     tracer, units, longname = _read3d(file,tracername)
@@ -173,6 +189,7 @@ function adjustsource!(q::Field,u::Field; r::Real = 1.0)
     # write it out so b changes when returned
     q.tracer[q.γ.wet] += r .* u.tracer[u.γ.wet] 
 end
+
 function adjustsource!(q::Source,u::Source; r::Real = 1.0)
     if q.logscale && u.logscale
         q.tracer[q.γ.interior] += u.tracer[u.γ.interior]
@@ -191,6 +208,7 @@ function adjustsource!(q::Source,u::Source; r::Real = 1.0)
         q.tracer[q.γ.interior] += r .* u.tracer[u.γ.interior]
     end        
 end
+
 function adjustsource!(q::Source{T}, u::AbstractVector{T};
                        idx::Int = 1,
                        return_idx::Bool = false,

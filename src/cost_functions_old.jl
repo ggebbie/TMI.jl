@@ -236,16 +236,18 @@ function prior_boundary_cost(
       u₀::NamedTuple,
       Qᵤ::NamedTuple{tracer_names,T}
   ) where {tracer_names, T}
-    J = 0
+    J = 0; nJ = 0.0
     lo = 1
     for name in tracer_names
+        nJ += 1
         len = size(Qᵤ[name], 1)
         hi = lo + len - 1
         du_slice = @view duvec[lo:hi]
         J +=  prior_boundary_cost(du_slice, u₀[name], Qᵤ[name])
         lo = hi + 1
     end
-    return J
+
+    (nJ != 0) ? (return J/nJ) : (return 0.0)
 end
 
 

@@ -71,7 +71,7 @@ function SourceControls(q₀::Union{NamedTuple, Nothing};
 )
     if isnothing(q₀) || isempty(q₀)
         @warn "No source controls (q₀) provided. Creating a null SourceControls object."
-        return SourceControls(nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+        return SourceControls(NamedTuple(), q₀, NamedTuple(), NamedTuple(), NamedTuple(), deepcopy(q₀), dependencies, zero(q₀), NamedTuple(), NamedTuple())
     end
 
     dependent_sources = keys(dependencies)
@@ -84,10 +84,22 @@ function SourceControls(q₀::Union{NamedTuple, Nothing};
         ()
     end
 
+    if isempty(uncertainty_vars)
+        @warn "No variance or covariance specified for source controls. Control vector will be empty."
+    end
+        
+    uq_ig_full = nothing
+    if isnothing(uq)
+        if !isempty(uncertainty_vars)
+            @warn "No `uq` (source control initial guess) provided. Controls for `q` will mirror the structure of `q₀` (prior source conditions)."
+        end
+        uq_ig_full = q₀
+    else
+        uq_ig_full = uq
+    end
+
     potential_ind_sources = filter(k -> !in(k, dependent_sources), keys(q₀))
     
-    uq_ig_full = isnothing(uq) ? q₀ : uq
-
     uq_controls_nt = NamedTuple{potential_ind_sources}(
         map(potential_ind_sources) do name
             if name in uncertainty_vars
@@ -98,20 +110,18 @@ function SourceControls(q₀::Union{NamedTuple, Nothing};
         end
     )
     
-    uq_controls = isempty(uq_controls_nt) ? nothing : uq_controls_nt
-    Qₛ_final = !isnothing(uq_controls) ? _build_tracer_precision_matrix(uq_controls, variance, covariance) : NamedTuple()
+    active_control_keys = filter(k -> !isnothing(uq_controls_nt[k]), keys(uq_controls_nt))
+    uq_indep = NamedTuple{active_control_keys}(getproperty(uq_controls_nt, k) for k in active_control_keys)
 
-    independent_sources = isnothing(uq_controls) ? () : filter(k -> !isnothing(uq_controls[k]), keys(uq_controls))
-    uq_indep = isnothing(uq_controls) ? nothing : NamedTuple{independent_sources}(getproperty(uq_controls, k) for k in independent_sources)
-    Qₛ_indep = isnothing(Qₛ_final) ? nothing : NamedTuple{independent_sources}(getproperty(Qₛ_final, k) for k in independent_sources)
+    Qₛ_indep = isempty(uq_indep) ? NamedTuple() : _build_tracer_precision_matrix(uq_indep, variance, covariance)
 
     check_shared_references(uq_indep, "uq")
     check_shared_references(q₀, "q₀")
     check_shared_references(Qₛ_indep, "Qₛ")
 
-    if !isnothing(uq_indep)
+    if !isempty(uq_indep)
         for dep_name in keys(dependencies)
-            if haskey(uq_indep, dep_name) && !isnothing(uq_indep[dep_name])
+            if haskey(uq_indep, dep_name)
                 error("Tracer :$(dep_name) is listed in `dependencies`\n" *
                       "but is also an independent control variable in `uq`. A source cannot be both.")
             end
@@ -121,15 +131,37 @@ function SourceControls(q₀::Union{NamedTuple, Nothing};
     lower = _generate_control_bounds(uq_indep, lower_bound, -Inf)
     upper = _generate_control_bounds(uq_indep, upper_bound, +Inf)
 
+    q_full = deepcopy(q₀)
+    
+    # Find a grid from any non-nothing source to use as a reference
+    reference_grid = nothing
+    for key in keys(q_full)
+        if !isnothing(q_full[key])
+            reference_grid = q_full[key].γ
+            break
+        end
+    end
+
+    # Ensure dependent sources that are `nothing` are initialized as zero sources
+    if !isnothing(reference_grid)
+        for dep_name in dependent_sources
+            if isnothing(get(q_full, dep_name, nothing))
+                 # Create a zero source and merge it into the NamedTuple
+                 zero_src = zerosource(reference_grid)
+                 q_full = merge(q_full, NamedTuple((dep_name => zero_src,)))
+            end
+        end
+    end
+
     return SourceControls(
         uq_indep,
         q₀,
         Qₛ_indep,
-        isnothing(uq_indep) ? nothing : deepcopy(uq_indep),
-        isnothing(uq_indep) ? nothing : deepcopy(uq_indep),
-        deepcopy(q₀),
+        isempty(uq_indep) ? NamedTuple() : deepcopy(uq_indep),
+        isempty(uq_indep) ? NamedTuple() : deepcopy(uq_indep),
+        q_full,
         dependencies,
-        zero(q₀),
+        zero(q_full),
         lower,
         upper
     )

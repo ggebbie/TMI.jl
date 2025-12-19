@@ -1,3 +1,19 @@
+percent_difference(a, b) = @. 100 * ((a - b) / b)
+
+function centered_finite_difference(f, x; δ = 1e-3)
+    orig_size = size(x)
+    x_vec = vec(copy(x))
+    grad_vec = similar(x_vec)
+    for i in eachindex(x_vec)
+        x_plus = copy(x_vec)
+        x_minus = copy(x_vec)
+        x_plus[i] += δ
+        x_minus[i] -= δ
+        grad_vec[i] = (f(x_plus) - f(x_minus)) / (2δ)
+    end
+    reshape(grad_vec, orig_size)
+end
+
 function generate_1d_grid()
     ngrid = (50,)
     xmax = 1000.0
@@ -29,11 +45,11 @@ end
 function gradient_check(controls, obs, γ; seed = 1)
     Random.seed!(seed)
     control_vector = randn(length(vec(controls)))
-    objective(x) = optim_fg_unconstrained_global_costfunction!(NaN, nothing, x, controls, obs, γ)
+    objective(x) = joint_global_cost!(NaN, nothing, x, controls, obs, γ)
 
     fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-4)
     analytic = zero(control_vector)
-    optim_fg_unconstrained_global_costfunction!(NaN, analytic, control_vector, controls, obs, γ)
+    joint_global_cost!(NaN, analytic, control_vector, controls, obs, γ)
 
     abspdiff = abs.(percent_difference(fd_grad, analytic))
     @test all(abspdiff .< 0.1)

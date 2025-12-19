@@ -105,7 +105,7 @@ vector. This is a necessary step for interfacing with optimization algorithms
 that expect a single vector of parameters.
 """
 function vectorize_controls(ub, uq, m)
-    v = []
+    v = Vector{Float64}()
     !isnothing(ub) && append!(v, vec(ub))
     !isnothing(uq) && append!(v, vec(uq))
     !isnothing(m) && append!(v, vec(m))

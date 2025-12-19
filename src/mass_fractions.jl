@@ -301,13 +301,13 @@ massfractions_down(A, γ) = MassFraction(A, γ, CartesianIndex(0,0,1);
     longname = "mass fraction from lower neighbor")
 
 """
-    inverse_watermassmatrix(A, γ)
+    mass_frac_from_watermassatrix(A, γ)
 
 Recover the directional mass fractions from a water-mass matrix `A` on grid
 `γ`. Assumes the standard 6-neighbor stencil and returns a NamedTuple with the
 north/east/south/west/up/down `MassFraction` fields.
 """
-function inverse_watermassmatrix(A::AbstractMatrix, γ::Grid{R,3}) where R
+function mass_frac_from_watermassatrix(A::AbstractMatrix, γ::Grid{R,3}) where R
     return (north = massfractions_north(A,γ),
         east   = massfractions_east(A,γ),
         south  = massfractions_south(A,γ),

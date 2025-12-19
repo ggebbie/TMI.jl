@@ -31,7 +31,7 @@ export config, download_file,
     linearindex, nearestneighbor, updatelinearindex,
     nearestneighbormask, horizontaldistance,
     readtracer, readfield, writefield,
-    readsource,
+    readsource, getsource,
     cartesianindex,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
@@ -70,7 +70,9 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors, 
     Observations, SourceControls, BoundaryControls, 
-    MassFracControls, Controls, optim_fg_unconstrained_global_costfunction!
+    MassFracControls, Controls, joint_global_cost!,
+    cache_f_and_g!, mass_conservation_constraints!,
+    mass_conservation_jacobian!, check_gradient, mass_frac_from_watermassatrix
 
 import Base: zeros, one, oneunit, ones, \
 import Base: maximum, minimum
@@ -113,6 +115,8 @@ include(pkgsrcdir("controls", "source.jl"))
 include(pkgsrcdir("controls", "massfrac.jl"))
 include(pkgsrcdir("controls", "control_parameters.jl"))
 include(pkgsrcdir("cost_functions.jl"))
+include(pkgsrcdir("opt_solver_utils.jl"))
+include(pkgsrcdir("opt_constraints.jl"))
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -2873,9 +2877,11 @@ function gsteadyinversion!(
 
         b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)
+        gdub_i = get(gdub, name, nothing)
+        gduq_i = get(gduq, name, nothing)
 
         gsteadyinversion!(
-            gdub[name], gduq[name],
+            gdub_i, gduq_i,
             gA_vals, gc[name], c[name], local_cache_adjoint, # Pass local_cache_adjoint here
             b_i, q_i, gA_rows, gA_cols, γ; r = r)
     end
@@ -2986,9 +2992,10 @@ function gsteadyinversion!(
     for name in tracer_names
         b_i = get(b, name, nothing)
         q_i = get(q, name, nothing)
-
+        gdub_i = get(gdub, name, nothing)
+        gduq_i = get(gduq, name, nothing)
         gsteadyinversion!(
-            gdub[name], gduq[name],
+            gdub_i, gduq_i,
             gA_vals, gc[name], c[name], Alu, # Pass local_cache_adjoint here
             b_i, q_i, gA_rows, gA_cols, γ; r = r)
     end
