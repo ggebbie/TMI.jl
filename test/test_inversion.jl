@@ -1,6 +1,7 @@
+using Printf
 percent_difference(a, b) = @. 100 * ((a - b) / b)
 
-function centered_finite_difference(f, x; δ = 1e-3)
+function centered_finite_difference(f, x; δ = 1e-6)
     orig_size = size(x)
     x_vec = vec(copy(x))
     grad_vec = similar(x_vec)
@@ -38,7 +39,7 @@ function generate_1d_grid()
     b_reference = (west = TMI.getboundarycondition(c_template, dim, 1, γ),
                    east = TMI.getboundarycondition(c_template, 1, ngrid[dim], γ))
     qfield = 1.0e-2 * ones(ngrid)
-
+    qfield[γ.wet .& .!γ.interior] .= 0.0
     return (γ, lon, c_template, b_reference, qfield, m0)
 end
 
@@ -47,11 +48,26 @@ function gradient_check(controls, obs, γ; seed = 1)
     control_vector = randn(length(vec(controls)))
     objective(x) = joint_global_cost!(NaN, nothing, x, controls, obs, γ)
 
-    fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-4)
+    fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-3)
     analytic = zero(control_vector)
     joint_global_cost!(NaN, analytic, control_vector, controls, obs, γ)
 
     abspdiff = abs.(percent_difference(fd_grad, analytic))
+
+    # --- DEBUGGING ADDITION ---
+    if !all(abspdiff .< 0.1)
+        println("DEBUG: Gradient check failed. Mismatch > 0.1%")
+        println("Index | Finite Diff | Analytic | % Diff")
+        println("----------------------------------------------")
+        for i in eachindex(abspdiff)
+            if abspdiff[i] >= 0.1
+                println(i)
+                @printf("  %3d | %11.6f | %11.6f | %.2f%%\n", i, fd_grad[i], analytic[i], abspdiff[i])
+            end
+        end
+    end
+    # --- END DEBUGGING ADDITION ---
+    
     @test all(abspdiff .< 0.1)
 end
 

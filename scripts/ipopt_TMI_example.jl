@@ -57,9 +57,9 @@ u_upper = (θ = 35.0, S = 45.0, δ¹⁸O = Inf, PO₄ = 50.0, NO₃ = Inf, O₂ 
 # for the optimization routine, using the new direct construction API.
 boundary_controls = BoundaryControls(
     u₀;
-    variance = tracer_error_variance,
-    lower_bound = u_lower,
-    upper_bound = u_upper,
+    # variance = tracer_error_variance,
+    # lower_bound = u_lower,
+    # upper_bound = u_upper,
 );
 
 # Priors for interior sources (q₀) are set to nothing (no sources).
@@ -81,9 +81,9 @@ q_upper = (PO₄ = 0.5, )
 source_controls = SourceControls(
     q₀;
     dependencies = source_dependencies, 
-    variance = source_error_variance, 
-    lower_bound = q_lower,
-    upper_bound = q_upper
+    # variance = source_error_variance, 
+    # lower_bound = q_lower,
+    # upper_bound = q_upper
 );
 
 # Isotropic mass fractions as a prior estimate.

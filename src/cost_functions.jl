@@ -110,6 +110,7 @@ function forward_joint_global(controls::Controls,
         println("J_boundary = ", J_boundary)
         println("J_massfrac = ", J_massfrac)
     end
+    
     return (J=J, c=c, n=n, A=A, Alu = Alu)
 end
 
@@ -228,7 +229,7 @@ end
 function prior_boundary_cost(duvec::AbstractVector,
                              u₀::Union{BoundaryCondition{T}, NamedTuple},
                              Qⁱᵤ::Union{Diagonal, Symmetric}) where {T}
-    return (1 / length(duvec)) * duvec' * Qⁱᵤ * duvec
+    return (1 / length(duvec)) * (duvec' * Qⁱᵤ * duvec)
 end
 
 function prior_boundary_cost(
@@ -252,11 +253,14 @@ end
 function prior_boundary_cost(du::NamedTuple,u₀::NamedTuple,Qᵤ::NamedTuple)
     tracer_names = keys(du)
     J = 0
+    println("\nStarting Boundary Cost")
     for (i, name) in enumerate(tracer_names)
-        J += prior_boundary_cost(vec(du[name]), u₀[name], Qᵤ[name])
-
+        J1 = prior_boundary_cost(vec(du[name]), u₀[name], Qᵤ[name])
+        println("$name : $J1")
+        J += J1
     end
-    
+    println("Ending Boundary Cost")
+
     return J
 end
 
@@ -442,7 +446,18 @@ end
 """
 function model_observation_cost(n::Union{Vector, Field{T}},
                                 Wⁱ::Union{Diagonal, Symmetric}) where {T}
-    return (1 / length(vec(n))) * (n ⋅ (Wⁱ * n))
+    if n isa Field
+        # Create a copy and zero out non-interior points
+        n_mod = deepcopy(n)
+        boundary_mask = n_mod.γ.wet .& .!n_mod.γ.interior
+        n_mod.tracer[boundary_mask] .*= 0.0
+        norm_factor = sum(n_mod.γ.interior)
+        
+        return (1 / norm_factor) * n_mod ⋅ (Wⁱ * n_mod)
+    else
+        # Keep original behavior for vector observations
+        return (1 / length(vec(n))) * (n ⋅ (Wⁱ * n))
+    end
 end
 
 function model_observation_cost(n::NamedTuple,c_obs::NamedTuple)
@@ -469,8 +484,17 @@ end
 """
 function gmodel_observation_cost(n::Union{Vector, Field{T}},
                                  Wⁱ::Union{Diagonal, Symmetric}) where {T}
-    gnvec = (2 / length(vec(n))) * Wⁱ * n 
-    return gnvec
+    if n isa Field
+        # Create a copy and zero out non-interior points
+        n_mod = deepcopy(n)
+        boundary_mask = n_mod.γ.wet .& .!n_mod.γ.interior
+        n_mod.tracer[boundary_mask] .*= 0.0
+        norm_factor = sum(n_mod.γ.interior)
+        return (2 / norm_factor) * (Wⁱ * n_mod)
+
+    else
+        return (2 / length(vec(n))) * (Wⁱ * n)
+    end
 end
 
 function gmodel_observation_cost(n::NamedTuple, c_obs::NamedTuple)
@@ -500,7 +524,8 @@ end
 function model_data_misfit(c::Field{T}, c_obs::Field{T},
                                   γ::Grid; locs::Union{Nothing, Vector{G}}=nothing, wis = nothing) where {T, G}
     # n = (c - c_obs)
-    n = c - c_obs
+    n = c - c_obs; 
+
     return n
 end
 
