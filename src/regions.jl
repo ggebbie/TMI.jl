@@ -4,11 +4,17 @@
     Read an oceanographically-relevant surface region from NetCDF file. (Also could be read from mat file.)
     Return a BoundaryCondition
 """
-function surfaceregion(TMIversion::String,region::Union{String,Symbol})::BoundaryCondition
+function surfaceregion(TMIversion::String, region::Union{String,Symbol})::BoundaryCondition
     #get wet mask 
     TMIfile = download_file(TMIversion)
     γ = Grid(TMIfile)
-    wet = γ.wet[:, :, 1]
+
+    # find surface index
+    k = 1
+    while iszero(sum(γ.wet[:,:,k]))
+        k += 1
+    end
+    wet = γ.wet[:,:,k]
     
     file,Nx,Ny = download_regionfile(TMIversion::String) 
     
@@ -23,14 +29,14 @@ function surfaceregion(TMIversion::String,region::Union{String,Symbol})::Boundar
 
     lon = ds["lon"][:]
     lat = ds["lat"][:]
-    depth = ds["depth"][1]
+    depth = γ.depth[k] #ds["depth"][1]
     mask = Bool.(v[:,:]) # use BitMatrix to save some bits
 
     #name = v.attrib["name"] # error
     close(ds)
     
     #b = BoundaryCondition(mask,lon,lat,depth,3,1,trues(parse(Int64,Nx),parse(Int64,Ny)),Symbol(region),longname,units)
-    b = BoundaryCondition(mask,(lon,lat),depth,3,1,wet,Symbol(region),longname,units)
+    b = BoundaryCondition(mask,(lon,lat),depth,3,k,wet,Symbol(region),longname,units)
     return b
 end
 
@@ -60,6 +66,7 @@ function download_regionfile(TMIversion::String)
         url = regionurl(filename)
         google_download(url,pkgdatadir())
     end
+    println(pathname)
     return pathname,Nx,Ny
 end
 
