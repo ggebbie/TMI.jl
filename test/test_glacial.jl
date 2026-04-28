@@ -1,4 +1,5 @@
 @testset "glacial" begin
+
     TMIversion = "LGM_90x45x33_G14"
     A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
@@ -50,4 +51,19 @@
         @test isapprox(vsum, sum(cellvolume(γ)))
 
     end
+    
+    @testset "watermassdistribution" begin
+        list = TMI.regionlist()
+        region = list[2]
+
+        #b = TMI.surfaceregion(TMIversion,region,γ)
+        #g = steadyinversion(Alu,b,γ)
+        g = watermassdistribution(TMIversion, Alu, region, γ)
+
+        @test maximum(g) ≤ 1.0
+        @test minimum(g) ≥ 0.0
+        @test sum(g) ≥ 0.0
+
+    end
+
 end
