@@ -23,4 +23,6 @@ end
     include("test_massfractions.jl")
 
     include("test_1d.jl")
+
+    include("test_enzyme.jl")
 end

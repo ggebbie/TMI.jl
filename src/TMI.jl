@@ -1434,6 +1434,8 @@ function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
     end
 end
 
+include(pkgsrcdir("enzyme", "enzyme_rules.jl"))
+
 """ 
     function synthetic_observations(TMIversion,variable)
     Synthetic observations that are a contaminated version of real observations
