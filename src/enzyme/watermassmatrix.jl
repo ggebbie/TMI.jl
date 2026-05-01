@@ -1,9 +1,24 @@
 """
-    augmented_primal(::Const{typeof(watermassmatrix)}, ..., m, γ)
+    function augmented_primal(config, func, ::Type{<:Duplicated}, m, γ)::AugmentedReturn
 
-Custom forward rule for `A = watermassmatrix(m, γ)`.
+      Custom forward rule for `A = watermassmatrix(m, γ)`.
 
-See the tutorial for a full explanation of the math.
+      This method executes the forward pass, creating the sparse matrix `A` and
+      allocating storage for its gradient. The mathematical pattern for this
+      rule is explained in the tutorial.
+
+# Arguments
+- `config`::RevConfigWidth{1}: Enzyme's internal configuration object.
+- `func`::Const{typeof(watermassmatrix)}: The function being differentiated, marked
+  as a non-differentiable constant.
+- `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying that the
+  function's output is differentiable.
+- `m`::Duplicated: The collection of mass fractions, marked as differentiable.
+- `γ`::Const{<:Grid}: The grid, which is not differentiated.
+
+# Output
+- `A`::AugmentedReturn: An `Enzyme.AugmentedReturn` struct containing the primal
+  sparse matrix `A` and its gradient storage `g_A`.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -18,12 +33,28 @@ function augmented_primal(
 end
 
 """
-    reverse(::Const{typeof(watermassmatrix)}, ..., g_A, m, γ)
+    function reverse(config, func, ::Type{<:Duplicated}, g_A, m, γ)::(Nothing, Nothing)
 
-Custom reverse rule for `A = watermassmatrix(m, γ)`.
+      Custom reverse rule for `A = watermassmatrix(m, γ)`.
 
-This rule reads the gradient from `g_A` and accumulates it into the gradient
-for the mass fractions in `m`. See the tutorial for a full derivation.
+      This method propagates gradients from the sparse matrix `g_A` backward,
+      accumulating them into the `dval` fields of the mass fractions `m`.
+      It does this by replaying the same loop structure as the forward pass
+      to ensure the gradients from `g_A` are mapped to the correct mass fraction entries.
+
+# Arguments
+- `config`::RevConfigWidth{1}: Enzyme's internal configuration object.
+- `func`::Const{typeof(watermassmatrix)}: The original function, marked as a constant.
+- `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying the
+  differentiability of the original function's output.
+- `g_A`: The adjoint of the sparse matrix from the forward pass, filled by
+  subsequent rules in Enzyme's reverse pass.
+- `m`::Duplicated: The mass fractions collection. Its `dval` field is updated
+  in-place with the computed gradients.
+- `γ`::Const{<:Grid}: The grid, which is not differentiated.
+
+# Output
+- `(nothing, nothing)`: Gradients are accumulated in-place.
 """
 function reverse(
     ::RevConfigWidth{1},

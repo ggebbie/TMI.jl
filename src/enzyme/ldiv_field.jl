@@ -1,10 +1,30 @@
 """
-    augmented_primal(::Const{typeof(\)}, ..., A, d)
+    function augmented_primal(config, func, ::Type{<:Duplicated}, A, d)::AugmentedReturn
 
-Custom forward rule for the sparse linear solve `c = A \ d`.
+      Custom forward rule for the sparse linear solve `c = A \ d`.
 
-See the tutorial for a full explanation of the math. This rule computes the
-primal solution `c` and allocates storage for its gradient `g_c`.
+      This method is called by Enzyme's reverse mode to execute the forward pass.
+      It computes the primal solution `c` and prepares the necessary storage for the
+      reverse pass. The mathematical pattern for this rule (the adjoint method)
+      is explained in the tutorial.
+
+# Arguments
+- `config`::RevConfigWidth{1}: Enzyme's internal configuration for the rule. The `needs_primal`
+  and `needs_shadow` functions query this object to determine if the primal value or
+  gradient storage are required for the current differentiation task.
+- `func`::Const{typeof(\)}: The function being differentiated (``), wrapped in `Enzyme.Const`
+  to mark it as a non-differentiable constant.
+- `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying that the
+  function's output is differentiable.
+- `A`::Annotation{<:SparseMatrixCSC}: The sparse matrix argument, wrapped in
+  `Enzyme.Annotation` which provides metadata about the argument's differentiability.
+- `d`::Annotation{<:Field}: The right-hand-side field argument, also wrapped in
+  `Enzyme.Annotation`.
+
+# Output
+- `c`::AugmentedReturn: An `Enzyme.AugmentedReturn` struct that contains the primal
+  output (`c`), storage for the output's gradient (`g_c`), and any values that need
+  to be "taped" for the reverse pass.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -21,11 +41,31 @@ function augmented_primal(
 end
 
 """
-    reverse(::Const{typeof(\)}, ..., tape, A, d)
+    function reverse(config, func, ::Type{<:Duplicated}, tape, A, d)::(Nothing, Nothing)
 
-Custom reverse rule for the sparse linear solve `c = A \ d`.
+      Custom reverse rule for the sparse linear solve `c = A \ d`.
 
-This implements the adjoint method. See the tutorial for a full derivation.
+      This method implements the adjoint method to propagate gradients backward.
+      It first solves the adjoint system `A' * λ = g_c` to get the adjoint variable
+      `λ` (which is also the gradient `g_d`). It then uses `λ` to accumulate the
+      gradients for `A` and `d`. The `if` blocks ensure that gradients are only
+      computed and stored for arguments that were marked as active (`Duplicated`).
+
+# Arguments
+- `config`::RevConfigWidth{1}: Enzyme's internal configuration object.
+- `func`::Const{typeof(\)}: The original function, marked as a constant.
+- `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying the
+  differentiability of the original function's output.
+- `tape`: Contains the values saved from `AugmentedReturn` in the forward pass,
+  in this case the primal solution `c` and its gradient storage `g_c`.
+- `A`::Annotation{<:SparseMatrixCSC}: The sparse matrix argument. If it is a
+  `Duplicated` annotation, its `dval` field will be updated with the gradient.
+- `d`::Annotation{<:Field}: The right-hand-side field argument. If it is a
+  `Duplicated` annotation, its `dval` field will be updated with the gradient.
+
+# Output
+- `(nothing, nothing)`: This rule returns no gradients directly. Gradients are
+  accumulated in-place into the `dval` fields of the `Duplicated` arguments.
 """
 function reverse(
     ::RevConfigWidth{1},
