@@ -71,6 +71,54 @@ function gradient_check(controls, obs, γ; seed = 1)
     @test all(abspdiff .< 0.1)
 end
 
+function control_state_snapshot(controls)
+    return (
+        ub = copy(vec(controls.boundary.ub)),
+        uq = copy(vec(controls.source.uq)),
+        m = copy(vec(controls.massfrac.m)),
+        b = copy(vec(controls.boundary.b)),
+        dub = copy(vec(controls.boundary.dub)),
+        q = copy(vec(controls.source.q)),
+        duq = copy(vec(controls.source.duq)),
+    )
+end
+
+function prior_only_objective(controls)
+    return TMI.prior_boundary_cost(controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ) +
+           TMI.prior_source_cost(controls.source.duq, controls.source.q₀, controls.source.Qₛ) +
+           TMI.prior_mass_fraction_cost(controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
+end
+
+function prior_only_gradient!(G, controls)
+    TMI.zero!(controls.boundary.gdub)
+    TMI.zero!(controls.source.gduq)
+    TMI.zero!(controls.massfrac.gm)
+
+    TMI.gprior_boundary_cost!(controls.boundary.gdub, controls.boundary.dub, controls.boundary.u₀, controls.boundary.Qᵤ)
+    TMI.gprior_source_cost!(controls.source.gduq, controls.source.duq, controls.source.q₀, controls.source.Qₛ)
+    TMI.gprior_mass_fraction_cost!(controls.massfrac.gm, controls.massfrac.m, controls.massfrac.m₀, controls.massfrac.Qₘ)
+
+    TMI.write_gradient!(G, controls.boundary.gdub, controls.source.gduq, controls.massfrac.gm, controls)
+    return G
+end
+
+function compare_objective_and_gradient(controls, obs, γ; seed = 1)
+    Random.seed!(seed)
+    control_vector = randn(length(vec(controls)))
+
+    ad_state_before = control_state_snapshot(controls)
+
+    legacy_grad = zero(control_vector)
+    ad_grad = zero(control_vector)
+    J_legacy = joint_global_cost!(0.0, legacy_grad, control_vector, controls, obs, γ)
+    ad_state_after = control_state_snapshot(controls)
+    J_ad = joint_global_cost_ad!(0.0, ad_grad, control_vector, controls, obs, γ)
+
+    @test isapprox(J_legacy, J_ad; rtol = 1e-8, atol = 1e-10)
+    @test isapprox(legacy_grad, ad_grad; rtol = 1e-6, atol = 1e-8)
+    @test ad_state_before == ad_state_after
+end
+
 @testset "TMI Inversion Tests" begin
     Random.seed!(42)
     γ, lon, c_template, b_reference, qfield, m0 = generate_1d_grid()
@@ -114,18 +162,67 @@ end
             massfrac = massfrac_controls
         )
 
+        W_full = map(v -> Diagonal(one.(vec(v))), c0)
+        c_obs_full = map((v, w) -> Observations(v; W = w), c0, W_full)
+
+        @testset "joint global cost mutation characterization" begin
+            Random.seed!(5)
+            control_vector = randn(length(vec(controls)))
+            initial_state = control_state_snapshot(controls)
+
+            J1 = joint_global_cost!(0.0, nothing, control_vector, controls, c_obs_full, γ)
+            mutated_state = control_state_snapshot(controls)
+            J2 = joint_global_cost!(0.0, nothing, control_vector, controls, c_obs_full, γ)
+
+            @test isapprox(J1, J2)
+            @test !all(initial_state.ub .== mutated_state.ub)
+            @test !all(initial_state.uq .== mutated_state.uq)
+            @test !all(initial_state.m .== mutated_state.m)
+            @test !all(initial_state.b .== mutated_state.b)
+            @test !all(initial_state.dub .== mutated_state.dub)
+            @test !all(initial_state.q .== mutated_state.q)
+            @test !all(initial_state.duq .== mutated_state.duq)
+        end
+
+        @testset "prior-only gradient check" begin
+            Random.seed!(6)
+            control_vector = randn(length(vec(controls)))
+
+            function objective(x)
+                unvec!(controls, x)
+                TMI.update_b!(controls.boundary)
+                TMI.update_q!(controls.source)
+                return prior_only_objective(controls)
+            end
+
+            function analytic_gradient(x)
+                unvec!(controls, x)
+                TMI.update_b!(controls.boundary)
+                TMI.update_q!(controls.source)
+                G = zero(x)
+                prior_only_gradient!(G, controls)
+                return G
+            end
+
+            fd_grad = centered_finite_difference(objective, control_vector; δ = 1e-3)
+            analytic = analytic_gradient(control_vector)
+            abspdiff = abs.(percent_difference(fd_grad, analytic))
+
+            @test all(abspdiff .< 0.1)
+        end
+
         @testset "point observation gradient" begin
             obs_loc = [lon[2]]
             observed_vals = map(v -> observe(v, obs_loc, γ), c0)
             W_pt = map(vals -> Diagonal(one.(vals)), observed_vals)
             c_obs = map((vals, w) -> Observations(vals; locs = obs_loc, γ = γ, W = w), observed_vals, W_pt)
             gradient_check(controls, c_obs, γ; seed = 2)
+            compare_objective_and_gradient(controls, c_obs, γ; seed = 12)
         end
 
         @testset "full-field observation gradient" begin
-            W_full = map(v -> Diagonal(one.(vec(v))), c0)
-            c_obs = map((v, w) -> Observations(v; W = w), c0, W_full)
-            gradient_check(controls, c_obs, γ; seed = 3)
+            gradient_check(controls, c_obs_full, γ; seed = 3)
+            compare_objective_and_gradient(controls, c_obs_full, γ; seed = 13)
         end
     end
 
@@ -183,6 +280,7 @@ end
 
         @testset "full-field observation gradient with coupling" begin
             gradient_check(controls_coupled, c_obs_coupled, γ; seed = 4)
+            compare_objective_and_gradient(controls_coupled, c_obs_coupled, γ; seed = 14)
         end
     end
 end

@@ -17,6 +17,8 @@ using OrderedCollections
 using Downloads
 using LinearSolve
 using IncompleteLU
+using ChainRulesCore
+using Zygote
 
 export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
@@ -70,7 +72,7 @@ export config, download_file,
     distancematrix, gaussiandistancematrix, versionlist,
     massfractions, massfractions_isotropic, neighbors, 
     Observations, SourceControls, BoundaryControls, 
-    MassFracControls, Controls, joint_global_cost!,
+    MassFracControls, Controls, joint_global_cost!, joint_global_cost_ad!,
     cache_f_and_g!, mass_conservation_constraints!,
     mass_conservation_jacobian!, check_gradient, mass_frac_from_watermassatrix
 
@@ -115,6 +117,7 @@ include(pkgsrcdir("controls", "source.jl"))
 include(pkgsrcdir("controls", "massfrac.jl"))
 include(pkgsrcdir("controls", "control_parameters.jl"))
 include(pkgsrcdir("cost_functions.jl"))
+include(pkgsrcdir("ad_objective.jl"))
 include(pkgsrcdir("opt_solver_utils.jl"))
 include(pkgsrcdir("opt_constraints.jl"))
 
