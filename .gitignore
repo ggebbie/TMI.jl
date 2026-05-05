@@ -6,3 +6,5 @@
 *~
 *nc
 .CondaPkg
+scripts/ex10.one_d.jl
+*.DS_Store

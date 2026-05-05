@@ -8,7 +8,7 @@ for TMIversion in ["modern_90x45x33_GH10_GH12","modern_180x90x33_GH11_GH12"]
 
     println(regionsfile)
     
-    A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+    A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
     #region = "ANT"
 

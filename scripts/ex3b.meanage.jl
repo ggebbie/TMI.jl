@@ -12,7 +12,7 @@ using GeoPythonPlot
 #TMIversion = "modern_90x45x33_GH10_GH12"
 TMIversion = "modern_180x90x33_GH11_GH12"
 
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config(TMIversion)
 
 a = meanage(TMIversion,Alu,γ)
 

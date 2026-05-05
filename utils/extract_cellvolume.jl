@@ -11,7 +11,7 @@ versions = ("modern_90x45x33_GH10_GH12","modern_180x90x33_GH11_GH12")
 
 volume = Dict{String,Array{Float64,3}}()
 for vers in versions
-    A, Alu, γ, TMIfile, L, B = config_from_nc(vers)
+    A, Alu, γ, TMIfile, L, B = config(vers)
     v = cellvolume(γ)
 
     # save to a Dictionary

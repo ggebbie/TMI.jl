@@ -18,7 +18,7 @@ using TMI
 using GeoPythonPlot # will load optional extension
 
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 # get observations at surface
 # set them as surface boundary condition
