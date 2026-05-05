@@ -4,7 +4,7 @@ TMIversion = "modern_90x45x33_GH10_GH12"
 
 regionsfile = "regions_90x45.nc"
 
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion);
+A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 region = "ANT"
 

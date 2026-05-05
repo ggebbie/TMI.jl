@@ -7,7 +7,7 @@ using PyPlot, PyCall, Test
 #, Distributions, LinearAlgebra,  Zygote, ForwardDiff, Optim
 
 TMIversion = "modern_90x45x33_G14_v2"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config(TMIversion)
 qPO₄ = readtracer(TMIfile,"qPO₄")
 
 # PO₄ inversion

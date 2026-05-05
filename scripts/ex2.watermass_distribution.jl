@@ -17,7 +17,7 @@ using GeoPythonPlot
 
 #TMIversion = "modern_180x90x33_GH10_GH12"
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config(TMIversion)
 
 # choose water mass (i.e., surface patch) of interest
 # Enhancement: provide list of choices

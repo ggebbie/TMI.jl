@@ -26,7 +26,7 @@ filenetcdf = datadir("TMI_"*TMIversion*".nc")
 NCDataset(filenetcdf)
 
 # read from NetCDF?
-@time A2, Alu2, γ2, TMIfile2, L2, B2 = config_from_nc(TMIversion);
+@time A2, Alu2, γ2, TMIfile2, L2, B2 = config(TMIversion);
 
 # Do NetCDF and mat-files agree?
 @test A2 == A

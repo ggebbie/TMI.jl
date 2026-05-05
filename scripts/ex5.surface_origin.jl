@@ -20,7 +20,7 @@ using Test
 using GeoPythonPlot
 
 TMIversion = "modern_90x45x33_GH10_GH12"
-A, Alu, γ, TMIfile, L, B = config_from_nc(TMIversion)
+A, Alu, γ, TMIfile, L, B = config(TMIversion)
 
 # % choose an interior location X (Xlon[lon], Xlat [lat], Xdepth [m depth]).
 #% -7.38, 115.26E
