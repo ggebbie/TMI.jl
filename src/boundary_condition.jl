@@ -456,7 +456,8 @@ end
 """
 adjustboundarycondition(b::BoundaryCondition,u::BoundaryCondition) = b + u
 function adjustboundarycondition(b::Union{BoundaryCondition,NamedTuple},u::Union{BoundaryCondition,NamedTuple}) 
-    bnew = deepcopy(b)
+    bnew = similar(b)
+    copy_tracer!(bnew, b)
     adjustboundarycondition!(bnew,u)
     return bnew
 end

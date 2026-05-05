@@ -1134,6 +1134,63 @@ function one(field::Field{Float64})
     return d
 end
 
+
+"""
+    replace_tracer(x, tracer)
+Return a new object with the same concrete type and fields as `x`, but with
+`x.tracer` replaced by `tracer`. All other fields are reused from `x`.
+"""
+function replace_tracer(x::T, tracer) where {T}
+    fields = ntuple(fieldcount(T)) do i
+        if fieldname(T, i) === :tracer
+            tracer
+        else
+            getfield(x, i)
+        end
+    end
+
+    return T(fields...)
+end
+
+"""
+    similar(x::Union{BoundaryCondition, Source, Field})
+    similar(x::NamedTuple{names,<:Tuple{Vararg{<:Union{BoundaryCondition, Source, Field}}}})
+
+Return a new object with the same passive fields as `x` and a new uninitialized
+`tracer` array with the same size and element type as `x.tracer`.
+"""
+function Base.similar(x::T) where {T<:Union{BoundaryCondition, Source, Field}}
+    return replace_tracer(x, similar(x.tracer))
+end
+
+function Base.similar(
+    x::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}},
+) where {names}
+    return map(similar, x)
+end
+
+"""
+    copy_tracer!(dest, src)
+
+in-place copy tracer values from `src` into `dest`
+For `BoundaryCondition`, `Source`, and `Field`, this does
+
+    dest.tracer .= src.tracer
+
+For `NamedTuple`s, this copies each matching entry by name.
+
+Returns `dest`.
+"""
+function copy_tracer!(dest::Union{BoundaryCondition, Source, Field}, src::Union{BoundaryCondition, Source, Field})
+    dest.tracer .= src.tracer
+end
+
+function copy_tracer!(dest::NamedTuple, src::NamedTuple)
+    for name in keys(dest)
+        copy_tracer!(dest[name], src[name])
+    end
+end
+
 function Field(field::Field{Float64})
 
     # use depth (could have been lon, lat)
@@ -1263,7 +1320,8 @@ function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
 end
 
 function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = deepcopy(c)
+    e = similar(c)
+    copy_tracer!(e, c)
     add!(e,d)
     return e
 end
@@ -1277,7 +1335,8 @@ function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
 end
 
 function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = deepcopy(c)
+    e = similar(c)
+    copy_tracer!(e, c)
     subtract!(e,d)
     return e
 end
@@ -1293,12 +1352,14 @@ end
 Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
 # right matrix multiply not handled
 function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
-    e = deepcopy(d)
+    e = similar(d)
+    copy_tracer!(e, d)
     mul!(c,e)
     return e
 end
 function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryCondition,Source}
-    e = deepcopy(d)
+    e = similar(d)
+    copy_tracer!(e, d)
     mul!(e,c)
     return e
 end
@@ -1406,7 +1467,7 @@ end
     u need to be known at runtime.
 """
 function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
-    u = deepcopy(u₀)
+    u = similar(u₀)
     unvec!(u,uvec)
     return u
 end
