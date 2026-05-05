@@ -10,16 +10,13 @@ Forward rule for reverse-mode AD through
 `BoundaryCondition` from the compact vector of wet boundary values, using the
 wet mask and metadata stored in `template`.
 
-In Enzyme terminology, a shadow is the storage paired with an active primal
-value. In reverse mode, the output shadow stores the adjoint accumulated from
-downstream computations. Here, the output shadow `gy` represents `ȳ = ∂J/∂y`.
+A shadow is Enzyme's storage for an adjoint value. Here, `gy` denotes the output
+shadow associated with `y`, i.e. `gy = dJ/dy`.
 
-Two methods are needed because Enzyme uses different shadow conventions for
-`Duplicated` and `MixedDuplicated` outputs. For `Duplicated`, the output shadow
-is passed directly to the reverse rule as a `BoundaryCondition`. For
-`MixedDuplicated`, the output shadow is passed by reference, so the reverse rule
-receives a `Ref{BoundaryCondition}`. The mathematical rule is identical in both
-cases; only the shadow container differs.
+Two methods are provided because `unvec` returns a `BoundaryCondition`, but the
+derivative of that return value is not always handed back to the reverse rule in
+the same form. `Duplicated` gives the reverse rule the derivative object
+directly, while `MixedDuplicated` gives it a reference to that object.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -57,22 +54,21 @@ Reverse rule for
 
     y = unvec(template::BoundaryCondition, uvec)
 
-Since `unvec` scatters the compact vector `uvec` into the wet entries of a full
-`BoundaryCondition`, its adjoint gathers the wet entries of the output shadow
-back into the input shadow `uvec.dval`.
+`unvec` scatters the compact vector `uvec` into the wet entries of a full
+`BoundaryCondition`. The reverse rule therefore gathers the wet entries of the
+output shadow `gy` and accumulates them into the input shadow `uvec.dval`.
 
-Equivalently, the adjoint of `unvec` is the corresponding boundary-condition
-packing operation:
+Equivalently, if `guvec = dJ/duvec` and `gy = dJ/dy`, then
 
-    ūvec += vec(ȳ)
+    guvec += vec(gy)
 
-where `ȳ` is the output shadow. This is implemented by accumulating the wet
-tracer entries of `gy` into `uvec.dval`.
+where `vec(gy)` denotes the wet tracer entries
 
-The two methods differ only in how Enzyme passes the output shadow. For
-`Duplicated`, `gy` is received directly as a `BoundaryCondition`. For
-`MixedDuplicated`, `gy` is received as a `Ref{BoundaryCondition}` and must be
-accessed with `gy[]`.
+    gy.tracer[template.wet]
+
+For `Duplicated`, `gy` is received directly as a `BoundaryCondition`. For
+`MixedDuplicated`, `gy` is received as a `Ref{BoundaryCondition}` and is accessed
+with `gy[]`.
 
 The accumulation uses `.+=` because other reverse paths may already have
 contributed to `uvec.dval`.
