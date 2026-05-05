@@ -3,9 +3,8 @@
 
 Forward pass for `y = unvec(template::Field, uvec)`.
 
-`unvec` is the inverse layout operation to `vec`: it rebuilds a `Field` from
-the compact vector of wet grid-cell values. The rule returns `y` and allocates
-`gy = dJ/dy` for the reverse pass.
+`unvec` is the inverse to `vec`. It rebuilds a `Field` from 
+uvec. The rule returns `y` and allocates `gy = dJ/dy` for the reverse pass.
 """
 function augmented_primal(
     config::RevConfigWidth{1},

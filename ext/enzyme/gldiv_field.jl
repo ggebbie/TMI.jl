@@ -59,7 +59,7 @@ function reverse(
     if A isa Duplicated && A.dval isa SparseMatrixCSC
         cvec = c.tracer[γ.wet]
         rows = SparseArrays.rowvals(Asparse)
-        nzv  = SparseArrays.nonzeros(A.dval)
+        nzv  = SparseArrays.nonzeros(A.dval) #view of sparse non-zero entries
         for j in 1:size(Asparse, 2)
             for ki in SparseArrays.nzrange(Asparse, j)
                 i = rows[ki]
