@@ -54,21 +54,19 @@ Reverse rule for
 
     y = unvec(template::BoundaryCondition, uvec)
 
-`unvec` scatters the compact vector `uvec` into the wet entries of a full
-`BoundaryCondition`. The reverse rule therefore gathers the wet entries of the
-output shadow `gy` and accumulates them into the input shadow `uvec.dval`.
+`unvec` rebuilds a full `BoundaryCondition` from the compact vector `uvec`,
+placing those values at the wet boundary entries defined by `template`.
 
-Equivalently, if `guvec = dJ/duvec` and `gy = dJ/dy`, then
+A shadow is Enzyme's storage for an adjoint value.
+Here, `gy` is the derivative storage for `y`, and `uvec.dval` is
+the derivative storage for `uvec`.
 
-    guvec += vec(gy)
+The reverse rule reads the wet tracer entries of `gy` and accumulates them into
+`uvec.dval`; equivalently, if `guvec = dJ/duvec` and `gy = dJ/dy`, then
+`guvec += vec(gy)`, where `vec(gy)` denotes `gy.tracer[template.wet]`.
 
-where `vec(gy)` denotes the wet tracer entries
-
-    gy.tracer[template.wet]
-
-For `Duplicated`, `gy` is received directly as a `BoundaryCondition`. For
-`MixedDuplicated`, `gy` is received as a `Ref{BoundaryCondition}` and is accessed
-with `gy[]`.
+For `Duplicated`, the reverse rule reads directly from `gy`. For
+`MixedDuplicated`, it reads from `gy[]`.
 
 The accumulation uses `.+=` because other reverse paths may already have
 contributed to `uvec.dval`.
