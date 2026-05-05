@@ -1,6 +1,6 @@
 name = "TMI"
 uuid = "582500f6-28c8-4d8f-aabe-b197735ec1d4"
-version = "0.3.7"
+version = "0.3.9"
 authors = ["G Jake Gebbie <ggebbie@whoi.edu>"]
 
 [deps]
