@@ -28,6 +28,7 @@ UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [weakdeps]
 COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 GeoPythonPlot = "1e05a8e1-7dec-4f9e-9d3d-7df52321841b"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MAT = "23992714-dd62-5051-b70f-ba57cb901cac"
@@ -37,6 +38,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 # GeoPythonPlot = {rev = "julia1.12", url = "https://github.com/ggebbie/GeoPythonPlot.jl"}
 
 [extensions]
+TMIEnzymeExt = "Enzyme"
 TMIGeoPythonPlotExt = "GeoPythonPlot"
 TMIJuMPExt = ["JuMP", "COSMO"]
 TMI_MAT_Ext = "MAT"
@@ -64,7 +66,8 @@ UnicodePlots = "3.8"
 julia = "1.12"
 
 [extras]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "COSMO", "JuMP", "MAT", "Statistics"]
+test = ["Test", "COSMO", "Enzyme", "JuMP", "MAT", "Statistics"]

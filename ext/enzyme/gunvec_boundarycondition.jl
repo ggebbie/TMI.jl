@@ -19,6 +19,20 @@ function augmented_primal(
     return AugmentedReturn(y, gy, gy)
 end
 
+function augmented_primal(
+    config::RevConfigWidth{1},
+    func::Const{typeof(unvec)},
+    ::Type{<:MixedDuplicated},
+    template::Const{BoundaryCondition{T,R,N,G,B}},
+    uvec::Duplicated{Vector{T}},
+) where {T <: Real, R <: Real, N, G <: Integer, B <: AbstractArray{T,N}}
+    y = func.val(template.val, uvec.val)
+    primal = needs_primal(config) ? y : nothing
+    gy = needs_shadow(config) ? Enzyme.make_zero(y) : nothing
+    shadow = isnothing(gy) ? nothing : Ref(gy)
+    return AugmentedReturn(primal, shadow, shadow)
+end
+
 """
     reverse(config, unvec, Duplicated, gy, template, uvec)
 
@@ -36,5 +50,17 @@ function reverse(
     uvec::Duplicated{Vector{T}},
 ) where {T <: Real, R <: Real, N, G <: Integer, B <: AbstractArray{T,N}}
     uvec.dval .+= gy.tracer[template.val.wet]
+    return (nothing, nothing)
+end
+
+function reverse(
+    ::RevConfigWidth{1},
+    ::Const{typeof(unvec)},
+    ::Type{<:MixedDuplicated},
+    gy::Base.RefValue{BoundaryCondition{T,R,N,G,B}},
+    template::Const{BoundaryCondition{T,R,N,G,B}},
+    uvec::Duplicated{Vector{T}},
+) where {T <: Real, R <: Real, N, G <: Integer, B <: AbstractArray{T,N}}
+    uvec.dval .+= gy[].tracer[template.val.wet]
     return (nothing, nothing)
 end

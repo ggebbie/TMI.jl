@@ -1585,8 +1585,6 @@ function gobserve(gy::Vector{T},c::Field{T},locs) where T <: Real
     return gc
 end
 
-include(pkgsrcdir("enzyme", "enzyme_rules.jl"))
-
 """
     function location_obs(field, locs, γ)
 """
