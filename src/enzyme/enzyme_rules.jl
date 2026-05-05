@@ -3,8 +3,10 @@
 
 This module collects the custom reverse-mode Enzyme rules for TMI.jl.
 
-The documentation for these rules, including the mathematical derivations,
-is in the `src/enzyme/tutorial/` directory.
+Notation in this directory follows the TMI adjoint convention: `ginput` means
+`dJ/dinput`, where `J` is a scalar cost function. The included files define
+`augmented_primal` and `reverse` methods for operations that Enzyme should not
+differentiate by tracing their generic Julia implementation.
 """
 module TMIEnzymeRules
 
@@ -19,10 +21,10 @@ using ..TMI: cartesianindex, interpweights, observe, step_cartesian, unvec, wate
 import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth
 import Enzyme.EnzymeRules: augmented_primal, needs_primal, needs_shadow, reverse
 
-include("unvec_boundarycondition.jl")
-include("unvec_field.jl")
-include("watermassmatrix.jl")
-include("ldiv_field.jl")
-include("observe.jl")
+include("gunvec_boundarycondition.jl")
+include("gunvec_field.jl")
+include("gwatermassmatrix.jl")
+include("gldiv_field.jl")
+include("gobserve.jl")
 
 end
