@@ -1468,6 +1468,7 @@ end
 """
 function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
     u = similar(u₀)
+    copy_tracer!(u, u₀)
     unvec!(u,uvec)
     return u
 end
