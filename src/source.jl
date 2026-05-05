@@ -64,7 +64,8 @@ readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsou
 writesource(file,q::Source) = write(file,q) 
 
 function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
-    q = deepcopy(q₀)
+    q = similar(q₀)
+    copy_tracer!(q, q₀)
     adjustsource!(q,u)
     return q
 end
@@ -114,7 +115,9 @@ function gadjustsource!(gu::Field,gq::Field)
     gu.tracer[gu.γ.wet] += gq.tracer[gq.γ.wet] 
 end
 function gadjustsource!(gu::Source,gq::Source,q₀::Source)
-    q = deepcopy(q₀)
+    q = similar(q₀)
+    copy_tracer!(q, q₀)
+
     if gq.logscale && gu.logscale
         error("not implemented")
         # gu.tracer[gu.γ.interior] += gq.tracer[gq.γ.interior]
