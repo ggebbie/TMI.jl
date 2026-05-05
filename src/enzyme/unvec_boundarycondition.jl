@@ -76,7 +76,7 @@ function reverse(
         # Handle 0-d boundary case (e.g., single surface cell in a 1-D grid).
         uvec.dval[1] += g_y.tracer[]
     else
-        uvec.dval .+= g_y.tracer[template.val.wet]
+        uvec.dval .+= g_y.tracer[template.val.wet] #this puts the gradietn in the correct vector form
     end
     return (nothing, nothing)
 end

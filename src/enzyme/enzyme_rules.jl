@@ -14,7 +14,7 @@ using SparseArrays
 using Enzyme: Annotation
 
 using ..TMI: BoundaryCondition, Field, Grid, MassFraction
-using ..TMI: cartesianindex, step_cartesian, unvec, watermassmatrix
+using ..TMI: cartesianindex, interpweights, observe, step_cartesian, unvec, watermassmatrix
 
 import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth
 import Enzyme.EnzymeRules: augmented_primal, needs_primal, needs_shadow, reverse
@@ -23,5 +23,6 @@ include("unvec_boundarycondition.jl")
 include("unvec_field.jl")
 include("watermassmatrix.jl")
 include("ldiv_field.jl")
+include("observe.jl")
 
 end

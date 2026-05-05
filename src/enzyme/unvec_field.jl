@@ -67,6 +67,6 @@ function reverse(
     template::Const{Field{T,R,N,F}},
     uvec::Duplicated{Vector{T}},
 ) where {T <: Real, R <: Real, N, F <: AbstractArray{T,N}}
-    uvec.dval .+= g_y.tracer[template.val.γ.wet]
+    uvec.dval .+= g_y.tracer[template.val.γ.wet] #this puts the gradient into the correct vector form 
     return (nothing, nothing)
 end

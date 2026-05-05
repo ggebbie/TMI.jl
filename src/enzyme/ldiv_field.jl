@@ -1,7 +1,7 @@
 """
     function augmented_primal(config, func, ::Type{<:Duplicated}, A, d)::AugmentedReturn
 
-      Custom forward rule for the sparse linear solve `c = A \ d`.
+      Custom forward rule for the sparse linear solve `c = A \\ d`.
 
       This method is called by Enzyme's reverse mode to execute the forward pass.
       It computes the primal solution `c` and prepares the necessary storage for the
@@ -12,7 +12,7 @@
 - `config`::RevConfigWidth{1}: Enzyme's internal configuration for the rule. The `needs_primal`
   and `needs_shadow` functions query this object to determine if the primal value or
   gradient storage are required for the current differentiation task.
-- `func`::Const{typeof(\)}: The function being differentiated (``), wrapped in `Enzyme.Const`
+- `func`::Const{typeof(\\)}: The function being differentiated (``), wrapped in `Enzyme.Const`
   to mark it as a non-differentiable constant.
 - `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying that the
   function's output is differentiable.
@@ -43,7 +43,7 @@ end
 """
     function reverse(config, func, ::Type{<:Duplicated}, tape, A, d)::(Nothing, Nothing)
 
-      Custom reverse rule for the sparse linear solve `c = A \ d`.
+      Custom reverse rule for the sparse linear solve `c = A \\ d`.
 
       This method implements the adjoint method to propagate gradients backward.
       It first solves the adjoint system `A' * λ = g_c` to get the adjoint variable
@@ -53,7 +53,7 @@ end
 
 # Arguments
 - `config`::RevConfigWidth{1}: Enzyme's internal configuration object.
-- `func`::Const{typeof(\)}: The original function, marked as a constant.
+- `func`::Const{typeof(\\)}: The original function, marked as a constant.
 - `::Type{<:Duplicated}`: An unnamed type argument from Enzyme specifying the
   differentiability of the original function's output.
 - `tape`: Contains the values saved from `AugmentedReturn` in the forward pass,
@@ -79,7 +79,7 @@ function reverse(
     γ = c.γ
     g_c_vec = g_c.tracer[γ.wet]
 
-    # Solve the adjoint system: A' * λ = g_c.
+    # Solve the adjoint system: A' * g_d = g_c.
     # The adjoint variable λ is also the gradient g_d.
     g_d_vec = A.val' \ g_c_vec
 
@@ -98,6 +98,48 @@ function reverse(
                 nzv[ki] -= g_d_vec[i] * c_vec[j]
             end
         end
+    end
+
+    return (nothing, nothing)
+end
+
+"""
+    Custom reverse-mode rule for `Alu \\ d::Field` with a constant UMFPACK LU factorization.
+
+The factorization is treated as non-differentiable, so the reverse pass only propagates
+the adjoint solve into the right-hand side: `g_d = Alu' \\ g_c`.
+"""
+function augmented_primal(
+    config::RevConfigWidth{1},
+    func::Const{typeof(\)},
+    ::Type{<:Duplicated},
+    Alu::Annotation{<:SparseArrays.UMFPACK.UmfpackLU},
+    d::Annotation{<:Field},
+)
+    dval = d.val
+    γ = dval.γ
+    tracer = copy(dval.tracer)
+    tracer[γ.wet] .= Alu.val \ dval.tracer[γ.wet]
+    c = Field(tracer, γ, dval.name, dval.longname, dval.units)
+    primal = needs_primal(config) ? c : nothing
+    g_c = needs_shadow(config) ? Enzyme.make_zero(c) : nothing
+
+    return AugmentedReturn(primal, g_c, g_c)
+end
+
+function reverse(
+    ::RevConfigWidth{1},
+    ::Const{typeof(\)},
+    ::Type{<:Duplicated},
+    g_c,
+    Alu::Annotation{<:SparseArrays.UMFPACK.UmfpackLU},
+    d::Annotation{<:Field},
+)
+    if d isa Duplicated
+        γ = d.val.γ
+        g_c_vec = g_c.tracer[γ.wet]
+        g_d_vec = Alu.val' \ g_c_vec
+        d.dval.tracer[γ.wet] .+= g_d_vec
     end
 
     return (nothing, nothing)

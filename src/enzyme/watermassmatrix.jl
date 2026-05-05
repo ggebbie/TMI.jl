@@ -72,7 +72,7 @@ function reverse(
             if m1_val.γ.wet[I]
                 Istep, _ = step_cartesian(I, m1_val.position, γval)
                 # Adjoint of: A[R[I], R[Istep]] = -m1.fraction[I]
-                m1_grad.fraction[I] -= g_A[R[I], R[Istep]]
+                m1_grad.fraction[I] += (-g_A[R[I], R[Istep]])
             end
         end
     end
