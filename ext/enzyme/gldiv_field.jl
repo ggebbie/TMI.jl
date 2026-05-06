@@ -1,10 +1,7 @@
-const SparseOrLU = Union{SparseMatrixCSC, SparseArrays.UMFPACK.UmfpackLU}
-
 """
     augmented_primal(config, \\ , Duplicated, A, d)
 
-Forward pass for `c = A \\ d`, where `d` is a `Field` and `A` is either a
-`SparseMatrixCSC` or a UMFPACK LU factorization.
+Forward pass for `c = A \\ d` with `d::Field` and constant `A`.
 
 Enzyme's reverse mode runs in two phases. The forward rule returns the primal
 output `c`, allocates `gc = dJ/dc` when a reverse pass is needed, and tapes the
@@ -14,40 +11,65 @@ function augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(\)},
     ::Type{<:Duplicated},
-    A::Annotation{<:SparseOrLU},
+    A::Const{<:Union{SparseMatrixCSC, SparseArrays.UMFPACK.UmfpackLU}},
     d::Annotation{<:Field},
 )
-    c = func.val(A.val, d.val)
+    γ = d.val.γ
+    dvec = d.val.tracer[γ.wet]
+    # Keep this on the wet-vector solve path. Calling `func.val(A.val, d.val)`
+    # dispatches to `\(A, d::Field)`, which has been unstable in long Enzyme
+    # optimization loops.
+    cvec = A.val \ dvec
+    c = zero(d.val)
+    c.tracer[γ.wet] .= cvec
     primal = needs_primal(config) ? c : nothing
     gc = needs_shadow(config) ? Enzyme.make_zero(c) : nothing
-    Asparse = needs_shadow(config) ? if A.val isa SparseMatrixCSC
-            A.val
-        else
-            SparseMatrixCSC(A.val.m, A.val.n, A.val.colptr .+ 1, A.val.rowval .+ 1, copy(A.val.nzval))
-        end : nothing
-    return AugmentedReturn(primal, gc, (c, gc, Asparse))
+    return AugmentedReturn(primal, gc, gc)
 end
 
 """
-    reverse(config, \\ , Duplicated, tape, A, d)
+    augmented_primal(config, \\ , Duplicated, A, d)
 
-Reverse pass for `c = A \\ d`.
+Forward pass for `c = A \\ d` with active sparse `A`.
+
+This method is for `A::Duplicated{SparseMatrixCSC}` and tapes `(c, gc)` so the
+reverse pass can accumulate both `dJ/dd` and `dJ/dA`.
+"""
+function augmented_primal(
+    config::RevConfigWidth{1},
+    func::Const{typeof(\)},
+    ::Type{<:Duplicated},
+    A::Duplicated{<:SparseMatrixCSC},
+    d::Annotation{<:Field},
+)
+    γ = d.val.γ
+    dvec = d.val.tracer[γ.wet]
+    # Same reason as above: avoid `\(A, d::Field)` dispatch in Enzyme loops.
+    cvec = A.val \ dvec
+    c = zero(d.val)
+    c.tracer[γ.wet] .= cvec
+    primal = needs_primal(config) ? c : nothing
+    gc = needs_shadow(config) ? Enzyme.make_zero(c) : nothing
+    return AugmentedReturn(primal, gc, (c, gc))
+end
+
+"""
+    reverse(config, \\ , Duplicated, gc, A, d)
+
+Reverse pass for `c = A \\ d` with constant `A`.
 
 Given `gc = dJ/dc`, the adjoint equation is `A' * gd = gc`, so
-`gd = dJ/dd = A' \\ gc`. If `A` itself is active and its shadow is a sparse
-matrix, the same solve gives `gA = dJ/dA = -gd * c'`, accumulated only on the
-stored sparse pattern.
+`gd = dJ/dd = A' \\ gc`.
 """
 function reverse(
     ::RevConfigWidth{1},
     ::Const{typeof(\)},
     ::Type{<:Duplicated},
-    tape,
-    A::Annotation{<:SparseOrLU},
+    gc,
+    A::Const{<:Union{SparseMatrixCSC, SparseArrays.UMFPACK.UmfpackLU}},
     d::Annotation{<:Field},
 )
-    c, gc, Asparse = tape
-    γ = c.γ
+    γ = d.val.γ
     gcvec = gc.tracer[γ.wet]
 
     gdvec = A.val' \ gcvec
@@ -56,15 +78,41 @@ function reverse(
         d.dval.tracer[γ.wet] .+= gdvec
     end
 
-    if A isa Duplicated && A.dval isa SparseMatrixCSC
-        cvec = c.tracer[γ.wet]
-        rows = SparseArrays.rowvals(Asparse)
-        nzv  = SparseArrays.nonzeros(A.dval) #view of sparse non-zero entries
-        for j in 1:size(Asparse, 2)
-            for ki in SparseArrays.nzrange(Asparse, j)
-                i = rows[ki]
-                nzv[ki] -= gdvec[i] * cvec[j]
-            end
+    return (nothing, nothing)
+end
+
+"""
+    reverse(config, \\ , Duplicated, tape, A, d)
+
+Reverse pass for `c = A \\ d` with active sparse `A`.
+
+Accumulates `dJ/dd = A' \\ gc` and `dJ/dA = -gd*c'` on the stored sparse
+pattern of `A.dval`.
+"""
+function reverse(
+    ::RevConfigWidth{1},
+    ::Const{typeof(\)},
+    ::Type{<:Duplicated},
+    tape,
+    A::Duplicated{<:SparseMatrixCSC},
+    d::Annotation{<:Field},
+)
+    c, gc = tape
+    γ = d.val.γ
+    gcvec = gc.tracer[γ.wet]
+    gdvec = A.val' \ gcvec
+
+    if d isa Duplicated
+        d.dval.tracer[γ.wet] .+= gdvec
+    end
+
+    cvec = c.tracer[γ.wet]
+    rows = SparseArrays.rowvals(A.val)
+    nzv = SparseArrays.nonzeros(A.dval)
+    for j in 1:size(A.val, 2)
+        for ki in SparseArrays.nzrange(A.val, j)
+            i = rows[ki]
+            nzv[ki] -= gdvec[i] * cvec[j]
         end
     end
 

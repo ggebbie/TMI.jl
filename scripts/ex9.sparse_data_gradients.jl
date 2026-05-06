@@ -3,7 +3,6 @@ import Pkg; Pkg.activate(".")
 using TMI
 using Enzyme
 using LinearAlgebra
-using Statistics
 using BenchmarkTools
 
 function costfunction_point_obs_value(uvec::Vector, Alu, b, u₀, y::Vector, W⁻::Diagonal, locs, Q⁻, γ::Grid, guvec)
@@ -12,7 +11,7 @@ end
 
 function enzyme_gradient!(grad, p)
     fill!(grad, 0)
-    Enzyme.autodiff(Enzyme.set_runtime_activity(Reverse), costfunction_point_obs_value, Duplicated(p.uvec, grad), Const(p.Alu), Const(p.b), Const(p.u₀), Const(p.y), Const(p.W⁻), Const(p.locs), Const(p.Q⁻), Const(p.γ), Const(nothing))
+    Enzyme.autodiff(set_runtime_activity(Reverse), costfunction_point_obs_value, Duplicated(p.uvec, grad), Const(p.Alu), Const(p.b), Const(p.u₀), Const(p.y), Const(p.W⁻), Const(p.locs), Const(p.Q⁻), Const(p.γ), Const(nothing))
     return grad
 end
 
@@ -29,26 +28,28 @@ correlation_length = 1000.0
 
 A, Alu, γ, TMIfile, L, B = config(TMIversion)
 
-u₀ = zerosurfaceboundary(γ)
+u₀ = (;surface = zerosurfaceboundary(γ))
+# u₀  = zerosurfaceboundary(γ)
+
 uvec = copy(vec(u₀))
 
 y, W⁻, ctrue, ytrue, locs, wis = synthetic_observations(TMIversion, "θ", γ, N)
-b = mean(y) * onesurfaceboundary(γ)
+b = (;surface = mean(y) * onesurfaceboundary(γ))
+# b  = mean(y) * onesurfaceboundary(γ)
 
 Dg = gaussiandistancematrix(γ, σb, correlation_length)
 Q⁻ = inv(cholesky(Dg))
 
-problem = (; uvec, Alu, b, u₀, y, W⁻, wis, locs, Q⁻, γ)
+parameters = (; uvec, Alu, b, u₀, y, W⁻, wis, locs, Q⁻, γ)
 
-J, guvec = manual_gradient(problem)
+J, guvec = manual_gradient(parameters)
 
 grad_uvec_ad = Enzyme.make_zero(uvec)
-enzyme_gradient!(grad_uvec_ad, problem)
+enzyme_gradient!(grad_uvec_ad, parameters)
 
 absolute_error = maximum(abs.(grad_uvec_ad .- guvec))
-
-manual_benchmark = @benchmark manual_gradient($problem)
-enzyme_benchmark = @benchmark enzyme_gradient!($grad_uvec_ad, $problem)
+manual_benchmark = @benchmark manual_gradient($parameters)
+enzyme_benchmark = @benchmark enzyme_gradient!($grad_uvec_ad, $parameters)
 
 println("Gradient benchmark summary:")
 println("  J = ", J)

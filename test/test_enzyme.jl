@@ -13,28 +13,37 @@ function finite_difference_gradient(f, x; δ = 1e-6)
 end
 
 @testset "Enzyme Reverse Readiness" begin
-    ngrid = (20,)
-    xmax = 1000.0
-    lon = collect(range(0.0, xmax, length = ngrid[1]))
-    tracer = collect(1.0 .- lon ./ xmax)
+    ngrid = (4, 3, 3)
+    lon = collect(range(0.0, 1000.0, length = ngrid[1]))
+    lat = collect(range(0.0, 800.0, length = ngrid[2]))
+    dep = collect(range(0.0, 500.0, length = ngrid[3]))
 
-    axes = (lon,)
+    axes = (lon, lat, dep)
     wet = trues(ngrid)
     interior = copy(wet)
-    interior[begin] = false
-    interior[end] = false
+    interior[:, :, 1] .= false
+    interior[:, :, end] .= false
+    interior[:, 1, :] .= false
+    interior[:, end, :] .= false
+    interior[1, :, :] .= false
+    interior[end, :, :] .= false
 
-    wrap = (false,)
-    Δ = [CartesianIndex(1,), CartesianIndex(-1,)]
+    wrap = (false, false, false)
+    Δ = [
+        CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0),
+        CartesianIndex(0, 1, 0), CartesianIndex(0, -1, 0),
+        CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1),
+    ]
     γ = Grid(axes, wet, interior, wrap, Δ)
 
     m = massfractions_isotropic(γ)
+    tracer = fill(1.0, ngrid)
     c = Field(tracer, γ, :c, "linear equilibrated tracer", "μmol/kg")
 
     b_template = TMI.getboundarycondition(c, 1, 1, γ)
     bvec0 = vec(b_template)
 
-    q_tracer = collect(range(0.0, 0.1, length = ngrid[1]))
+    q_tracer = fill(0.01, ngrid)
     q_template = Field(q_tracer, γ, :q, "interior source", "μmol/kg")
     qvec0 = vec(q_template)
 
@@ -72,18 +81,28 @@ end
             qvec0;
             δ,
         )
+
+        m_locs = [(k, I) for k in eachindex(m) for I in TMI.cartesianindex(m[k].γ.wet)]
+        mvec0 = [m[k].fraction[I] for (k, I) in m_locs]
+
+        m_from_vec = function (mvec)
+            mout = deepcopy(m)
+            for (ii, (k, I)) in enumerate(m_locs)
+                mout[k].fraction[I] = mvec[ii]
+            end
+            return mout
+        end
+
+        grad_m_fd_vec = finite_difference_gradient(
+            mv -> J(b_template, bvec0, q_template, qvec0, m_from_vec(mv), γ),
+            mvec0;
+            δ,
+        )
+
         grad_m_fd = Enzyme.make_zero(m)
 
-        for k in eachindex(m)
-            m1 = m[k]
-            for I in TMI.cartesianindex(m1.γ.wet)
-                m_plus = deepcopy(m); m_plus[k].fraction[I] += δ
-                m_minus = deepcopy(m); m_minus[k].fraction[I] -= δ
-
-                grad_m_fd[k].fraction[I] =
-                    (J(b_template, bvec0, q_template, qvec0, m_plus, γ) -
-                     J(b_template, bvec0, q_template, qvec0, m_minus, γ)) / (2δ)
-            end
+        for (ii, (k, I)) in enumerate(m_locs)
+            grad_m_fd[k].fraction[I] = grad_m_fd_vec[ii]
         end
 
         @test all(isfinite.(grad_b_ad))

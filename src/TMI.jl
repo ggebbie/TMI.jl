@@ -1254,7 +1254,10 @@ end
 """
     zero(c::Field) = zeros(c.γ)
 """
-Base.zero(c::Field) = zeros(c.γ)
+function Base.zero(c::T) where {T<:Union{BoundaryCondition, Source, Field}}
+    return replace_tracer(c, zero(c.tracer))
+end
+Base.zero(c::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}}) where {names} = map(zero, c)
 
 
 # Define maximum for Field to not include NaNs
@@ -1318,10 +1321,15 @@ function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] += d.tracer[wet(d)]
 end
+function add!(c::NamedTuple,d::NamedTuple)
+    for k in keys(c)
+        haskey(d,k) && add!(c[k], d[k])
+    end
+end
 
 function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = similar(c)
-    copy_tracer!(e, c)
+    e = zero(c)
+    add!(e,c)
     add!(e,d)
     return e
 end
@@ -1335,8 +1343,8 @@ function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
 end
 
 function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = similar(c)
-    copy_tracer!(e, c)
+    e = zero(c)
+    add!(e,c)
     subtract!(e,d)
     return e
 end
@@ -1352,14 +1360,14 @@ end
 Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
 # right matrix multiply not handled
 function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
-    e = similar(d)
-    copy_tracer!(e, d)
+    e = zero(d)
+    add!(e,d)
     mul!(c,e)
     return e
 end
 function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryCondition,Source}
-    e = similar(d)
-    copy_tracer!(e, d)
+    e = zero(d)
+    add!(e,d)
     mul!(e,c)
     return e
 end
@@ -1466,8 +1474,9 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
-    u = similar(u₀)
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition,Source},uvec::Vector) #where T <: Real
+    u = zero(u₀)
+    add!(u, u₀)
     unvec!(u,uvec)
     return u
 end

@@ -51,3 +51,29 @@ function Enzyme.accumulate_into(
     end
     return accumulated[gab_ref]
 end
+
+"""
+    Enzyme.accumulate_into(gab_ref::Ref{<:NamedTuple{...,Tuple{Vararg{<:Union{Source,Field,BoundaryCondition}}}}}, accumulated, ge)
+
+Merge a gradient contribution into a `NamedTuple` of TMI structs
+(`BoundaryCondition`, `Field`, `Source`) by accumulating tracer gradients entry
+wise on wet points. This is needed when Enzyme differentiates code paths that
+`deepcopy` a named bundle of boundary conditions.
+"""
+function Enzyme.accumulate_into(
+    gab_ref::Base.RefValue{T},
+    accumulated::IdDict,
+    ge::T,
+) where {names, T <: NamedTuple{names, <:Tuple{Vararg{<:Union{Source, Field, BoundaryCondition}}}}}
+    if !haskey(accumulated, gab_ref)
+        gab = gab_ref[]
+        for k in keys(gab)
+            gabk = gab[k]
+            gek = ge[k]
+            gabk.tracer[wet(gabk)] .+= gek.tracer[wet(gek)]
+            gek.tracer[wet(gek)] .= zero(eltype(gek.tracer))
+        end
+        accumulated[gab_ref] = (gab_ref, ge)
+    end
+    return accumulated[gab_ref]
+end
