@@ -11,7 +11,7 @@ end
 
 function enzyme_gradient!(grad, p)
     fill!(grad, 0)
-    Enzyme.autodiff(set_runtime_activity(Reverse), costfunction_point_obs_value, Duplicated(p.uvec, grad), Const(p.Alu), Const(p.b), Const(p.u₀), Const(p.y), Const(p.W⁻), Const(p.locs), Const(p.Q⁻), Const(p.γ), Const(nothing))
+    Enzyme.autodiff(set_runtime_activity(Reverse), Const(costfunction_point_obs_value), Duplicated(p.uvec, grad), Const(p.Alu), Const(p.b), Const(p.u₀), Const(p.y), Const(p.W⁻), Const(p.locs), Const(p.Q⁻), Const(p.γ), Const(nothing))
     return grad
 end
 

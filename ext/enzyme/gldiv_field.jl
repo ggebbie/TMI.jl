@@ -117,8 +117,8 @@ function reverse(
         Asparse = SparseMatrixCSC(
             A.val.m,
             A.val.n,
-            deepcopy(A.val.colptr .+ 1),
-            deepcopy(A.val.rowval .+ 1),
+            copy(A.val.colptr .+ 1),
+            copy(A.val.rowval .+ 1),
             zeros(eltype(A.val.nzval), length(A.val.nzval)),
         )
         nzv = A.dval.nzval
