@@ -34,6 +34,13 @@ This method computes `c = A \\ d` with `d::Field` and constant `A`.
 Enzyme's reverse mode runs in two phases. The forward rule returns the primal
 output `c`, allocates `gc = dJ/dc` when a reverse pass is needed, and tapes the
 values needed by `reverse`.
+
+Linked TMI function:
+- `TMI.\\(A, d::Field)`
+
+Arguments:
+- `A`: constant sparse/LU operator.
+- `d`: active or mixed-active `Field` right-hand side.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -66,6 +73,13 @@ when `A` is active.
 
 This method is for `A::Duplicated{SparseMatrixCSC}` and tapes `(c, gc)` so the
 reverse pass can accumulate both `dJ/dd` and `dJ/dA`.
+
+Linked TMI function:
+- `TMI.\\(A, d::Field)`
+
+Arguments:
+- `A`: active sparse/LU operator.
+- `d`: active or mixed-active `Field` right-hand side.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -96,6 +110,14 @@ with constant `A`.
 
 Given `gc = dJ/dc`, the adjoint equation is `A' * gd = gc`, so
 `gd = dJ/dd = A' \\ gc`.
+
+Linked TMI function:
+- `TMI.\\(A, d::Field)`
+
+Arguments:
+- `gc`: gradient w.r.t. solve output `c`.
+- `A`: constant sparse/LU operator.
+- `d`: input `Field` receiving `dJ/dd`.
 """
 function reverse(
     ::RevConfigWidth{1},
@@ -128,6 +150,14 @@ with active sparse `A`.
 
 Accumulates `dJ/dd = A' \\ gc` and `dJ/dA = -gd*c'` on the stored sparse
 pattern of `A.dval`.
+
+Linked TMI function:
+- `TMI.\\(A, d::Field)`
+
+Arguments:
+- `tape`: `(c, gc)` from the forward rule.
+- `A`: active `SparseMatrixCSC` operator receiving `dJ/dA`.
+- `d`: input `Field` receiving `dJ/dd`.
 """
 function reverse(
     ::RevConfigWidth{1},
@@ -159,6 +189,20 @@ function reverse(
     return (nothing, nothing)
 end
 
+"""
+    `reverse(config, \\, Duplicated, tape, A, d)` for `A::Duplicated{UmfpackLU}`
+
+Same adjoint as the sparse-matrix case, but writes `dJ/dA` into `A.dval.nzval`
+using UMFPACK's stored sparsity pattern.
+
+Linked TMI function:
+- `TMI.\\(A, d::Field)`
+
+Arguments:
+- `tape`: `(c, gc)` from the forward rule.
+- `A`: active `UmfpackLU` operator receiving `dJ/dA`.
+- `d`: input `Field` receiving `dJ/dd`.
+"""
 function reverse(
     ::RevConfigWidth{1},
     ::Const{typeof(\)},

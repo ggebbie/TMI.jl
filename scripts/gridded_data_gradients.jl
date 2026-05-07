@@ -6,12 +6,28 @@ using LinearAlgebra
 using Printf
 using BenchmarkTools
 
+"""
+Compare manual adjoint gradients and Enzyme reverse-mode gradients for
+`costfunction_gridded_obs!` on gridded observations.
+"""
+
+"""
+    gridded_obs_cost_with_grad!(..., c0_work, ..., guvec)
+
+Scalar cost wrapper that writes `∂J/∂uvec` into `guvec`.
+`c0_work` is mutated by `costfunction_gridded_obs!`.
+"""
 function gridded_obs_cost_with_grad!(
     uvec::Vector, Alu, b, u₀, c0_work::Field, W⁻::Diagonal, γ::Grid, guvec,
 )
     return TMI.costfunction_gridded_obs!(0.0, guvec, uvec, Alu, b, u₀, c0_work, W⁻, γ)
 end
 
+"""
+    manual_gradient!(grad, ...)
+
+Reference gradient path using TMI's hand-written adjoint.
+"""
 function manual_gradient!(
     grad, uvec::Vector, Alu, b, u₀, c0::Field, W⁻::Diagonal, γ::Grid,
 )
@@ -21,6 +37,12 @@ function manual_gradient!(
     return J, grad
 end
 
+"""
+    enzyme_gradient!(grad, ...)
+
+Enzyme reverse-mode gradient path for the same scalar objective.
+Only `uvec` is active; model/data objects are constants.
+"""
 function enzyme_gradient!(
     grad, uvec::Vector, Alu, b, u₀, c0::Field, W⁻::Diagonal, γ::Grid,
 )
@@ -63,7 +85,6 @@ J, _ = manual_gradient!(manual_grad, uvec, Alu, b, u₀, c0, W⁻, γ)
 grad_uvec_ad = Enzyme.make_zero(uvec)
 enzyme_gradient!(grad_uvec_ad, uvec, Alu, b, u₀, c0, W⁻, γ)
 
-absolute_error = maximum(abs.(grad_uvec_ad .- manual_grad))
 manual_wrapper!(uvec_in, grad_out) = manual_gradient!(grad_out, uvec_in, Alu, b, u₀, c0, W⁻, γ)
 enzyme_wrapper!(uvec_in, grad_out) = enzyme_gradient!(grad_out, uvec_in, Alu, b, u₀, c0, W⁻, γ)
 

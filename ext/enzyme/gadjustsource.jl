@@ -8,6 +8,13 @@ Custom reverse-mode primal rule for
 This rule currently supports only the non-logscale path (`q.logscale == false`
 and `u.logscale == false`), which is the path used in current enzyme tests and
 ex9 workflows.
+
+Linked TMI function:
+- `TMI.adjustsource!`
+
+Arguments:
+- `q`: destination source term.
+- `u`: additive source update.
 """
 function augmented_primal(
     ::RevConfigWidth{1},
@@ -28,6 +35,13 @@ end
 For `q += u` on interior points, the local Jacobian wrt `u` is identity. The
 incoming gradient on `q` is accumulated into `u`. This explicit reverse rule
 is needed so this mutating update remains differentiable in Enzyme test/ex9.
+
+Linked TMI function:
+- `TMI.adjustsource!`
+
+Arguments:
+- `q`: source from forward pass carrying incoming gradient.
+- `u`: source update receiving accumulated gradient.
 """
 function reverse(::RevConfigWidth{1}, ::Const{typeof(adjustsource!)}, ::Type{<:Const},
     tape, q::Annotation{<:Source}, u::Annotation{<:Source})

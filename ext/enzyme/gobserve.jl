@@ -8,6 +8,13 @@ but skips location-to-index conversion.
 Why this exists:
 - Enzyme was unstable when differentiating directly through `observe(..., wis, γ)`.
 - The custom observe rule tapes wet-point weights and uses them in reverse.
+
+Linked TMI function:
+- `TMI.interpweights`
+
+Arguments:
+- `wis`: one interpolation-index tuple.
+- `γ`: grid metadata.
 """
 function interpweights(
     wis::Tuple{I, I, I},
@@ -39,6 +46,14 @@ Forward pass for point observations under Enzyme.
 Both methods compute the primal via `func.val(...)` and tape a shared
 representation: one wet-point weight vector per observation. That makes the
 reverse pass identical for `locs` and `wis` call paths.
+
+Linked TMI function:
+- `TMI.observe`
+
+Arguments:
+- `c`: active tracer field.
+- `locs`/`wis`: point-observation sampling definition.
+- `γ`: grid metadata.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -86,6 +101,15 @@ Reverse pass for point observations.
 `tape` contains `(gy, wetweights)`, where `wetweights[i]` is the local Jacobian
 of observation `i` with respect to `c.tracer[c.γ.wet]`. Because both forward
 paths tape the same format, reverse accumulation is shared.
+
+Linked TMI function:
+- `TMI.observe`
+
+Arguments:
+- `tape`: `(gy, wetweights)` from forward pass.
+- `c`: active tracer field receiving gradients.
+- `locs_or_wis`: constant observation sampling definition.
+- `γ`: grid metadata.
 """
 function reverse(
     ::RevConfigWidth{1},

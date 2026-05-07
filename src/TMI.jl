@@ -1333,6 +1333,12 @@ function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     add!(e,d)
     return e
 end
+function Base.:+(c::NamedTuple,d::NamedTuple)
+    e = zero(c)
+    add!(e,c)
+    add!(e,d)
+    return e
+end
 
 function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     if wet(c) != wet(d) # check conformability

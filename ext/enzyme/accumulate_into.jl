@@ -3,25 +3,13 @@ import Enzyme
 """
     Enzyme.accumulate_into(gab_ref::Ref{<:Union{Source,Field,BoundaryCondition,MassFraction}}, accumulated, ge)
 
-Merge a gradient contribution into the accumulator for a TMI struct
-(`Source`, `Field`, `BoundaryCondition`) during Enzyme's reverse pass.
-For `e = a + b`, `ge = dJ/de` flows back as `ga += ge` and `gb += ge` on
-wet tracer entries. Metadata (axes, masks, names, units) is not
-differentiable.
+Merge one reverse-mode gradient contribution `ge` into a TMI accumulator `gab`.
+This handles both array fields used in this codebase:
+- `.tracer` for `Source`, `Field`, `BoundaryCondition`
+- `.fraction` for `MassFraction`
 
-A custom rule for `+` doesn't work. In `Const(a) + Duplicated(b)`, Enzyme
-sees `a` and `b` as structurally identical and rejects the setup, since
-`a.tracer` could be differentiated like `b.tracer` but `Const` says it
-should not. `A \\ d` (see `gldiv_field.jl`) avoids this because the solve
-goes through UMFPACK / SuiteSparse (no Julia code to trace) and has only
-one `Field` operand.
-
-Enzyme already differentiates the elementwise tracer math in `+`. The
-only gap is the per-struct merge. This method adds `ge.tracer` into
-`gab.tracer` on wet entries, leaves metadata alone, and zeros `ge.tracer`
-so it is not counted twice. The same merge serves `-`, scalar `*`, and
-broadcasting — Enzyme has already applied the sign or scale to `ge`
-upstream.
+Only wet-point values are differentiable. Metadata is copied through unchanged.
+After merge, `ge` is zeroed so Enzyme will not count it twice.
 
 Arguments:
 - `gab_ref`: reference to the gradient accumulator (`ga` or `gb`).
@@ -63,10 +51,9 @@ end
 """
     Enzyme.accumulate_into(gab_ref::Ref{<:NamedTuple{...,Tuple{Vararg{<:Union{Source,Field,BoundaryCondition,MassFraction}}}}}, accumulated, ge)
 
-Merge a gradient contribution into a `NamedTuple` of TMI structs
-(`BoundaryCondition`, `Field`, `Source`) by accumulating tracer gradients entry
-wise on wet points. This is needed when Enzyme differentiates code paths that
-`deepcopy` a named bundle of boundary conditions.
+Same merge operation as above, but for `NamedTuple` bundles of TMI controls.
+Each entry is merged on wet points with the right storage array
+(`.tracer` vs `.fraction`).
 """
 function Enzyme.accumulate_into(
     gab_ref::Base.RefValue{T},

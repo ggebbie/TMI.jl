@@ -7,12 +7,27 @@ using LinearAlgebra
 using Printf
 using BenchmarkTools
 
+"""
+Compare manual adjoint gradients and Enzyme reverse-mode gradients for
+`costfunction_point_obs!` on sparse (pointwise) observations.
+"""
+
+"""
+    point_obs_cost_with_grad!(..., guvec)
+
+Scalar cost wrapper that writes `∂J/∂uvec` into `guvec`.
+"""
 function point_obs_cost_with_grad!(
     uvec::Vector, Alu, b, u₀, y::Vector, W⁻::Diagonal, wis, locs, Q⁻, γ::Grid, guvec,
 )
     return TMI.costfunction_point_obs!(0.0, guvec, uvec, Alu, b, u₀, y, W⁻, wis, locs, Q⁻, γ)
 end
 
+"""
+    manual_gradient!(grad, ...)
+
+Reference gradient path using TMI's hand-written adjoint.
+"""
 function manual_gradient!(
     grad, uvec::Vector, Alu, b, u₀, y::Vector, W⁻::Diagonal, wis, locs, Q⁻, γ::Grid,
 )
@@ -21,6 +36,12 @@ function manual_gradient!(
     return J, grad
 end
 
+"""
+    enzyme_gradient!(grad, ...)
+
+Enzyme reverse-mode gradient path for the same scalar objective.
+Only `uvec` is active; model/data objects are constants.
+"""
 function enzyme_gradient!(
     grad, uvec::Vector, Alu, b, u₀, y::Vector, W⁻::Diagonal, wis, locs, Q⁻, γ::Grid,
 )

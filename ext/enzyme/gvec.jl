@@ -3,6 +3,14 @@
 
 Custom `vec` rules for heterogeneous NamedTuple controls. This avoids Enzyme
 type-activity ambiguity on packed controls used by the inversion test path.
+
+Linked TMI function:
+- `TMI.vec`
+
+Arguments:
+- `config`: Enzyme reverse-mode config.
+- `func`: wrapped `vec`.
+- `u`: control NamedTuple annotation.
 """
 function augmented_primal(config::RevConfigWidth{1}, func::Const{typeof(vec)},
     ::Type{<:Duplicated}, u::Annotation{NT}) where
@@ -27,6 +35,13 @@ end
 
 Adjoint for `vec`: scatter vector gradients back into control storage
 (`.tracer` for tracer-like controls, `.fraction` for MassFraction).
+
+Linked TMI function:
+- `TMI.vec`
+
+Arguments:
+- `gy`: gradient w.r.t. packed vector output.
+- `u`: control NamedTuple annotation with shadow storage.
 """
 function reverse(::RevConfigWidth{1}, ::Const{typeof(vec)}, ::Type{<:Duplicated},
     gy::Vector{T}, u::Annotation{NT}) where

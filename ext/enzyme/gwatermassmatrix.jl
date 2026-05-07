@@ -5,6 +5,13 @@ Forward pass for `A = watermassmatrix(m, γ)`.
 
 The mass fractions `m` are active. The grid `γ` is constant. The rule returns
 the sparse matrix `A` and allocates `gA = dJ/dA` for the reverse pass.
+
+Linked TMI function:
+- `TMI.watermassmatrix`
+
+Arguments:
+- `m`: active mass-fraction controls.
+- `γ`: constant grid metadata.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
@@ -25,6 +32,14 @@ Reverse pass for `watermassmatrix`.
 
 Here `gA = dJ/dA`. The rule replays the sparse-matrix assembly pattern and
 accumulates each matching entry into `gm = dJ/dm`, stored in `m.dval`.
+
+Linked TMI function:
+- `TMI.watermassmatrix`
+
+Arguments:
+- `gA`: gradient w.r.t. matrix output.
+- `m`: active mass-fraction controls receiving gradients.
+- `γ`: constant grid metadata.
 """
 function reverse(
     ::RevConfigWidth{1},

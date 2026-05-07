@@ -10,6 +10,15 @@ Supports tracer-like `u` and NamedTuples of tracer-like TMI structs.
 Reason this custom rule exists: in this workflow, differentiating through
 generic `unvec`/`unvec!` dispatch can trigger Enzyme type-activity failures on
 heterogeneous NamedTuple controls.
+
+Linked TMI function:
+- `TMI.unvec!`
+
+Arguments:
+- `config`: Enzyme reverse-mode config.
+- `func`: wrapped `unvec!`.
+- `u`: destination control object (or NamedTuple of controls).
+- `uvec`: packed control vector.
 """
 function augmented_primal(::RevConfigWidth{1}, func::Const{typeof(unvec!)}, ::Type{<:Const},
     u::Annotation{U}, uvec::Annotation{<:Vector{T}}) where {U<:Union{Field, BoundaryCondition, Source, MassFraction}, T<:Real}
@@ -34,6 +43,13 @@ end
 Adjoint for `unvec!`: gather gradients from rebuilt controls back into `uvec`
 with the same packing as `vec`. Needed so the AD path mirrors control packing
 without relying on Enzyme to infer tuple-entry activity through mutation.
+
+Linked TMI function:
+- `TMI.unvec!`
+
+Arguments:
+- `u`: mutated control object from forward pass.
+- `uvec`: packed control vector shadow to accumulate into.
 """
 function reverse(::RevConfigWidth{1}, ::Const{typeof(unvec!)}, ::Type{<:Const}, tape,
     u::Annotation{U}, uvec::Annotation{<:Vector{T}}) where

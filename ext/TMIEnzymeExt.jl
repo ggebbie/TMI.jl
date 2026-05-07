@@ -1,5 +1,13 @@
-# TMIEnzymeExt is loaded automatically
-# whenever both `TMI` and `Enzyme` are present in the active environment. 
+"""
+TMIEnzymeExt is loaded automatically when both `TMI` and `Enzyme` are in the
+active environment.
+
+These rules are written to make Enzyme work on the current Enzyme tests and
+gradient scripts in this repo.
+
+Additional rules may still be needed for TMI operators not exercised by those
+tests/scripts.
+"""
 
 module TMIEnzymeExt
 

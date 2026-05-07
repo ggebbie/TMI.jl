@@ -1,15 +1,26 @@
 # TMI.jl Enzyme Rules
 
-This directory contains custom reverse-mode rules for Enzyme.jl.
+This directory contains custom reverse-mode rules used by `TMIEnzymeExt`.
 
-The files are named with a `g` prefix because they implement adjoint, or gradient,
-propagation. In rule code, `ginput` means `dJ/dinput`, where `J` is a scalar cost
-function.
+Why these rules exist:
+- They make Enzyme run on the current Enzyme tests and gradient scripts in
+  this repo.
+- Generic Enzyme tracing can fail on some mutating and sparse-operator paths.
+- Additional rules may be needed for TMI operators that are not covered by the
+  current tests/scripts.
 
-- `gunvec_boundarycondition.jl`: vector-to-`BoundaryCondition` scatter/gather.
-- `gunvec_field.jl`: vector-to-`Field` scatter/gather.
-- `gwatermassmatrix.jl`: mass fractions to sparse water-mass matrix.
-- `gldiv_field.jl`: sparse or LU linear solve with a `Field` right-hand side.
-- `gobserve.jl`: point observations and their interpolation adjoint.
+Files:
+- `gunvec_inplace.jl`: reverse rules linked to `TMI.unvec!` on tracer-like controls and
+  heterogeneous `NamedTuple` control bundles.
+- `gvec.jl`: reverse rules linked to `TMI.vec` so packed control vectors map cleanly back
+  to TMI structs (`Field`, `BoundaryCondition`, `Source`, `MassFraction`).
+- `gwatermassmatrix.jl`: reverse rule linked to `TMI.watermassmatrix(m, γ)`.
+- `gldiv_field.jl`: reverse rules linked to `TMI.\\(A, d::Field)` with sparse/LU
+  support and `dJ/dA` accumulation.
+- `gobserve.jl`: reverse rules linked to `TMI.observe`.
+- `gadjustsource.jl`: reverse rule linked to mutating `TMI.adjustsource!`.
+- `accumulate_into.jl`: Enzyme accumulation hooks used by TMI overloaded
+  arithmetic on `Field`/`BoundaryCondition`/`Source`/`MassFraction`.
 
-`enzyme_rules.jl` collects these methods into `TMIEnzymeRules`.
+If you are new to Enzyme in this repo, start from `gvec.jl` and
+`gunvec_inplace.jl`, then read `gldiv_field.jl` for sparse-solve adjoints.
