@@ -1254,7 +1254,10 @@ end
 """
     zero(c::Field) = zeros(c.γ)
 """
-Base.zero(c::Field) = zeros(c.γ)
+function Base.zero(c::T) where {T<:Union{BoundaryCondition, Source, Field}}
+    return replace_tracer(c, zero(c.tracer))
+end
+Base.zero(c::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}}) where {names} = map(zero, c)
 
 
 # Define maximum for Field to not include NaNs
@@ -1318,10 +1321,15 @@ function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] += d.tracer[wet(d)]
 end
+function add!(c::NamedTuple,d::NamedTuple)
+    for k in keys(c)
+        haskey(d,k) && add!(c[k], d[k])
+    end
+end
 
 function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = similar(c)
-    copy_tracer!(e, c)
+    e = zero(c)
+    add!(e,c)
     add!(e,d)
     return e
 end
@@ -1333,10 +1341,21 @@ function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] -= d.tracer[wet(d)]
 end
+function subtract!(c::NamedTuple,d::NamedTuple)
+    for k in keys(c)
+        haskey(d,k) && subtract!(c[k], d[k])
+    end
+end
 
 function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
-    e = similar(c)
-    copy_tracer!(e, c)
+    e = zero(c)
+    add!(e,c)
+    subtract!(e,d)
+    return e
+end
+function Base.:-(c::NamedTuple,d::NamedTuple)
+    e = zero(c)
+    add!(e,c)
     subtract!(e,d)
     return e
 end
@@ -1352,14 +1371,14 @@ end
 Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
 # right matrix multiply not handled
 function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
-    e = similar(d)
-    copy_tracer!(e, d)
+    e = zero(d)
+    add!(e,d)
     mul!(c,e)
     return e
 end
 function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryCondition,Source}
-    e = similar(d)
-    copy_tracer!(e, d)
+    e = zero(d)
+    add!(e,d)
     mul!(e,c)
     return e
 end
@@ -1466,8 +1485,9 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
-    u = similar(u₀)
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition,Source},uvec::Vector) #where T <: Real
+    u = zero(u₀)
+    add!(u, u₀)
     unvec!(u,uvec)
     return u
 end
@@ -2051,6 +2071,36 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
     c = Alu \ d
 
     return c
+end
+
+"""
+    steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+                    b::NamedTuple{tracer_names}, q::NamedTuple, γ; r=1.0)
+
+Multi-tracer steady inversion using an LU/UMFPACK factorization of the
+watermassmatrix. Applies per-tracer boundary conditions and sources, returning
+a `NamedTuple` of steady tracer fields.
+# Arguments
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: `NamedTuple` of boundary conditions keyed by tracer.
+- `q`: `NamedTuple` of interior sources keyed by tracer.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `c_nt`: `NamedTuple` of steady tracer `Field`s.
+"""
+function steadyinversion(
+    Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+    b::NamedTuple{tracer_names, S},
+    q::NamedTuple,
+    γ::Grid{T};
+    r=1.0,
+) where {T <: Real, tracer_names, S}
+    c_nt = map(b, q) do b_i, q_i
+        steadyinversion(Alu, b_i, γ; q=q_i, r=r)
+    end
+    return c_nt
 end
 
 # """
