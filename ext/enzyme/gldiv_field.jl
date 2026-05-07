@@ -23,9 +23,13 @@ function Enzyme.make_zero(A::SparseArrays.UMFPACK.UmfpackLU{Tv, Ti}) where {Tv, 
 end
 
 """
-    augmented_primal(config, \\ , Duplicated, A, d)
+    `augmented_primal(config, \\, Duplicated, A, d)`
 
-Forward pass for `c = A \\ d` with `d::Field` and constant `A`.
+Custom Enzyme forward rule for TMI's left-division method:
+
+    \\(A, d::Field)::Field
+
+This method computes `c = A \\ d` with `d::Field` and constant `A`.
 
 Enzyme's reverse mode runs in two phases. The forward rule returns the primal
 output `c`, allocates `gc = dJ/dc` when a reverse pass is needed, and tapes the
@@ -52,9 +56,13 @@ function augmented_primal(
 end
 
 """
-    augmented_primal(config, \\ , Duplicated, A, d)
+    `augmented_primal(config, \\, Duplicated, A, d)`
 
-Forward pass for `c = A \\ d` with active sparse `A`.
+Forward rule for the same method
+
+    \\(A, d::Field)::Field
+
+when `A` is active.
 
 This method is for `A::Duplicated{SparseMatrixCSC}` and tapes `(c, gc)` so the
 reverse pass can accumulate both `dJ/dd` and `dJ/dA`.
@@ -78,9 +86,13 @@ function augmented_primal(
 end
 
 """
-    reverse(config, \\ , Duplicated, gc, A, d)
+    `reverse(config, \\, Duplicated, gc, A, d)`
 
-Reverse pass for `c = A \\ d` with constant `A`.
+Reverse pass for
+
+    \\(A, d::Field)::Field
+
+with constant `A`.
 
 Given `gc = dJ/dc`, the adjoint equation is `A' * gd = gc`, so
 `gd = dJ/dd = A' \\ gc`.
@@ -106,9 +118,13 @@ function reverse(
 end
 
 """
-    reverse(config, \\ , Duplicated, tape, A, d)
+    `reverse(config, \\, Duplicated, tape, A, d)`
 
-Reverse pass for `c = A \\ d` with active sparse `A`.
+Reverse pass for
+
+    \\(A, d::Field)::Field
+
+with active sparse `A`.
 
 Accumulates `dJ/dd = A' \\ gc` and `dJ/dA = -gd*c'` on the stored sparse
 pattern of `A.dval`.

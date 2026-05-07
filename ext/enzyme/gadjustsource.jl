@@ -26,16 +26,11 @@ end
     reverse(config, adjustsource!, Const, tape, q, u)
 
 For `q += u` on interior points, the local Jacobian wrt `u` is identity. The
-incoming gradient on `q` is accumulated into `u`.
+incoming gradient on `q` is accumulated into `u`. This explicit reverse rule
+is needed so this mutating update remains differentiable in Enzyme test/ex9.
 """
-function reverse(
-    ::RevConfigWidth{1},
-    ::Const{typeof(adjustsource!)},
-    ::Type{<:Const},
-    tape,
-    q::Annotation{<:Source},
-    u::Annotation{<:Source},
-)
+function reverse(::RevConfigWidth{1}, ::Const{typeof(adjustsource!)}, ::Type{<:Const},
+    tape, q::Annotation{<:Source}, u::Annotation{<:Source})
     if !(u isa Const)
         ud = u isa MixedDuplicated ? u.dval[] : u.dval
         qd = q isa MixedDuplicated ? q.dval[] : q.dval

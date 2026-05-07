@@ -4,12 +4,14 @@
 module TMIEnzymeExt
 
 using Enzyme
+using Interpolations
 using SparseArrays
 using TMI
 
 using Enzyme: Annotation
 using TMI: BoundaryCondition, Field, Grid, MassFraction, Source
 using TMI: adjustboundarycondition, adjustsource!, cartesianindex, gsetboundarycondition, interpweights, observe, steadyinversion, step_cartesian, unvec, unvec!, watermassmatrix, wet
+import TMI: interpweights
 
 import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth
 import Enzyme.EnzymeRules: augmented_primal, needs_primal, needs_shadow, reverse

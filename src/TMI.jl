@@ -1299,9 +1299,9 @@ Base.sum(c::Field) = sum(c.tracer[wet(c)])
 # Base.sum(c::BoundaryCondition) = sum(c.tracer[wet(c)])
 
 """
-    `function \\(A,d::Field)::Field`
-    Define left division for Fields
-    Need two slashes to prevent invalid escape
+    function \\(A, d::Field)::Field
+
+Define left division for `Field` by solving on wet points only.
 """
 function \(A,d::Field{T})::Field{T} where T <: Real
     # initialize output
