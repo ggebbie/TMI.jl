@@ -9,16 +9,20 @@ using TMI
 
 using Enzyme: Annotation
 using TMI: BoundaryCondition, Field, Grid, MassFraction, Source
-using TMI: adjustboundarycondition, cartesianindex, gsetboundarycondition, interpweights, observe, steadyinversion, step_cartesian, unvec, watermassmatrix, wet
+using TMI: adjustboundarycondition, adjustsource!, cartesianindex, gsetboundarycondition, interpweights, observe, steadyinversion, step_cartesian, unvec, watermassmatrix, wet
 
 import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth
 import Enzyme.EnzymeRules: augmented_primal, needs_primal, needs_shadow, reverse
 
-include("enzyme/gunvec_tracerlike.jl")
-include("enzyme/gunvec_namedtuple.jl")
+# Enzyme can differentiate `unvec` directly on Julia 1.11. Custom rules for
+# `unvec` return mixed-active TMI structs, which Enzyme 1.11 rejects before the
+# reverse rule can run.
+# include("enzyme/gunvec_tracerlike.jl")
+# include("enzyme/gunvec_namedtuple.jl")
 include("enzyme/gwatermassmatrix.jl")
 include("enzyme/gldiv_field.jl")
 include("enzyme/accumulate_into.jl")
 include("enzyme/gobserve.jl")
+include("enzyme/gadjustsource.jl")
 
 end

@@ -2062,6 +2062,36 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
     return c
 end
 
+"""
+    steadyinversion(Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+                    b::NamedTuple{tracer_names}, q::NamedTuple, γ; r=1.0)
+
+Multi-tracer steady inversion using an LU/UMFPACK factorization of the
+watermassmatrix. Applies per-tracer boundary conditions and sources, returning
+a `NamedTuple` of steady tracer fields.
+# Arguments
+- `Alu`: LU/UMFPACK factorization of the watermassmatrix.
+- `b`: `NamedTuple` of boundary conditions keyed by tracer.
+- `q`: `NamedTuple` of interior sources keyed by tracer.
+- `γ`: grid.
+# Optional Arguments
+- `r`: stoichiometric ratio applied to `q`.
+# Output
+- `c_nt`: `NamedTuple` of steady tracer `Field`s.
+"""
+function steadyinversion(
+    Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU, SparseMatrixCSC},
+    b::NamedTuple{tracer_names, S},
+    q::NamedTuple,
+    γ::Grid{T};
+    r=1.0,
+) where {T <: Real, tracer_names, S}
+    c_nt = map(b, q) do b_i, q_i
+        steadyinversion(Alu, b_i, γ; q=q_i, r=r)
+    end
+    return c_nt
+end
+
 # """
 #     function gsteadyinversion(gc::Field{T},Alu,b::NamedTuple{<:Any, NTuple{N,BoundaryCondition{T}}},γ::Grid;q=nothing,r=1.0)::Field{T} where {N, T <: Real}
 

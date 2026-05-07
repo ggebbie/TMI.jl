@@ -3,23 +3,27 @@
 
 Forward pass for point observations `y = observe(c, locs, γ)`.
 
-The primal observation uses TMI's interpolation machinery. For the reverse pass
-we tape the interpolation weights computed by `interpweights`, so `reverse` can
-apply the same adjoint pattern as `gobserve` in `TMI.jl`.
+The primal observation is computed from interpolation weights directly. The
+reverse pass reuses the taped weights and applies the same adjoint pattern as
+`gobserve` in `TMI.jl`.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(observe)},
     ::Type{<:Duplicated},
-    c::Annotation{<:Field},
-    locs::Annotation{<:Vector{<:Tuple}},
-    γ::Annotation{<:Grid},
-)
-    y = func.val(c.val, locs.val, γ.val)
+    c::Duplicated{<:Field{T}},
+    locs::Const{<:Vector{<:Tuple}},
+    γ::Const{<:Grid},
+) where {T <: Real}
+    y = Vector{T}(undef, length(locs.val))
+    wetmask = c.val.γ.wet
+    weights = Vector{typeof(interpweights(first(locs.val), c.val.γ))}(undef, length(locs.val))
+    for ii in eachindex(y)
+        weights[ii] = interpweights(locs.val[ii], c.val.γ)
+        y[ii] = sum(c.val.tracer[wetmask] .* weights[ii][wetmask])
+    end
     primal = needs_primal(config) ? y : nothing
     gy = needs_shadow(config) ? Enzyme.make_zero(y) : nothing
-    weights = needs_shadow(config) ? [interpweights(loc, c.val.γ) for loc in locs.val] : nothing
-
     return AugmentedReturn(primal, gy, (gy, weights))
 end
 
@@ -36,15 +40,13 @@ function reverse(
     ::Const{typeof(observe)},
     ::Type{<:Duplicated},
     tape,
-    c::Annotation{<:Field},
-    locs::Annotation{<:Vector{<:Tuple}},
-    γ::Annotation{<:Grid},
+    c::Duplicated{<:Field},
+    locs::Const{<:Vector{<:Tuple}},
+    γ::Const{<:Grid},
 )
     gy, weights = tape
-    if c isa Duplicated
-        for ii in eachindex(gy)
-            c.dval.tracer[c.val.γ.wet] .+= gy[ii] * weights[ii][c.val.γ.wet]
-        end
+    for ii in eachindex(gy)
+        c.dval.tracer[c.val.γ.wet] .+= gy[ii] * weights[ii][c.val.γ.wet]
     end
 
     return (nothing, nothing, nothing)
