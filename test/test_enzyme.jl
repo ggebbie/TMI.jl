@@ -1,5 +1,6 @@
 using Enzyme
 
+<<<<<<< HEAD
 function loss(
     b_template::NamedTuple{names, <:Tuple{Vararg{<:BoundaryCondition}}},
     bvec::AbstractVector{T},
@@ -17,6 +18,8 @@ function loss(
     return sum(ci -> sum(abs2, ci.tracer[ci.γ.wet]), ĉ)
 end
 
+=======
+>>>>>>> parent of 60f186d3 (updating enzyme test to handle tuples of boundary conditions and sources.)
 function finite_difference_gradient(f, x; δ = 1e-6)
     grad = similar(x)
     for i in eachindex(x)
@@ -58,21 +61,28 @@ end
     tracer = fill(1.0, ngrid)
     c = Field(tracer, γ, :c, "linear equilibrated tracer", "μmol/kg")
 
-    b_template = (; tracer = getsurfaceboundary(c))
+    b_template = TMI.getboundarycondition(c, 1, 1, γ)
     bvec0 = vec(b_template)
 
-    q = onesource(γ, :q, "interior source", "μmol/kg")
-    q.tracer[q.γ.interior] .*= 0.01
-    q_template = (; tracer = q)
+    q_tracer = fill(0.01, ngrid)
+    q_template = Field(q_tracer, γ, :q, "interior source", "μmol/kg")
     qvec0 = vec(q_template)
 
-    @testset "reverse NamedTuple steadyinversion through unvec and watermassmatrix (b, q, m)" begin
+    @testset "reverse steadyinversion through unvec and watermassmatrix (b, q, m)" begin
+        function J(b_template, bvec, q_template, qvec, m, γ)
+            A = watermassmatrix(m, γ)
+            b = unvec(b_template, bvec)
+            q = unvec(q_template, qvec)
+            ĉ = steadyinversion(A, b, γ; q = q)
+            return sum(abs2, ĉ.tracer[ĉ.γ.wet])
+        end
+
         grad_b_ad = Enzyme.make_zero(bvec0)
         grad_q_ad = Enzyme.make_zero(qvec0)
         grad_m_ad = Enzyme.make_zero(mvec0)
         Enzyme.autodiff(
             Enzyme.set_runtime_activity(Reverse),
-            loss,
+            J,
             Const(b_template),
             Duplicated(bvec0, grad_b_ad),
             Const(q_template),
@@ -84,17 +94,29 @@ end
 
         δ = 1e-6
         grad_b_fd = finite_difference_gradient(
+<<<<<<< HEAD
             bv -> loss(b_template, bv, q_template, qvec0, m, mvec0, γ),
+=======
+            bv -> J(b_template, bv, q_template, qvec0, m, γ),
+>>>>>>> parent of 60f186d3 (updating enzyme test to handle tuples of boundary conditions and sources.)
             bvec0;
             δ,
         )
         grad_q_fd = finite_difference_gradient(
+<<<<<<< HEAD
             qv -> loss(b_template, bvec0, q_template, qv, m, mvec0, γ),
+=======
+            qv -> J(b_template, bvec0, q_template, qv, m, γ),
+>>>>>>> parent of 60f186d3 (updating enzyme test to handle tuples of boundary conditions and sources.)
             qvec0;
             δ,
         )
         grad_m_fd_vec = finite_difference_gradient(
+<<<<<<< HEAD
             mv -> loss(b_template, bvec0, q_template, qvec0, m, mv, γ),
+=======
+            mv -> J(b_template, bvec0, q_template, qvec0, m_from_vec(mv), γ),
+>>>>>>> parent of 60f186d3 (updating enzyme test to handle tuples of boundary conditions and sources.)
             mvec0;
             δ,
         )
@@ -106,5 +128,4 @@ end
         @test isapprox(grad_q_ad, grad_q_fd; rtol = 1e-4, atol = 1e-8)
         @test isapprox(grad_m_ad, grad_m_fd_vec; rtol = 1e-4, atol = 1e-8)
     end
-
 end

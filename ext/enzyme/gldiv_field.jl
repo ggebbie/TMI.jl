@@ -1,8 +1,7 @@
 """
-    augmented_primal(config, left division, Duplicated, A, d)
+    augmented_primal(config, \\ , Duplicated, A, d)
 
-Forward pass for solving a linear system with a `Field` right-hand side and
-constant `A`.
+Forward pass for `c = A \\ d` with `d::Field` and constant `A`.
 
 Enzyme's reverse mode runs in two phases. The forward rule returns the primal
 output `c`, allocates `gc = dJ/dc` when a reverse pass is needed, and tapes the
@@ -29,19 +28,18 @@ function augmented_primal(
 end
 
 """
-    augmented_primal(config, left division, Duplicated, A, d)
+    augmented_primal(config, \\ , Duplicated, A, d)
 
-Forward pass for solving a linear system with active `A`.
+Forward pass for `c = A \\ d` with active sparse `A`.
 
-This method accepts either `A::SparseMatrixCSC` or `A::UmfpackLU`.  In the LU
-case, `A.dval.nzval` is used as the sparse adjoint buffer on the original
-matrix pattern stored by the factorization.
+This method is for `A::Duplicated{SparseMatrixCSC}` and tapes `(c, gc)` so the
+reverse pass can accumulate both `dJ/dd` and `dJ/dA`.
 """
 function augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(\)},
     ::Type{<:Duplicated},
-    A::Duplicated{<:Union{SparseMatrixCSC, SparseArrays.UMFPACK.UmfpackLU}},
+    A::Duplicated{<:SparseMatrixCSC},
     d::Annotation{<:Field},
 )
     γ = d.val.γ
@@ -56,12 +54,12 @@ function augmented_primal(
 end
 
 """
-    reverse(config, left division, Duplicated, gc, A, d)
+    reverse(config, \\ , Duplicated, gc, A, d)
 
-Reverse pass for a linear solve with constant `A`.
+Reverse pass for `c = A \\ d` with constant `A`.
 
 Given `gc = dJ/dc`, the adjoint equation is `A' * gd = gc`, so
-`gd` is computed by solving the transpose system.
+`gd = dJ/dd = A' \\ gc`.
 """
 function reverse(
     ::RevConfigWidth{1},
@@ -84,20 +82,19 @@ function reverse(
 end
 
 """
-    reverse(config, left division, Duplicated, tape, A, d)
+    reverse(config, \\ , Duplicated, tape, A, d)
 
-Reverse pass for a linear solve with active `A`.
+Reverse pass for `c = A \\ d` with active sparse `A`.
 
-Accumulates `dJ/dd = A' \\ gc` and `dJ/dA = -gd*c'`.  For a sparse matrix the
-adjoint is written to `nonzeros(A.dval)`; for an LU factorization it is written
-to `A.dval.nzval`, which has the original matrix sparsity pattern.
+Accumulates `dJ/dd = A' \\ gc` and `dJ/dA = -gd*c'` on the stored sparse
+pattern of `A.dval`.
 """
 function reverse(
     ::RevConfigWidth{1},
     ::Const{typeof(\)},
     ::Type{<:Duplicated},
     tape,
-    A::Duplicated{<:Union{SparseMatrixCSC, SparseArrays.UMFPACK.UmfpackLU}},
+    A::Duplicated{<:SparseMatrixCSC},
     d::Annotation{<:Field},
 )
     c, gc = tape
@@ -110,25 +107,10 @@ function reverse(
     end
 
     cvec = c.tracer[γ.wet]
-    if A.val isa SparseMatrixCSC
-        Asparse = A.val
-        nzv = SparseArrays.nonzeros(A.dval)
-    elseif A.val isa SparseArrays.UMFPACK.UmfpackLU
-        Asparse = SparseMatrixCSC(
-            A.val.m,
-            A.val.n,
-            deepcopy(A.val.colptr .+ 1),
-            deepcopy(A.val.rowval .+ 1),
-            zeros(eltype(A.val.nzval), length(A.val.nzval)),
-        )
-        nzv = A.dval.nzval
-    else
-        error("unsupported active solve type: ", typeof(A.val))
-    end
-
-    rows = SparseArrays.rowvals(Asparse)
-    for j in 1:size(Asparse, 2)
-        for ki in SparseArrays.nzrange(Asparse, j)
+    rows = SparseArrays.rowvals(A.val)
+    nzv = SparseArrays.nonzeros(A.dval)
+    for j in 1:size(A.val, 2)
+        for ki in SparseArrays.nzrange(A.val, j)
             i = rows[ki]
             nzv[ki] -= gdvec[i] * cvec[j]
         end
