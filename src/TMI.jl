@@ -1257,7 +1257,7 @@ end
 function Base.zero(c::T) where {T<:Union{BoundaryCondition, Source, Field}}
     return replace_tracer(c, zero(c.tracer))
 end
-Base.zero(c::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}}) where {names} = map(zero, c)
+Base.zero(c::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field, MassFraction}}}}) where {names} = map(zero, c)
 
 
 # Define maximum for Field to not include NaNs
@@ -1321,13 +1321,20 @@ function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] += d.tracer[wet(d)]
 end
-function add!(c::NamedTuple,d::NamedTuple)
+function add!(c::NamedTuple{names, T}, d::NamedTuple{names, T}) where {names, T <: Tuple{Vararg{<:Union{Source, Field, BoundaryCondition, MassFraction}}}}
     for k in keys(c)
-        haskey(d,k) && add!(c[k], d[k])
+        add!(c[k], d[k])
     end
+    return nothing
 end
 
 function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = zero(c)
+    add!(e,c)
+    add!(e,d)
+    return e
+end
+function Base.:+(c::NamedTuple{names, T}, d::NamedTuple{names, T}) where {names, T <: Tuple{Vararg{<:Union{Source, Field, BoundaryCondition, MassFraction}}}}
     e = zero(c)
     add!(e,c)
     add!(e,d)

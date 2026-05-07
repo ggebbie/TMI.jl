@@ -64,6 +64,34 @@ end
 
 
 Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
+wet(m::MassFraction) = m.γ.wet
+Base.zero(m::MassFraction) = MassFraction(zero(m.fraction), m.γ, m.name, m.longname, m.units, m.position)
+function Base.vec(u::NamedTuple{names, M}) where {names, M <: Tuple{Vararg{<:MassFraction}}}
+    first_mass_fraction = first(values(u))
+    uvec = Vector{eltype(first_mass_fraction.fraction)}(undef, 0)
+    for mass_fraction in u
+        append!(uvec, vec(mass_fraction))
+    end
+    return uvec
+end
+function unvec!(m::MassFraction{T}, mvec::Vector{T}) where T <: Real
+    I = findall(wet(m))
+    for (ii, vv) in enumerate(I)
+        m.fraction[vv] = mvec[ii]
+    end
+    return nothing
+end
+function add!(a::MassFraction, b::MassFraction)
+    wet(a) == wet(b) || error("TMI type not conformable for addition")
+    a.fraction[wet(a)] .+= b.fraction[wet(b)]
+    return nothing
+end
+function Base.:+(a::MassFraction, b::MassFraction)
+    c = zero(a)
+    add!(c, a)
+    add!(c, b)
+    return c
+end
 Base.length(m::MassFraction) = sum(m.γ.wet)
 Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
 Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])

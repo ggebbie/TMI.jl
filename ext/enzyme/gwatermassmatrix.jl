@@ -10,7 +10,7 @@ function augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
-    m::Duplicated,
+    m::Annotation,
     γ::Const{<:Grid},
 )
     A   = needs_primal(config) ? func.val(m.val, γ.val)            : nothing
@@ -31,18 +31,21 @@ function reverse(
     ::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
     gA,
-    m::Duplicated,
+    m::Annotation,
     γ::Const{<:Grid},
 )
     γval = γ.val
     R = γval.R
     Iint = cartesianindex(γval.interior)
-    for I in Iint
-        for (m1_val, m1_grad) in zip(m.val, m.dval)
-            if m1_val.γ.wet[I]
-                Istep, _ = step_cartesian(I, m1_val.position, γval)
-                # Adjoint of: A[R[I], R[Istep]] = -m1.fraction[I]
-                m1_grad.fraction[I] += (-gA[R[I], R[Istep]])
+    if m isa Duplicated || m isa MixedDuplicated
+        md = m isa MixedDuplicated ? m.dval[] : m.dval
+        for I in Iint
+            for (m1_val, m1_grad) in zip(m.val, md)
+                if m1_val.γ.wet[I]
+                    Istep, _ = step_cartesian(I, m1_val.position, γval)
+                    # Adjoint of: A[R[I], R[Istep]] = -m1.fraction[I]
+                    m1_grad.fraction[I] += (-gA[R[I], R[Istep]])
+                end
             end
         end
     end

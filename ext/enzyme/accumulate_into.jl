@@ -53,6 +53,27 @@ function Enzyme.accumulate_into(
 end
 
 """
+    Enzyme.accumulate_into(gab_ref::Ref{<:MassFraction}, accumulated, ge)
+
+Merge a gradient contribution into a `MassFraction` accumulator. Only
+`fraction` values on the mass-fraction wet mask are differentiable; grid,
+name, units, and stencil position are metadata.
+"""
+function Enzyme.accumulate_into(
+    gab_ref::Base.RefValue{T},
+    accumulated::IdDict,
+    ge::T,
+) where {T <: MassFraction}
+    if !haskey(accumulated, gab_ref)
+        gab = gab_ref[]
+        gab.fraction[wet(gab)] .+= ge.fraction[wet(ge)]
+        ge.fraction[wet(ge)] .= zero(eltype(ge.fraction))
+        accumulated[gab_ref] = (gab_ref, ge)
+    end
+    return accumulated[gab_ref]
+end
+
+"""
     Enzyme.accumulate_into(gab_ref::Ref{<:NamedTuple{...,Tuple{Vararg{<:Union{Source,Field,BoundaryCondition}}}}}, accumulated, ge)
 
 Merge a gradient contribution into a `NamedTuple` of TMI structs
@@ -72,6 +93,29 @@ function Enzyme.accumulate_into(
             gek = ge[k]
             gabk.tracer[wet(gabk)] .+= gek.tracer[wet(gek)]
             gek.tracer[wet(gek)] .= zero(eltype(gek.tracer))
+        end
+        accumulated[gab_ref] = (gab_ref, ge)
+    end
+    return accumulated[gab_ref]
+end
+
+"""
+    Enzyme.accumulate_into(gab_ref::Ref{<:NamedTuple{...,Tuple{Vararg{<:MassFraction}}}}, accumulated, ge)
+
+Merge a gradient contribution into a `NamedTuple` of `MassFraction`s.
+"""
+function Enzyme.accumulate_into(
+    gab_ref::Base.RefValue{T},
+    accumulated::IdDict,
+    ge::T,
+) where {names, T <: NamedTuple{names, <:Tuple{Vararg{<:MassFraction}}}}
+    if !haskey(accumulated, gab_ref)
+        gab = gab_ref[]
+        for k in keys(gab)
+            gabk = gab[k]
+            gek = ge[k]
+            gabk.fraction[wet(gabk)] .+= gek.fraction[wet(gek)]
+            gek.fraction[wet(gek)] .= zero(eltype(gek.fraction))
         end
         accumulated[gab_ref] = (gab_ref, ge)
     end
