@@ -3,16 +3,27 @@ using Enzyme
 function loss(
     b_template::NamedTuple{names, <:Tuple{Vararg{<:BoundaryCondition}}},
     bvec::AbstractVector{T},
-    q_template::NamedTuple{names, <:Tuple{Vararg{<:TMI.Source}}},
+    q_template::NamedTuple{qnames, <:Tuple{Vararg{<:TMI.Source}}},
     qvec::AbstractVector{T},
     m::NamedTuple,
     γ::Grid{T},
-) where {names, T <: Real}
+    b0::NamedTuple{names, <:Tuple{Vararg{<:BoundaryCondition}}},
+    q0::NamedTuple{qnames},
+    c0::NamedTuple{names, <:Tuple{Vararg{<:Field}}},
+) where {names, qnames, T <: Real}
     A = watermassmatrix(m, γ)
     b = unvec(b_template, bvec)
     q = unvec(q_template, qvec)
     ĉ = steadyinversion(A, b, q, γ)
-    return sum(ci -> sum(abs2, ci.tracer[ci.γ.wet]), ĉ)
+
+    Δb = b - b0
+    Δc = ĉ - c0
+    Δq = q - q0
+
+    nΔb = vec(Δb)' * I * vec(Δb)
+    nΔc = vec(Δc)' * I * vec(Δc)
+    nΔq = vec(Δq)' * I * vec(Δq)
+    return nΔb + nΔc + nΔq
 end
 
 function finite_difference_gradient(f, x; δ = 1e-6)
@@ -55,13 +66,23 @@ end
     tracer = fill(1.0, ngrid)
     c = Field(tracer, γ, :c, "linear equilibrated tracer", "umol/kg")
 
-    b_template = (; tracer = getsurfaceboundary(c))
+    b_surface = getsurfaceboundary(c)
+    b_surface2 = 1.01 * getsurfaceboundary(c)
+    b_template = (
+        tracer = b_surface,
+        tracer2 = b_surface2,
+    )
     bvec0 = vec(b_template)
 
     q = onesource(γ, :q, "interior source", "umol/kg")
     q.tracer[q.γ.interior] .*= 0.01
-    q_template = (; tracer = q)
+    q2 = onesource(γ, :q2, "interior source 2", "umol/kg")
+    q2.tracer[q2.γ.interior] .*= 0.008
+    q_template = (tracer = q, tracer2 = q2)
     qvec0 = vec(q_template)
+    q0 = map(qi -> 0.97 * qi, q_template)
+    b0 = map(bi -> 0.98 * bi, b_template)
+    c0 = map(ci -> 0.95 * ci, steadyinversion(watermassmatrix(m, γ), b0, q0, γ))
 
     @testset "reverse NamedTuple steadyinversion through unvec and watermassmatrix (b, q, m)" begin
         grad_b_ad = Enzyme.make_zero(bvec0)
@@ -76,16 +97,19 @@ end
             Duplicated(qvec0, grad_q_ad),
             Duplicated(m, grad_m_ad),
             Const(γ),
+            Const(b0),
+            Const(q0),
+            Const(c0),
         )
 
         δ = 1e-6
         grad_b_fd = finite_difference_gradient(
-            bv -> loss(b_template, bv, q_template, qvec0, m, γ),
+            bv -> loss(b_template, bv, q_template, qvec0, m, γ, b0, q0, c0),
             bvec0;
             δ,
         )
         grad_q_fd = finite_difference_gradient(
-            qv -> loss(b_template, bvec0, q_template, qv, m, γ),
+            qv -> loss(b_template, bvec0, q_template, qv, m, γ, b0, q0, c0),
             qvec0;
             δ,
         )
@@ -102,7 +126,7 @@ end
         end
 
         grad_m_fd_vec = finite_difference_gradient(
-            mv -> loss(b_template, bvec0, q_template, qvec0, m_from_vec(mv), γ),
+            mv -> loss(b_template, bvec0, q_template, qvec0, m_from_vec(mv), γ, b0, q0, c0),
             mvec0;
             δ,
         )

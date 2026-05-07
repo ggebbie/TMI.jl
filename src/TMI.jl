@@ -1341,8 +1341,19 @@ function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] -= d.tracer[wet(d)]
 end
+function subtract!(c::NamedTuple,d::NamedTuple)
+    for k in keys(c)
+        haskey(d,k) && subtract!(c[k], d[k])
+    end
+end
 
 function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
+    e = zero(c)
+    add!(e,c)
+    subtract!(e,d)
+    return e
+end
+function Base.:-(c::NamedTuple,d::NamedTuple)
     e = zero(c)
     add!(e,c)
     subtract!(e,d)
