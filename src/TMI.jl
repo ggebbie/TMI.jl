@@ -1,5 +1,5 @@
 module TMI
-using Revise
+
 using LinearAlgebra
 using SparseArrays
 using NetCDF
