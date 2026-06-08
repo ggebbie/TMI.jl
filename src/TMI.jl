@@ -1,5 +1,5 @@
 module TMI
-
+using Revise
 using LinearAlgebra
 using SparseArrays
 using NetCDF
@@ -236,14 +236,15 @@ preformedcarbon13(TMIversion,Alu,γ) = preformednutrient("δ¹³C",TMIversion,Al
 - `TMIversion`: version of TMI water-mass/circulation model
 - `Alu`: LU decomposition of water-mass matrix A
 - `γ`: TMI grid
+
 # Output
 - `a`: mean age [yr]
 """
-function meanage(TMIversion,Alu,γ)
-
+function meanage(TMIversion,Alu,γ; b₀ = nothing)
     TMIfile = pkgdatadir("TMI_"*TMIversion*".nc")
 
     if TMIfile[end-1:end] == "nc"
+        
 
         #F = ncread(file,"F")
         ## read age source
@@ -254,10 +255,19 @@ function meanage(TMIversion,Alu,γ)
         Iq = findall(x -> x > 0,qPO₄.tracer)
 
         qa = zeros(γ)
-        qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
-        # zero boundary condition
-        b₀ = zerosurfaceboundary(γ)
-        a = steadyinversion(Alu,b₀,γ,q=qa)
+        if isnothing(b₀) 
+            qa.tracer[Iq] = 1 ./ F₀.tracer[Iq]
+            a = steadyinversion(Alu, zerosurfaceboundary(γ),γ,q=qa)
+            return a 
+
+        else
+            wmf = steadyinversion(Alu, b₀, γ)
+            qa.tracer[Iq] = 1 ./ F₀.tracer[Iq] .* wmf.tracer[Iq]
+            a = steadyinversion(Alu, zerosurfaceboundary(γ),γ,q=qa)
+            a.tracer ./= wmf.tracer 
+            return a
+        end
+        
 
     else
         
