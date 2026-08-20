@@ -414,28 +414,36 @@ tracerdict() =
         "θ" => :θ,
         "THETA" => :θ,
         "theta" => :θ,
+        "potential_temperature" => :θ,
         "σθ" => :σθ,
         "S⋆" => Symbol("S⋆"),
         "Sₚ" => :Sₚ,
         "Sp" => :Sₚ,
         "SALT" => :Sₚ,
+        "salinity" => :Sₚ,
         "σSₚ" => :σSₚ,
         "δ¹⁸Ow" => :δ¹⁸Ow,
+        "d18o" => :δ¹⁸Ow,
         "σδ¹⁸Ow" => :σδ¹⁸Ow,
          "PO₄" => :PO₄,
+         "phosphate" => :PO₄,
          "σPO₄" => :σPO₄,
          "qPO₄" => :qPO₄,
          "NO₃" => :NO₃,
+         "nitrate" => :NO₃,
          "σNO₃" => :σNO₃,
          "O₂" => :O₂,
+         "oxygen" => :O₂,
          "σO₂" => :σO₂,
+         "decorrelation_length" => :L,
+         "decorrelation_scale" => :L,
          "δ¹³C" => :δ¹³C,
          "σδ¹³C" => :σδ¹³C,
          "F₀" => :F₀)
 
-function watermassmatrix2nc(TMIversion,A)
+function watermassmatrix2nc(TMIversion,A; file=pkgdatadir("TMI_"*TMIversion*".nc"))
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    filenetcdf = file
     i, j, m = findnz(A)
     nelements = length(i)
 
@@ -578,9 +586,9 @@ end
 """
 Put grid properties (Cartesian index) into NetCDF file
 """
-function grid2nc(TMIversion,γ)
+function grid2nc(TMIversion,γ; file=pkgdatadir("TMI_"*TMIversion*".nc"))
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
+    filenetcdf = file
 
     linearindexatts = Dict("longname" => "linear index")
     nfld = length(γ.I)
@@ -709,4 +717,3 @@ function matrix_modern2glacial(Amodern,γmodern,γglacial)
     # form new sparse matrix for glacial times
     return sparse(iglacial, jglacial, mglacial)
 end
-

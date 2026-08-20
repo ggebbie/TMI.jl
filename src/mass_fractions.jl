@@ -43,7 +43,7 @@ function MassFraction(A,
         if inbounds
             if γ.wet[Istep]
                 wet[I] = true
-                m[I] = A[R[I],R[Istep]]
+                m[I] = -A[R[I],R[Istep]] / A[R[I],R[I]]
             end
         end
     end
@@ -63,10 +63,34 @@ function MassFraction(A,
 end
 
 
-Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
 Base.length(m::MassFraction) = sum(m.γ.wet)
 Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
 Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
+"""
+    wet(m::MassFraction)
+    massfractions(A::AbstractMatrix, γ::Grid)
+
+Return a directional wet mask or recover all six fractions from a matrix. Matrix
+rows are normalized by their diagonal so both TMI matrix sign conventions give
+the same positive fractions.
+
+# Arguments
+- `m`, `A`, `γ`: directional fraction, water-mass matrix, and grid
+
+# Output
+- `result`: wet mask or named tuple of directional fractions
+"""
+wet(m::MassFraction) = m.γ.wet
+function massfractions(A::AbstractMatrix, γ::Grid)
+    return (
+        north = massfractions_north(A, γ),
+        east = massfractions_east(A, γ),
+        south = massfractions_south(A, γ),
+        west = massfractions_west(A, γ),
+        up = massfractions_up(A, γ),
+        down = massfractions_down(A, γ),
+    )
+end
 
 """
 function massfractions(c::NamedTuple, w::NamedTuple; alg = :local)

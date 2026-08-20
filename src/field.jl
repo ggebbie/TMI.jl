@@ -106,13 +106,19 @@ end
 
     read MATLAB field and transfer zyx format to xyz
 """
-function readfield(file,tracername,γ::Grid{A,N}) where {A,N} 
+function readfield(file, tracername, γ::Grid{A,N}; name=nothing,
+    longname=nothing, units=nothing) where {A,N}
 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    tracer, units, longname = _read3d(file,tracername)
-    T = eltype(tracer)
+    fieldname = isnothing(name) ? tracerdict()[tracername] : Symbol(name)
+    attributes = get(fieldsatts(), String(fieldname), nothing)
+    if !isnothing(attributes)
+        isnothing(longname) && (longname = attributes["longname"])
+        isnothing(units) && (units = attributes["units"])
+    end
+    tracer, units, longname = _read3d(file, tracername; units, longname)
     checkgrid!(tracer,γ.wet)
-    c = Field(tracer,γ,tracerdict()[tracername],longname,units)
+    c = Field(tracer, γ, fieldname, longname, units)
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) 

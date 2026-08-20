@@ -28,7 +28,8 @@ Construct the Grid given a file name
 # Output
 - `γ::Grid`: TMI grid struct
 
-    function Grid(foreign_file, maskname, lonname, latname, depthname)
+    function Grid(foreign_file, maskname, lonname, latname, depthname;
+        flipdepth=true)
 
 Construct the Grid from a non-TMI file given the names of relevant fields.
 
@@ -43,6 +44,7 @@ Tested for Float32 fields (should work for other types).
 - `lonname::String`
 - `latname::String`
 - `depthname::String`
+- `flipdepth::Bool`: reverse the sign of the depth coordinate
 # Output
 - `γ::Grid`: TMI grid struct
 """
@@ -66,7 +68,8 @@ function Grid(TMIfile::String; A = watermassmatrix(TMIfile))
     Δ = neighbor_indices(6)
     return Grid(labels,wet,interior,wrap,Δ)
 end
-function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S) where S <: String
+function Grid(foreign_file::S, maskname::S, lonname::S, latname::S,
+    depthname::S; flipdepth::Bool=true) where S <: String
     
     # make ocean mask
     ds = Dataset(foreign_file)
@@ -79,7 +82,8 @@ function Grid(foreign_file::S, maskname::S, lonname::S, latname::S, depthname::S
     
     lon = convert(Vector{T},ds[lonname]) 
     lat = convert(Vector{T},ds[latname])
-    depth = - convert(Vector{T},ds[depthname]) # flip sign for actual "depth"
+    depth = convert(Vector{T},ds[depthname])
+    flipdepth && (depth .*= -1)
 
     # make interior mask: Assume no lateral or bottom boundaries (CAUTION)
     interior = deepcopy(wet)
@@ -101,7 +105,7 @@ end
     Do not store Cartesian and linear indices.
     Compute them on demand.
 """ 
-Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...) 
+Base.propertynames(γ::Grid) = (:I,:R,:lon,:lat,:depth,fieldnames(typeof(γ))...)
 function Base.getproperty(γ::Grid{R,N}, d::Symbol) where {R,N}
     if d === :I
         return cartesianindex(γ.wet)

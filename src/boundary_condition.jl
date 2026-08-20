@@ -234,7 +234,10 @@ function getboundarycondition(field::Field{T,R,N},dim::Integer,dimval::Integer,Î
                 k,
                 dim,
                 dimval,
-                wet_nminus1)
+                wet_nminus1,
+                field.name,
+                field.longname,
+                field.units)
         end
     end
 end
@@ -252,8 +255,6 @@ Get boundary condition by extracting from Field (i.e., 3D tracer)
 getboundarycondition(field::Field,dim::Integer,dimval::Integer) =
     getboundarycondition(field,dim,dimval,field.Î³)
     
-vec(u::BoundaryCondition) = u.tracer[u.wet]
-
 """
     function surfacepatch
     Make a surface boundary condition

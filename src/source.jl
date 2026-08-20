@@ -63,6 +63,41 @@ readmatsource(file,matsourcename,γ::Grid,Izyx = cartesianindex(file)) = readsou
 
 writesource(file,q::Source) = write(file,q) 
 
+"""
+    adjustsource(q₀::Source, u::Source); adjustsource(priors, adjustments, templates)
+
+Combine a source prior and adjustment in physical units.
+
+# Arguments
+- `q₀`, `u`: prior and additive or relative-log adjustment
+
+# Output
+- `q`: linearly represented physical source
+"""
+function adjustsource(q₀::Source,u::Source)
+    tracer = copy(q₀.tracer)
+    if q₀.logscale && u.logscale
+        tracer[wet(q₀)] .= exp.(q₀.tracer[wet(q₀)] .+ u.tracer[wet(u)])
+    elseif !q₀.logscale && u.logscale
+        tracer[wet(q₀)] .*= exp.(u.tracer[wet(u)])
+    elseif q₀.logscale
+        error("cannot add a linear adjustment to a logscale source")
+    else
+        tracer[wet(q₀)] .+= u.tracer[wet(u)]
+    end
+    return Source(tracer, q₀.γ, q₀.name, q₀.longname, q₀.units, false)
+end
+adjustsource(priors::NamedTuple, adjustments::NamedTuple,
+    templates::NamedTuple{names}) where {names} = NamedTuple{names}(map(name -> begin
+        if haskey(priors, name)
+            adjustsource(priors[name], adjustments[name])
+        else
+            templates[name]
+        end
+    end, names))
+adjustsource(::NamedTuple{(),Tuple{}}, ::AbstractVector, templates::NamedTuple) = templates
+adjustsource(priors::NamedTuple, x::AbstractVector, templates::NamedTuple) =
+    adjustsource(priors, unvec(priors, x), templates)
 function adjustsource(q₀::Union{Source,Field,NamedTuple},u::Union{Source,Field,NamedTuple})
     q = similar(q₀)
     copy_tracer!(q, q₀)
