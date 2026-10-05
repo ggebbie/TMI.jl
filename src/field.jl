@@ -87,7 +87,7 @@ function section(c::Field{T},lon)::Array{T,2} where T <: Real
 end
 
 """
-    function readfield(file,tracername,γ)
+    function readfield(file,tracername,γ; name, longname, units)
     Read a tracer field from NetCDF but return it 
     as a Field.
 
@@ -97,6 +97,9 @@ end
 - `file`: TMI NetCDF file name
 - `tracername`: name of tracer
 - `γ::Grid`, TMI grid specification
+- `name`: name of the Field; default `tracerdict()[tracername]`
+- `longname`, `units`: used where the file has no such attribute; default TMI's
+  attributes for `name`, if any
 # Output
 - `c`::Field
 

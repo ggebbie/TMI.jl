@@ -1,119 +1,70 @@
+#=
+Invert for the surface boundary conditions, the phosphate source, and the
+water-mass fractions that fit gridded WOCE observations of θ, S, δ¹⁸O, PO₄,
+NO₃, and O₂. Gradients come from Enzyme and the optimizer is Ipopt.
+The WOCE files are read from a sibling checkout of regridding_WOCE_for_TMI.
+
+Run from the repository with Julia 1.13, with Enzyme, Optimization, and
+OptimizationIpopt in the global environment:
+    JULIA_LOAD_PATH="@:@v1.13:@stdlib" julia +1.13 --project=. scripts/full_inversion.jl
+Plot the result with scripts/inversion_diagnostics.jl.
+=#
 using Enzyme
 using Optimization
 using OptimizationIpopt
 using TMI
 
-const TMIEnzymeOptimization = Base.get_extension(TMI, :TMIEnzymeOptimizationExt)
-using .TMIEnzymeOptimization
+TMIversion = "modern_90x45x33_G14_v2"
+A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
-"""
-    woceobservations()
+WOCEdir = normpath(TMI.pkgdir("..", "regridding_WOCE_for_TMI", "data"))
+WOCEfile = joinpath(WOCEdir, "TMI_gridded_WOCE_4x4_Variables_33_levels.nc")
+WOCEerrorfile = joinpath(WOCEdir, "TMI_gridded_WOCE_Errors_4x4_Variables_33_levels.nc")
 
-Read the gridded WOCE tracer observations, standard deviations, and horizontal
-decorrelation scale used by the full inversion example.
+# WOCE variable and TMI name of each tracer
+WOCEnames = (θ = "potential_temperature", S = "salinity", δ¹⁸O = "d18o",
+    PO₄ = "phosphate", NO₃ = "nitrate", O₂ = "oxygen")
+TMInames = (θ = :θ, S = :Sₚ, δ¹⁸O = :δ¹⁸Ow, PO₄ = :PO₄, NO₃ = :NO₃, O₂ = :O₂)
 
-# Arguments
-This function reads the paths configured in its body and takes no arguments.
+# observations, their standard deviations, and the horizontal decorrelation
+# length [km] of their errors
+c = map((variable, name) -> readfield(WOCEfile, variable, γ; name), WOCEnames, TMInames)
+σ = map((variable, name) -> readfield(WOCEerrorfile, variable, γ; name = Symbol("σ", name)),
+    WOCEnames, TMInames)
+Ly = readfield(WOCEerrorfile, "decorrelation_length", γ;
+    name = :L, longname = "decorrelation length", units = "km")
+y = Observations(c, σ, γ; L = Ly)
 
-# Output
-- `observations::Observations`: WOCE `y`, `σ`, and `L` on the modern TMI grid
-"""
-function woceobservations()
-    data_directory = normpath(TMI.pkgdir("..", "regridding_WOCE_for_TMI", "data"))
-    observations_file = joinpath(data_directory,
-        "TMI_gridded_WOCE_4x4_Variables_33_levels.nc")
-    uncertainties_file = joinpath(data_directory,
-        "TMI_gridded_WOCE_Errors_4x4_Variables_33_levels.nc")
-    woce_tracers = (
-        θ="potential_temperature", S="salinity", δ¹⁸O="d18o",
-        PO₄="phosphate", NO₃="nitrate", O₂="oxygen",
-    )
-    γ = TMI.Grid(TMI.pkgdatadir("TMI_modern_90x45x33_G14_v2.nc"))
-    observations = map(name -> readfield(observations_file, name, γ), woce_tracers)
-    σ = map((name, observation) -> readfield(
-        uncertainties_file,
-        name,
-        γ;
-        name=Symbol("σ", observation.name),
-    ), woce_tracers, observations)
-    L = readfield(uncertainties_file, "decorrelation_length", γ)
-    return Observations(observations, σ, γ; L)
-end
+# first guess: observed surface values, a uniform phosphate source, isotropic mass fractions
+b₀ = map(getsurfaceboundary, c)
+q₀ = (qPO₄ = 3.0e-4 * onesource(γ, :qPO₄, "local source of phosphate", "μmol/kg"),)
+m₀ = massfractions_isotropic(γ)
 
-"""
-    main(experiment_name; max_iterations, checkpoint_interval,
-        number_of_gradient_checks, random_seed)
+# stoichiometric ratios for A = watermassmatrix(m, γ), whose interior diagonal
+# is +1: signs are opposite to ex0, which uses the A of the TMI file
+r = (PO₄ = (qPO₄ = -1.0,), NO₃ = (qPO₄ = -15.5,), O₂ = (qPO₄ = 170.0,))
 
-Run the full WOCE inversion with Enzyme gradients and Ipopt.
+# physical limits on each surface boundary condition
+lb = (θ = -2.0, S = 0.0, δ¹⁸O = -10.0, PO₄ = 0.0, NO₃ = 0.0, O₂ = 0.0)
+ub = (θ = 35.0, S = 45.0, δ¹⁸O = 10.0, PO₄ = 10.0, NO₃ = 45.0, O₂ = 500.0)
 
-# Arguments
-- `experiment_name` and keyword arguments: artifact name and run limits
+# adjustments: standard deviation σ, smoothing length L [km], and physical limits lb, ub.
+# The phosphate source is adjusted on a log scale, qPO₄ = qPO₄₀ eᵘ, which keeps it
+# positive; its σ is therefore in log units (log 50: one standard deviation is a
+# factor of 50), while lb and ub stay limits on qPO₄ in its own units.
+σb = map(getsurfaceboundary, σ)
+controls = (b = map((σₖ, lbₖ, ubₖ) -> (σ = σₖ, L = 1_000.0, lb = lbₖ, ub = ubₖ), σb, lb, ub),
+    q = (qPO₄ = (σ = log(50.0), lb = 6.0e-6, ub = 1.5e-2, logscale = true),),
+    m = (σ = 1.0, lb = 0.0, ub = 1.0))
+inversion = Inversion(y; b₀, q₀, r, m₀, controls)
 
-# Output
-- `checkpointer::InversionCheckpointer`: configuration for the saved results
-"""
-function main(
-    experiment_name = "full_inversion";
-    max_iterations = 6000,
-    checkpoint_interval = 500,
-    number_of_gradient_checks = 5,
-    random_seed = 1234,
+optimizer = IpoptOptimizer(
+    hessian_approximation = "limited-memory",
+    limited_memory_max_history = 10,
+    acceptable_tol = 1.0e-6,
+    mu_strategy = "adaptive",
+    adaptive_mu_globalization = "kkt-error",
+    nlp_scaling_method = "gradient-based",
 )
-    checkpointer = InversionCheckpointer(experiment_name, checkpoint_interval)
-    observations = woceobservations()
-    γ = observations.γ
-    y = observations.y
-    σ = observations.σ
-    b₀ = map(getsurfaceboundary, y)
-    σ_b = map(getsurfaceboundary, σ)
-    # Keep each tracer's prior, uncertainty, smoothing scale, and bounds together.
-    boundary_controls = (
-        θ = (prior=b₀.θ, σ=σ_b.θ,
-            L=1_000.0, lb=-2.0, ub=35.0),
-        S = (prior=b₀.S, σ=σ_b.S,
-            L=1_000.0, lb=0.0, ub=45.0),
-        δ¹⁸O = (prior=b₀.δ¹⁸O, σ=σ_b.δ¹⁸O,
-            L=1_000.0, lb=-10.0, ub=10.0),
-        PO₄ = (prior=b₀.PO₄, σ=σ_b.PO₄,
-            L=1_000.0, lb=0.0, ub=10.0),
-        NO₃ = (prior=b₀.NO₃, σ=σ_b.NO₃,
-            L=1_000.0, lb=0.0, ub=45.0),
-        O₂ = (prior=b₀.O₂, σ=σ_b.O₂,
-            L=1_000.0, lb=0.0, ub=500.0),
-    )
-    inversion = Inversion(
-        observations;
-        boundary_conditions=boundary_controls,
-        sources=(qPO₄=(prior=log(3.0e-4) * one(onesource(γ, :qPO₄,
-                "local source of phosphate", "μmol/kg"; logscale=true)),
-            σ=log(50.0),
-            lb=log(6.0e-6), ub=log(1.5e-2)),),
-        stoichiometry=(
-            PO₄ = (qPO₄ = -1.0,),
-            NO₃ = (qPO₄ = -15.5,),
-            O₂ = (qPO₄ = 170.0,),
-        ),
-        mass_fractions=(prior=massfractions_isotropic(γ),
-            σ=1.0, lb=0.0, ub=1.0),
-    )
-    optimizer = IpoptOptimizer(
-        hessian_approximation = "limited-memory",
-        limited_memory_max_history = 10,
-        acceptable_tol = 1.0e-6,
-        mu_strategy = "adaptive",
-        adaptive_mu_globalization = "kkt-error",
-        nlp_scaling_method = "gradient-based",
-    )
-    runinversion(
-        inversion,
-        optimizer,
-        checkpointer;
-        max_iterations=max_iterations,
-        number_of_gradient_checks=number_of_gradient_checks,
-        random_seed=random_seed,
-        normalize_controls=true,
-    )
-    return checkpointer
-end
-
-main()
+runinversion(inversion, optimizer; name = "full_inversion",
+    iterations = 6000, checkpoint_interval = 500)

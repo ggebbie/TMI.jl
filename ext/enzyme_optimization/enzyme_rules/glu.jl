@@ -1,13 +1,17 @@
 """
     Enzyme.make_zero(Alu)
-    augmented_primal(config, lu, return_activity, A)
-    reverse(config, lu, return_activity, gAlu, A)
+    augmented_primal(config, lu!, return_activity, F, A)
+    reverse(config, lu!, return_activity, _, F, A)
 
-Create and propagate the sparse cotangent shadow for UMFPACK factorization.
+Create and propagate the sparse cotangent shadow for the UMFPACK refactorization
+`lu!(F, A)`, which reuses the symbolic analysis (and ordering) of `F`. When `F`
+already holds the values of `A`, as when Ipopt asks for the gradient at the
+point whose cost it just evaluated, the refactorization is skipped.
 
 # Arguments
-- `Alu`, `A`: factorization and duplicated sparse source matrix
-- `config`, `gAlu`: reverse configuration and factorization cotangent
+- `Alu`, `F`: UMFPACK factorization and its duplicated shadow
+- `A`: duplicated sparse source matrix
+- `config`: reverse configuration
 
 # Output
 - `result`: factorization shadow, `AugmentedReturn`, or reverse placeholder
@@ -30,31 +34,26 @@ function Enzyme.make_zero(Alu::SparseArrays.UMFPACK.UmfpackLU{Tv, Ti}) where {Tv
 end
 function augmented_primal(
     config::RevConfigWidth{1},
-    func::Const{typeof(lu)},
-    ::Type{<:Union{Duplicated,Enzyme.DuplicatedNoNeed}},
+    ::Const{typeof(lu!)},
+    ::Type{<:Union{Const,Duplicated,Enzyme.DuplicatedNoNeed}},
+    F::Duplicated{<:SparseArrays.UMFPACK.UmfpackLU},
     A::Duplicated{<:SparseMatrixCSC},
 )
-    Alu = func.val(A.val)
-    gAlu = needs_shadow(config) ? Enzyme.make_zero(Alu) : nothing
-    primal = needs_primal(config) ? Alu : nothing
-    return AugmentedReturn(primal, gAlu, gAlu)
+    nonzeros(A.val) == F.val.nzval || lu!(F.val, A.val)
+    primal = needs_primal(config) ? F.val : nothing
+    shadow = needs_shadow(config) ? F.dval : nothing
+    return AugmentedReturn(primal, shadow, nothing)
 end
 function reverse(
     ::RevConfigWidth{1},
-    ::Const{typeof(lu)},
-    ::Type{<:Union{Duplicated,Enzyme.DuplicatedNoNeed}},
-    gAlu::SparseArrays.UMFPACK.UmfpackLU,
+    ::Const{typeof(lu!)},
+    ::Type{<:Union{Const,Duplicated,Enzyme.DuplicatedNoNeed}},
+    _,
+    F::Duplicated{<:SparseArrays.UMFPACK.UmfpackLU},
     A::Duplicated{<:SparseMatrixCSC},
 )
-    A.dval.nzval .+= gAlu.nzval
-    return (nothing,)
-end
-function reverse(
-    ::RevConfigWidth{1},
-    ::Const{typeof(lu)},
-    ::Type{<:Union{Duplicated,Enzyme.DuplicatedNoNeed}},
-    ::Nothing,
-    ::Duplicated{<:SparseMatrixCSC},
-)
-    return (nothing,)
+    # lu! overwrites F, so its cotangent passes entirely to A
+    A.dval.nzval .+= F.dval.nzval
+    fill!(F.dval.nzval, 0)
+    return (nothing, nothing)
 end

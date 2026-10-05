@@ -15,11 +15,11 @@ function augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
-    mass_fractions::Duplicated,
+    m::Union{Const,Duplicated},
     γ::Annotation{<:Grid},
 )
     needs_matrix = needs_primal(config) || needs_shadow(config)
-    A = needs_matrix ? func.val(mass_fractions.val, γ.val) : nothing
+    A = needs_matrix ? func.val(m.val, γ.val) : nothing
     primal = needs_primal(config) ? A : nothing
     gA = needs_shadow(config) ? Enzyme.make_zero(A) : nothing
     return AugmentedReturn(primal, gA, gA)
@@ -29,16 +29,18 @@ function reverse(
     ::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
     gA,
-    mass_fractions::Duplicated,
+    m::Union{Const,Duplicated},
     γ::Annotation{<:Grid},
 )
+    # fixed mass fractions: A is constant
+    m isa Const && return (nothing, nothing)
     grid = γ.val
     R = grid.R
-    for cell in cartesianindex(grid.interior)
-        for (fraction, g_fraction) in zip(mass_fractions.val, mass_fractions.dval)
-            wet(fraction)[cell] || continue
-            neighbor, _ = step_cartesian(cell, fraction.position, grid)
-            g_fraction.fraction[cell] -= gA[R[cell], R[neighbor]]
+    # fractions outer: taking an element of `m` in the inner loop allocates on Julia 1.13
+    for (mₖ, gmₖ) in zip(m.val, m.dval)
+        for cell in cartesianindex(wet(mₖ))
+            neighbor, _ = step_cartesian(cell, mₖ.position, grid)
+            gmₖ.fraction[cell] -= gA[R[cell], R[neighbor]]
         end
     end
     return (nothing, nothing)

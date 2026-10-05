@@ -20,7 +20,7 @@ export config, download_file,
     surfaceindex, lonindex, latindex, depthindex,
     surfacepatch, 
     layerthickness, cellarea, cellvolume,
-    planview, zonalaverage,
+    planview, 
     section,
     tracerinit,
     watermassmatrix, watermassdistribution,
@@ -34,6 +34,7 @@ export config, download_file,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
+    Observations, Inversion, runinversion,
     trackpathways, meanage,
     regeneratedphosphate, preformedphosphate,
     regeneratednitrate, preformednitrate,
@@ -61,12 +62,11 @@ export config, download_file,
     +, -, *, dot,
     zerosource, onesource,
     adjustsource, adjustsource!,
-    Grid, Field, BoundaryCondition, Observations, vec, unvec!, unvec, wet,
+    Grid, Field, BoundaryCondition, vec, unvec!, unvec, wet,
     zerowestboundary, zeronorthboundary,
     zeroeastboundary, zerosouthboundary,
     onewestboundary, onenorthboundary, oneeastboundary, onesouthboundary,
     distancematrix, gaussiandistancematrix, versionlist,
-    surfacelaplacianmatrix, gaussianprecision,
     massfractions, massfractions_isotropic, neighbors
 
 import Base: zeros, one, oneunit, ones, \
@@ -99,14 +99,9 @@ include(pkgsrcdir("field.jl"))
 include(pkgsrcdir("source.jl"))
 include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
-include(pkgsrcdir("spatial_derivatives.jl"))
-include(pkgsrcdir("precision_matrices.jl"))
-include(pkgsrcdir("observations.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
 include(pkgsrcdir("deprecated.jl"))
-
-function zonalaverage end
 
 """ 
     function trackpathways(TMIversion,latbox,lonbox)
@@ -597,6 +592,41 @@ function gradient_check(uvec,f,fg,fg!)
     return ∇f, ∇f_finite
 end
 
+"Tracer observations for `Inversion`; constructor in the `TMIEnzymeOptimizationExt` extension."
+struct Observations{Y,S,X,I,V,G,M}
+    tracers::Y
+    σ::S
+    locs::X
+    wis::I
+    yvec::V
+    γ::G
+    Wⁱ::M
+end
+
+"Inverse problem for `runinversion`; constructor in the `TMIEnzymeOptimizationExt` extension."
+struct Inversion{Y,B,Q,R,M,U,N,V,W}
+    y::Y
+    b₀::B
+    q₀::Q
+    r::R
+    m₀::M
+    u::U
+    ranges::N
+    σ::V
+    lb::V
+    ub::V
+    Q⁻::W
+end
+
+"""
+    runinversion(inversion, optimizer; name, iterations, checkpoint_interval)
+
+Solve an `Inversion` with Ipopt. Defined in the `TMIEnzymeOptimizationExt`
+extension, loaded with `using Enzyme, Optimization, OptimizationIpopt`.
+"""
+function runinversion end
+
+
 """
     function writefield(file,field)
 
@@ -938,12 +968,10 @@ function interpindex(loc,γ)
     The derivative of linear interpolation is needed in sensitivity studies.
     ReverseDiff.jl could find this quantity automatically.
     Instead we dig into the Interpolations.jl package to find the weights that are effectively the partial derivatives of the function.
-
 # Arguments
 - `c`: a temporary tracer field, would be nice to make it unnecessary
 - `loc`: (lon,lat,depth) tuple of a location of interest
 - `γ`: TMI grid
-
 # Output
 - `δ`: weights on a 3D tracer field grid
 """
@@ -965,19 +993,6 @@ function interpindex(loc,γ)
     # may involve chaging Gridded(Linear()) above
     return wis
 end
-"""
-    interpindex(locations,γ)
-
-Return interpolation indices for multiple locations.
-
-# Arguments
-- `locations`, `γ`: locations and grid
-
-# Output
-- `indices`: vector of weighted indices
-"""
-interpindex(locations::AbstractVector{<:Tuple}, γ::Grid) =
-    map(location -> interpindex(location, γ), locations)
 
 """
 function  shiftloc(loc)
@@ -1049,31 +1064,7 @@ function interpweights(loc,γ)
     elseif sum(filter(!isnan,δ)) < 1.0
         δ ./= sum(filter(!isnan,δ))
     end
-
-    return δ
-end
-
-"""
-    interpweights(wis,γ)
-
-Construct gridded weights from precomputed interpolation indices.
-
-# Arguments
-- `wis`, `γ`: weighted indices and TMI grid
-
-# Output
-- `δ`: normalized three-dimensional weights
-"""
-function interpweights(wis::Tuple{I,I,I},γ::Grid{R,3}) where
-    {T<:Real,R<:Real,I<:Interpolations.WeightedAdjIndex{2,T}}
-    list, δ = vcat(1:length(γ.lon),1), zeros(γ.wet)
-    δwrap = view(δ,list,:,:)
-    for ii = 1:2, jj = 1:2, kk = 1:2
-        δwrap[wis[1].istart+ii-1,wis[2].istart+jj-1,wis[3].istart+kk-1] +=
-            wis[1].weights[ii]*wis[2].weights[jj]*wis[3].weights[kk]
-    end
-    weight = sum(filter(!isnan,δ))
-    weight < 1.0 && (δ ./= weight)
+    
     return δ
 end
 
@@ -1206,13 +1197,14 @@ Return a new object with the same passive fields as `x` and a new uninitialized
 function Base.similar(x::T) where {T<:Union{BoundaryCondition, Source, Field}}
     return replace_tracer(x, similar(x.tracer))
 end
+Base.similar(m::MassFraction) = MassFraction(similar(m.fraction), m.γ, m.name, m.longname, m.units, m.position)
 
 function Base.similar(
-    x::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}},
+    x::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field, MassFraction}}}},
 ) where {names}
     return map(similar, x)
 end
-Base.similar(x::NamedTuple{names,<:Tuple{Vararg{MassFraction}}}) where {names} = map(similar, x)
+
 """
     copy_tracer!(dest, src)
 
@@ -1227,10 +1219,6 @@ Returns `dest`.
 """
 function copy_tracer!(dest::Union{BoundaryCondition, Source, Field}, src::Union{BoundaryCondition, Source, Field})
     dest.tracer .= src.tracer
-end
-
-function copy_tracer!(dest::MassFraction, src::MassFraction)
-    dest.fraction .= src.fraction
 end
 
 function copy_tracer!(dest::NamedTuple, src::NamedTuple)
@@ -1298,41 +1286,11 @@ function zeros(wet,ltype=Float64)
     return d
 end
 
-Base.similar(m::MassFraction) = MassFraction(similar(m.fraction), m.γ, m.name, m.longname, m.units, m.position)
+
 """
-    one(control)
-    zero(control)
-
-Construct constant controls while retaining metadata.
-
-# Arguments
-- `control`: TMI control or compatible named tuple
-
-# Output
-- `result`: similar, one-valued, or zero-valued control
+    zero(c::Field) = zeros(c.γ)
 """
-function Base.one(c::T) where {T<:Union{BoundaryCondition,Source}}
-    result = similar(c)
-    result.tracer .= c.tracer
-    result.tracer[wet(c)] .= one(eltype(c.tracer))
-    return result
-end
-function Base.one(m::MassFraction)
-    result = similar(m)
-    result.fraction .= m.fraction
-    result.fraction[wet(m)] .= one(eltype(m.fraction))
-    return result
-end
-Base.one(c::NamedTuple{names,T}) where {
-    names,
-    T<:Tuple{Vararg{Union{BoundaryCondition,Field,MassFraction,Source}}},
-} = map(one, c)
 Base.zero(c::Field) = zeros(c.γ)
-Base.zero(c::Union{BoundaryCondition,Source,MassFraction}) = zero(eltype(vec(c))) * one(c)
-Base.zero(c::NamedTuple{names,T}) where {
-    names,
-    T<:Tuple{Vararg{Union{BoundaryCondition,Field,MassFraction,Source}}},
-} = map(zero, c)
 
 
 # Define maximum for Field to not include NaNs
@@ -1396,28 +1354,13 @@ function add!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] += d.tracer[wet(d)]
 end
-function add!(m::MassFraction,n::MassFraction)
-    m.fraction[wet(m)] += n.fraction[wet(n)]
-end
-function add!(c::NamedTuple,d::NamedTuple)
-    for name in keys(c)
-        add!(c[name], d[name])
-    end
-    return nothing
-end
+
 function Base.:+(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     e = similar(c)
     copy_tracer!(e, c)
     add!(e,d)
     return e
 end
-function Base.:+(m::MassFraction,n::MassFraction)
-    result = similar(m)
-    result.fraction .= m.fraction
-    add!(result, n)
-    return result
-end
-Base.:+(c::NamedTuple,d::NamedTuple) = map(+, c, d)
 
 function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     if wet(c) != wet(d) # check conformability
@@ -1426,6 +1369,7 @@ function subtract!(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     # a strange formulation to do in-place addition
     c.tracer[wet(c)] -= d.tracer[wet(d)]
 end
+
 function Base.:-(c::T,d::T) where T <: Union{Source,Field,BoundaryCondition}
     e = similar(c)
     copy_tracer!(e, c)
@@ -1442,8 +1386,6 @@ end
 # the order doesn't matter when multiplying by a scalar
 
 Base.:*(c::Number,d::Union{Field,BoundaryCondition,Source}) = d*c
-Base.:*(c::Number,d::MassFraction) = d*c
-Base.:*(c::Number,d::NamedTuple) = d*c
 # right matrix multiply not handled
 function Base.:*(c::AbstractArray,d::Union{Field,BoundaryCondition,Source})
     e = similar(d)
@@ -1457,14 +1399,6 @@ function Base.:*(d::T,c::Union{Number,T}) where T <: Union{Field,BoundaryConditi
     mul!(e,c)
     return e
 end
-function Base.:*(m::MassFraction,c::Number)
-    result = similar(m)
-    result.fraction .= m.fraction
-    result.fraction[wet(m)] .*= c
-    return result
-end
-Base.:*(controls::NamedTuple,c::Number) = map(control -> control * c, controls)
-Base.:*(controls::NamedTuple,values::NamedTuple) = map(*, controls, values)
 
 function mul!(d::Union{Field,BoundaryCondition,Source},C::Number)
     d.tracer[wet(d)] *= C #*d.tracer[wet(d)]
@@ -1543,35 +1477,16 @@ end
     function vec(u)
 
     Turn a collection of controls into a vector
-    for use with Optim.jl.
+    for use with Optim.jl. 
     An in-place version of this function would be handy.
-
-# Arguments
-- `u`: control or named tuple
-
-# Output
-- `uvec`: wet values in control order
 """
 vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
-vec(u::BoundaryCondition) = u.tracer[u.wet]
-vec(m::MassFraction) = m.fraction[wet(m)]
 vec(::NamedTuple{(),Tuple{}}) = Float64[]
-function vec(u::NamedTuple)
-
-    T = eltype(vec(values(u)[1]))
-    #T = eltype(u)
-    uvec = Vector{T}(undef,0)
-    for v in u
-        #append!(uvec,v.tracer[v.wet])
-        append!(uvec,vec(v))
-    end
-    return uvec
-end
-function vec(u::NamedTuple{names,<:Tuple{Vararg{MassFraction}}}) where {names}
-    uvec = Vector{eltype(vec(first(u)))}()
-    foreach(fraction -> append!(uvec, vec(fraction)), u)
-    return uvec
+function vec(u::NamedTuple) 
+    # map over the tuple instead of looping over it, as in `unvec!`: on Julia 1.13
+    # the loop is slower when Enzyme differentiates through it
+    return vcat(map(vec, values(u))...)
 end
 
 """
@@ -1579,22 +1494,10 @@ end
 
     Replace u with new u
     Undo the operations by vec(u)
-    Needs to update u because attributes of
+    Needs to update u because attributes of 
     u need to be known at runtime.
-
-# Arguments
-- `u`, `uvec`: template and wet values from `vec(u)`
-
-# Output
-- `reconstructed`: populated control copy
-
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
-    u = similar(u₀)
-    unvec!(u,uvec)
-    return u
-end
-function unvec(u₀::Union{Source,MassFraction},uvec::Vector)
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition,Source,MassFraction},uvec::Vector) #where T <: Real
     u = similar(u₀)
     unvec!(u,uvec)
     return u
@@ -1604,14 +1507,8 @@ end
     function unvec!(u,uvec)
 
     Undo the operations by vec(u)
-    Needs to update u because attributes of
+    Needs to update u because attributes of 
     u need to be known at runtime.
-
-# Arguments
-- `u`, `uvec`: destination and wet values
-
-# Output
-- `nothing`
 """
 function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T}) where T <: Real
     I = findall(wet(u)) # findall seems slow
@@ -1619,18 +1516,17 @@ function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T
         u.tracer[vv] = uvec[ii]
     end
 end
-function unvec!(m::MassFraction, uvec::Vector)
+function unvec!(m::MassFraction,uvec::Vector)
     m.fraction[wet(m)] .= uvec
     return nothing
 end
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-    nlo = 1
-    nhi = 0
-    for v in u
-        nhi += sum(wet(v))
-        unvec!(v,uvec[nlo:nhi])
-        nlo = nhi + 1
-    end
+    # map over the tuple instead of looping over it: Enzyme on Julia 1.13
+    # cannot compile a loop over a NamedTuple of controls
+    n = map(v -> sum(wet(v)), values(u))
+    nhi = cumsum(n)
+    map((v, nv, hi) -> unvec!(v, uvec[hi-nv+1:hi]), values(u), n, nhi)
+    return nothing
 end
 
 """ 
@@ -1737,7 +1633,9 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
         # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
     sumwis = Vector{Float64}(undef,length(wis))
-    list = vcat(1:length(γ.lon),1)
+    # size(γ.wet,1), not length(γ.lon): the same number, but Enzyme's type
+    # analysis fails on the latter when observe is differentiated.
+    list = vcat(1:size(γ.wet,1),1)
     wetwrap = view(γ.wet,list,:,:)
     [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
@@ -2189,29 +2087,6 @@ function steadyinversion(Alu,b::NamedTuple,γ::Grid{T};q=nothing,r=1.0)::Field{T
     c = Alu \ d
 
     return c
-end
-
-"""
-    steadyinversion(Alu, b::NamedTuple, q::NamedTuple, γ; r=1.0)
-
-Solve multiple steady tracers with one factorization.
-
-# Arguments
-- `Alu`, `b`, `q`, `γ`: factorization, boundaries, sources, and grid
-- `r`: source ratio
-
-# Output
-- `c`: steady tracer fields keyed like `b`
-"""
-function steadyinversion(
-    Alu::Union{LU, SparseArrays.UMFPACK.UmfpackLU},
-    b::NamedTuple{tracer_names, S},
-    q::NamedTuple,
-    γ::Grid{T};
-    r=1.0,
-) where {T <: Real, tracer_names, S}
-    c_nt = map((b_i, q_i) -> steadyinversion(Alu, b_i, γ; q=q_i, r=r), b, q)
-    return c_nt
 end
 
 # """

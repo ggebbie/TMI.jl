@@ -29,21 +29,14 @@ _shadow(annotation::MixedDuplicated) = annotation.dval[]
 
 function reverse(
     ::RevConfigWidth{1}, ::Const{typeof(unvec!)}, ::Type{<:Const}, ::Any,
-    destination::Union{Duplicated,MixedDuplicated},
-    x::Union{Duplicated,MixedDuplicated},
+    destination::Annotation, x::Annotation,
 )
-    _shadow(x) .+= vec(_shadow(destination))
+    destination isa Const && return (nothing, nothing)
+    x isa Const || (_shadow(x) .+= vec(_shadow(destination)))
+    _zerowet!(_shadow(destination))
     return (nothing, nothing)
 end
-function reverse(
-    ::RevConfigWidth{1}, ::Const{typeof(unvec!)}, ::Type{<:Const}, ::Any,
-    ::Const, ::Annotation,
-)
-    return (nothing, nothing)
-end
-function reverse(
-    ::RevConfigWidth{1}, ::Const{typeof(unvec!)}, ::Type{<:Const}, ::Any,
-    ::Union{Duplicated,MixedDuplicated}, ::Const,
-)
-    return (nothing, nothing)
-end
+# `unvec!` overwrites the wet values, so their cotangent is consumed. Zero only
+# those entries: with runtime activity, inactive shadow fields can alias primal
+# grid arrays, so `remake_zero!` on the whole struct is unsafe.
+_zerowet!(shadow) = unvec!(shadow, zero(vec(shadow)))
