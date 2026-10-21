@@ -1,7 +1,8 @@
 """
     struct Observations
 
-Tracer observations for `Inversion`; constructor in the `TMIEnzymeOptimizationExt` extension.
+Tracer observations for `Inversion`. The constructor is in the
+`TMIEnzymeOptimizationExt` extension, ext/TMIEnzymeOptimizationExt/observations.jl.
 
 - `values::NamedTuple`: observed values of each tracer at its observation points
 - `σ::NamedTuple`: standard deviations of the observed values
@@ -24,7 +25,8 @@ end
 """
     struct Inversion
 
-Inverse problem for `runinversion`; constructor in the `TMIEnzymeOptimizationExt` extension.
+Inverse problem for `runinversion`. The constructor is in the
+`TMIEnzymeOptimizationExt` extension, ext/TMIEnzymeOptimizationExt/inverse_problem.jl.
 
 - `y::Observations`: observations
 - `b₀`, `q₀`, `m₀`: first-guess boundary conditions, sources, and mass fractions
@@ -54,6 +56,7 @@ end
         checkpoint_directory, data_directory, number_of_gradient_checks)
 
 Solve an `Inversion` with Ipopt. Defined in the `TMIEnzymeOptimizationExt`
-extension, loaded with `using Enzyme, Optimization, OptimizationIpopt`.
+extension, ext/TMIEnzymeOptimizationExt/TMIEnzymeOptimizationExt.jl, which is
+loaded with `using Enzyme, Optimization, OptimizationIpopt`.
 """
 function runinversion end

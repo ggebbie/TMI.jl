@@ -1,12 +1,12 @@
-# an observation setting (σ, locs, L, Wⁱ) for each tracer in `names`: one value
-# for all tracers, or a `NamedTuple` by tracer (`nothing` for tracers missing from it)
-bytracer(a, names) = foreachtracer(k -> a isa NamedTuple ? get(a, k, nothing) : a, names)
+# The `Observations` type: its constructor, sampling modeled tracers where they are
+# observed, and how it prints. The struct itself is defined in src/inversion.jl.
 
 """
     function observe(c, y)
 
-Values of the tracers `c` where `y` observes them: at the interior cells for a
-gridded tracer, interpolated to the observation locations otherwise.
+Method of TMI's `observe` for all tracers of an `Observations`. Values of the
+tracers `c` where `y` observes them: at the interior cells for a gridded tracer,
+interpolated to the observation locations otherwise.
 
 # Arguments
 - `c::NamedTuple`: gridded `Field`s, including every tracer observed in `y`
@@ -41,7 +41,11 @@ given once for all tracers or as a `NamedTuple` keyed like `observed`.
 """
 function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, L=nothing, Wⁱ=nothing)
     names = keys(observed)
-    σ, locs, L, Wⁱ = map(a -> bytracer(a, names), (σ, locs, L, Wⁱ))
+    # each setting for each tracer: one value for all tracers, or a NamedTuple by
+    # tracer (`nothing` for tracers missing from it)
+    σ, locs, L, Wⁱ = map((σ, locs, L, Wⁱ)) do a
+        foreachtracer(k -> a isa NamedTuple ? get(a, k, nothing) : a, names)
+    end
     wis = map(x -> isnothing(x) ? nothing : [TMI.interpindex(loc, γ) for loc in x], locs)
     # a setting of tracer k at each of its n observation points: a Field at the
     # interior cells or interpolated to `locs`, a vector as given, a number repeated

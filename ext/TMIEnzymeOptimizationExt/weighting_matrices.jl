@@ -1,5 +1,9 @@
+# Weighting matrices of the cost function: the inverse covariance Wⁱ of correlated
+# gridded observations (`gaussianprecision`), and the Laplacian of the prior
+# smoothness cost of boundary adjustments (`surfacelaplacianmatrix`).
+
 """
-    function euclidean_distance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6371.0)
+    function euclideandistance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6371.0)
 
 Straight-line distance between two points below the sea surface, accounting
 for their depths below a sphere of radius `R`.
@@ -11,7 +15,7 @@ for their depths below a sphere of radius `R`.
 # Output
 - `d`: distance [km]
 """
-function euclidean_distance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6_371.0)
+function euclideandistance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6_371.0)
     ϕᵢ, λᵢ, ϕⱼ, λⱼ = deg2rad.((latᵢ, lonᵢ, latⱼ, lonⱼ))
     rᵢ, rⱼ = R - depthᵢ / 1_000, R - depthⱼ / 1_000
     xyz(r, ϕ, λ) = (r * cos(ϕ) * cos(λ), r * cos(ϕ) * sin(λ), r * sin(ϕ))
@@ -50,6 +54,9 @@ end
 
 Sparse inverse covariance of gridded interior observations with a Gaussian
 horizontal correlation, built by a Vecchia approximation on horizontal neighbors.
+TMI's `gaussiandistancematrix(γ, σ, L)` is the dense covariance of the surface
+cells for one σ and L; this is its sparse inverse for all interior cells, with
+σ and L varying by cell, where a dense matrix would be too large.
 
 # Arguments
 - `σ`: standard deviation at each interior cell
@@ -71,7 +78,7 @@ function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3})
     function correlation(i, j)
         i == j && return one(T)
         ci, cj = cells[i], cells[j]
-        d = euclidean_distance(γ.lat[ci[2]], γ.lon[ci[1]], γ.depth[ci[3]],
+        d = euclideandistance(γ.lat[ci[2]], γ.lon[ci[1]], γ.depth[ci[3]],
             γ.lat[cj[2]], γ.lon[cj[1]], γ.depth[cj[3]])
         L² = L[i]^2 + L[j]^2
         return (2L[i] * L[j] / L²)^(3 / 2) * exp(-2d^2 / L²)

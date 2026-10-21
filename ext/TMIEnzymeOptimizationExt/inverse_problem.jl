@@ -1,10 +1,5 @@
-"""
-    function foreachtracer(f, names)
-
-The result of `f` for each tracer (or source) in `names`, as a `NamedTuple`
-keyed by name.
-"""
-foreachtracer(f, names) = NamedTuple{names}(map(f, names))
+# The `Inversion` type: its constructor, how it prints, and the first guesses
+# adjusted by a control vector. The struct itself is defined in src/inversion.jl.
 
 """
     function Inversion(y; b₀, q₀=(;), r=(;), m₀, controls)
@@ -84,40 +79,14 @@ function Base.show(io::IO, inversion::Inversion)
 end
 
 """
-    function steadytracers(Alu, b, q, r, γ)
-
-Steady-state tracers for every boundary condition in `b`, one tracer per
-boundary condition (`steadyinversion(Alu, b::NamedTuple, γ; q, r)` instead
-combines several boundaries of one tracer). The interior source of each tracer
-is the sum of the sources in `q` scaled by its stoichiometric ratios in `r`.
-
-# Arguments
-- `Alu`: LU factorization of `A = watermassmatrix(m, γ)`
-- `b::NamedTuple`: surface boundary conditions
-- `q::NamedTuple`: interior sources
-- `r::NamedTuple`: stoichiometric ratios, signed as `r` in `steadyinversion`,
-  e.g. `(NO₃ = (qPO₄ = 15.5,),)`; a tracer missing from `r` has no interior source
-- `γ::Grid`: TMI grid
-# Output
-- `c::NamedTuple`: steady-state `Field`s keyed like `b`
-"""
-function steadytracers(Alu, b::NamedTuple, q::NamedTuple, r::NamedTuple, γ::Grid)
-    return foreachtracer(keys(b)) do k
-        rₖ = get(r, k, nothing)
-        qₖ = isnothing(rₖ) ? nothing : reduce(+, map(j -> rₖ[j] * q[j], keys(rₖ)))
-        # r = -1: watermassmatrix(m, γ) has +1 on the interior diagonal, TMI files -1
-        steadyinversion(Alu, b[k], γ; q=qₖ, r=-1.0)
-    end
-end
-
-"""
     function adjustfirstguess!(u, inversion, uvec)
 
 The first-guess boundary conditions, sources, and mass fractions adjusted by
 the control vector, which is written into the preallocated controls `u`.
 
 # Arguments
-- `u`: preallocated controls, a copy of `inversion.u`
+- `u`: preallocated controls, a copy of `inversion.u`: the adjustments `u.b` and
+  `u.q` as `BoundaryCondition`s and `Source`s, and the adjusted mass fractions `u.m`
 - `inversion::Inversion`: first guesses and blocks of `uvec`
 - `uvec`: control vector
 # Output
@@ -132,32 +101,8 @@ function adjustfirstguess!(u, inversion::Inversion, uvec::AbstractVector)
         haskey(u.q, k) ? adjustsource(inversion.q₀[k], u.q[k]) : inversion.q₀[k]
     end
     isempty(ranges.m) && return b, q, inversion.m₀
-    # u.m holds the adjusted mass fractions, not an adjustment
+    # u.m holds the adjusted mass fractions, not an adjustment: watermassmatrix
+    # takes the fractions, and writing them into u.m allocates no new MassFractions
     unvec!(u.m, vec(inversion.m₀) + uvec[ranges.m])
     return b, q, u.m
-end
-
-"""
-    function forwardmodel(uvec, inversion, u, F)
-
-The forward model for a control vector: the first guesses adjusted by `uvec`,
-their water-mass matrix, and the steady-state tracers.
-
-# Arguments
-- `uvec`: control vector
-- `inversion::Inversion`: first guesses
-- `u`: preallocated controls, a copy of `inversion.u`
-- `F`: UMFPACK factorization of a water-mass matrix on the same grid, refactored
-  in place by `lu!`, which keeps its ordering
-# Output
-- `(; b, q, m, A, c)`: adjusted boundary conditions, sources, and mass
-  fractions, water-mass matrix `A`, and steady-state tracers `c` keyed like
-  `inversion.b₀`
-"""
-function forwardmodel(uvec::AbstractVector, inversion::Inversion, u, F)
-    γ = inversion.y.γ
-    b, q, m = adjustfirstguess!(u, inversion, uvec)
-    A = watermassmatrix(m, γ)
-    c = steadytracers(lu!(F, A), b, q, inversion.r, γ)
-    return (; b, q, m, A, c)
 end
