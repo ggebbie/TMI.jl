@@ -101,6 +101,7 @@ include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
+include(pkgsrcdir("inversion.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -591,40 +592,6 @@ function gradient_check(uvec,f,fg,fg!)
     println("Percent error ",100*abs(∇f - ∇f_finite)/abs(∇f + ∇f_finite))
     return ∇f, ∇f_finite
 end
-
-"Tracer observations for `Inversion`; constructor in the `TMIEnzymeOptimizationExt` extension."
-struct Observations{Y,S,X,I,V,G,M}
-    tracers::Y
-    σ::S
-    locs::X
-    wis::I
-    yvec::V
-    γ::G
-    Wⁱ::M
-end
-
-"Inverse problem for `runinversion`; constructor in the `TMIEnzymeOptimizationExt` extension."
-struct Inversion{Y,B,Q,R,M,U,N,V,W}
-    y::Y
-    b₀::B
-    q₀::Q
-    r::R
-    m₀::M
-    u::U
-    ranges::N
-    σ::V
-    lb::V
-    ub::V
-    Q⁻::W
-end
-
-"""
-    runinversion(inversion, optimizer; name, iterations, checkpoint_interval)
-
-Solve an `Inversion` with Ipopt. Defined in the `TMIEnzymeOptimizationExt`
-extension, loaded with `using Enzyme, Optimization, OptimizationIpopt`.
-"""
-function runinversion end
 
 
 """

@@ -1,7 +1,7 @@
 """
-    Enzyme.make_zero(Alu)
-    augmented_primal(config, lu!, return_activity, F, A)
-    reverse(config, lu!, return_activity, _, F, A)
+    function Enzyme.make_zero(Alu)
+    function augmented_primal(config, lu!, return_activity, F, A)
+    function reverse(config, lu!, return_activity, _, F, A)
 
 Create and propagate the sparse cotangent shadow for the UMFPACK refactorization
 `lu!(F, A)`, which reuses the symbolic analysis (and ordering) of `F`. When `F`
@@ -12,7 +12,6 @@ point whose cost it just evaluated, the refactorization is skipped.
 - `Alu`, `F`: UMFPACK factorization and its duplicated shadow
 - `A`: duplicated sparse source matrix
 - `config`: reverse configuration
-
 # Output
 - `result`: factorization shadow, `AugmentedReturn`, or reverse placeholder
 """

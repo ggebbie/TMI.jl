@@ -28,21 +28,20 @@ TMInames = (θ = :θ, S = :Sₚ, δ¹⁸O = :δ¹⁸Ow, PO₄ = :PO₄, NO₃ = 
 
 # observations, their standard deviations, and the horizontal decorrelation
 # length [km] of their errors
-c = map((variable, name) -> readfield(WOCEfile, variable, γ; name), WOCEnames, TMInames)
+observed = map((variable, name) -> readfield(WOCEfile, variable, γ; name), WOCEnames, TMInames)
 σ = map((variable, name) -> readfield(WOCEerrorfile, variable, γ; name = Symbol("σ", name)),
     WOCEnames, TMInames)
 Ly = readfield(WOCEerrorfile, "decorrelation_length", γ;
     name = :L, longname = "decorrelation length", units = "km")
-y = Observations(c, σ, γ; L = Ly)
+y = Observations(observed, σ, γ; L = Ly)
 
 # first guess: observed surface values, a uniform phosphate source, isotropic mass fractions
-b₀ = map(getsurfaceboundary, c)
+b₀ = map(getsurfaceboundary, observed)
 q₀ = (qPO₄ = 3.0e-4 * onesource(γ, :qPO₄, "local source of phosphate", "μmol/kg"),)
 m₀ = massfractions_isotropic(γ)
 
-# stoichiometric ratios for A = watermassmatrix(m, γ), whose interior diagonal
-# is +1: signs are opposite to ex0, which uses the A of the TMI file
-r = (PO₄ = (qPO₄ = -1.0,), NO₃ = (qPO₄ = -15.5,), O₂ = (qPO₄ = 170.0,))
+# stoichiometric ratios to the phosphate source, as in ex0
+r = (PO₄ = (qPO₄ = 1.0,), NO₃ = (qPO₄ = 15.5,), O₂ = (qPO₄ = -170.0,))
 
 # physical limits on each surface boundary condition
 lb = (θ = -2.0, S = 0.0, δ¹⁸O = -10.0, PO₄ = 0.0, NO₃ = 0.0, O₂ = 0.0)

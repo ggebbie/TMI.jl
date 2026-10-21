@@ -1,5 +1,5 @@
 """
-    euclidean_distance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6371.0)
+    function euclidean_distance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6371.0)
 
 Straight-line distance between two points below the sea surface, accounting
 for their depths below a sphere of radius `R`.
@@ -8,7 +8,6 @@ for their depths below a sphere of radius `R`.
 - `latᵢ`, `lonᵢ`, `depthᵢ`: latitude [°N], longitude [°E], and depth [m] of the first point
 - `latⱼ`, `lonⱼ`, `depthⱼ`: latitude [°N], longitude [°E], and depth [m] of the second point
 - `R`: radius of the sphere [km]
-
 # Output
 - `d`: distance [km]
 """
@@ -20,7 +19,7 @@ function euclidean_distance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; 
 end
 
 """
-    adjacencymatrix(γ, mask, offsets)
+    function adjacencymatrix(γ, mask, offsets)
 
 Sparse matrix with a 1 where the cell of column j is a neighbor of the cell of
 row i. Rows and columns follow the order of the cells in `mask`.
@@ -29,7 +28,6 @@ row i. Rows and columns follow the order of the cells in `mask`.
 - `γ::Grid`: TMI grid, which sets zonal wrapping
 - `mask`: cells included as rows and columns
 - `offsets`: steps to the neighbors, e.g. `(CartesianIndex(1, 0, 0),)`
-
 # Output
 - `G`: sparse adjacency matrix
 """
@@ -48,7 +46,7 @@ function adjacencymatrix(γ::Grid{T,N}, mask::BitArray{N},
 end
 
 """
-    gaussianprecision(σ, L, γ)
+    function gaussianprecision(σ, L, γ)
 
 Sparse inverse covariance of gridded interior observations with a Gaussian
 horizontal correlation, built by a Vecchia approximation on horizontal neighbors.
@@ -57,7 +55,6 @@ horizontal correlation, built by a Vecchia approximation on horizontal neighbors
 - `σ`: standard deviation at each interior cell
 - `L`: decorrelation length scale [km] at each interior cell
 - `γ`: TMI grid
-
 # Output
 - `Wⁱ`: symmetric sparse inverse covariance matrix
 """
@@ -100,7 +97,7 @@ function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3})
 end
 
 """
-    surfacelaplacianmatrix(γ)
+    function surfacelaplacianmatrix(γ)
 
 Horizontal Laplacian on wet surface cells, with zonal wrapping and no flux
 across land. Rows and columns follow the order of `vec` of a surface
@@ -108,7 +105,6 @@ across land. Rows and columns follow the order of `vec` of a surface
 
 # Arguments
 - `γ::Grid`: TMI grid
-
 # Output
 - `∇²`: sparse Laplacian [km⁻²]
 """

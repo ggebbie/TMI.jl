@@ -3,82 +3,73 @@
 bytracer(a, names) = foreachtracer(k -> a isa NamedTuple ? get(a, k, nothing) : a, names)
 
 """
-    atobservations(c, wis, γ, n)
+    function observe(c, y)
 
-Values of a tracer, or of its σ or L, at the points where the tracer is observed.
-
-# Arguments
-- `c`: gridded `Field`, vector of observed values, or number
-- `wis`: interpolation weights at observation locations, or `nothing` for gridded observations
-- `γ::Grid`: TMI grid
-- `n`: number of observations, used when `c` is a number
-
-# Output
-- `ỹ`: interior cells of a gridded `Field`, `observe(c, wis, γ)` at observation
-  locations, a vector as given, or a number repeated `n` times
-"""
-atobservations(c::Field, ::Nothing, γ, n=0) = c.tracer[γ.interior]
-atobservations(c::Field, wis, γ, n=0) = observe(c, wis, γ)
-atobservations(c::AbstractVector, wis, γ, n=0) = c
-atobservations(c::Number, wis, γ, n) = fill(float(c), n)
-
-"""
-    observe(c, y)
-
-Values of the tracers `c` where `y` observes them.
+Values of the tracers `c` where `y` observes them: at the interior cells for a
+gridded tracer, interpolated to the observation locations otherwise.
 
 # Arguments
 - `c::NamedTuple`: gridded `Field`s, including every tracer observed in `y`
 - `y::Observations`: observations
-
 # Output
 - `ỹ`: vector ordered like `vec(y)`
 """
-observe(c::NamedTuple, y::Observations) =
-    reduce(vcat, map(k -> atobservations(c[k], y.wis[k], y.γ), keys(y.tracers)))
+observe(c::NamedTuple, y::Observations) = reduce(vcat, map(keys(y.values)) do k
+    isnothing(y.wis[k]) ? c[k].tracer[y.γ.interior] : observe(c[k], y.wis[k], y.γ)
+end)
 
 """
-    Observations(y, σ, γ; locs=nothing, L=nothing, Wⁱ=nothing)
+    function Observations(observed, σ, γ; locs=nothing, L=nothing, Wⁱ=nothing)
 
 Tracer observations and their error statistics. `σ`, `locs`, `L`, and `Wⁱ` are
-given once for all tracers or as a `NamedTuple` keyed like `y`.
+given once for all tracers or as a `NamedTuple` keyed like `observed`.
 
 # Arguments
-- `y::NamedTuple`: each tracer a gridded `Field` or a vector of values at `locs`
+- `observed::NamedTuple`: the observed tracers, each a gridded `Field` or a
+  vector of values at `locs`
 - `σ`: observational error, a number, `Field`, or vector
 - `γ::Grid`: TMI grid
+# Optional Arguments
 - `locs`: `nothing` for gridded tracers, or a vector of (lon, lat, depth)
 - `L`: decorrelation length scale [km] of gridded errors, a number or `Field`
 - `Wⁱ`: inverse observational error covariance, overrides `σ` and `L`
-
 # Output
-- `Observations`: `tracers` (the given `y`), `σ`, `locs`, interpolation weights
-  `wis`, all observed values `yvec` (also `vec(y)`), `γ`, and block-diagonal `Wⁱ`
+- `Observations`: for each tracer, its observed `values` and their `σ` at the
+  observation points (the interior cells of a gridded tracer); `locs`,
+  interpolation weights `wis`, all observed values `yvec` (also `vec(y)`), `γ`,
+  and block-diagonal `Wⁱ`
 """
-function Observations(y::NamedTuple, σ, γ::Grid; locs=nothing, L=nothing, Wⁱ=nothing)
-    names = keys(y)
+function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, L=nothing, Wⁱ=nothing)
+    names = keys(observed)
     σ, locs, L, Wⁱ = map(a -> bytracer(a, names), (σ, locs, L, Wⁱ))
     wis = map(x -> isnothing(x) ? nothing : [TMI.interpindex(loc, γ) for loc in x], locs)
-    observed = map(k -> atobservations(y[k], wis[k], γ), names)
-    Wⁱ = map(names, observed) do k, yₖ
-        n = length(yₖ)
+    # a setting of tracer k at each of its n observation points: a Field at the
+    # interior cells or interpolated to `locs`, a vector as given, a number repeated
+    function atpoints(x, k, n=0)
+        x isa Number && return fill(float(x), n)
+        x isa Field || return x
+        return isnothing(wis[k]) ? x.tracer[γ.interior] : observe(x, wis[k], γ)
+    end
+    pointvalues = foreachtracer(k -> atpoints(observed[k], k), names)
+    pointσ = foreachtracer(k -> atpoints(σ[k], k, length(pointvalues[k])), names)
+    Wⁱ = map(names) do k
         if !isnothing(Wⁱ[k])
             sparse(Wⁱ[k])
         elseif !isnothing(L[k])
-            isnothing(wis[k]) || throw(ArgumentError(
-                "L needs gridded observations of $k; supply Wⁱ for observations at locs"))
-            gaussianprecision(atobservations(σ[k], nothing, γ, n), atobservations(L[k], nothing, γ, n), γ)
+            isnothing(wis[k]) || throw(ArgumentError("L applies to gridded observations, " *
+                "and $k is observed at locs: give L by tracer, e.g. L = (θ = 1000.0,), or supply Wⁱ"))
+            gaussianprecision(pointσ[k], atpoints(L[k], k, length(pointvalues[k])), γ)
         else
-            spdiagm(0 => atobservations(σ[k], wis[k], γ, n) .^ -2)
+            spdiagm(0 => pointσ[k] .^ -2)
         end
     end
-    return Observations(y, σ, locs, wis, reduce(vcat, observed), γ, blockdiag(Wⁱ...))
+    return Observations(pointvalues, pointσ, locs, wis, reduce(vcat, pointvalues), γ, blockdiag(Wⁱ...))
 end
 
 Base.vec(y::Observations) = y.yvec
 
 function Base.show(io::IO, y::Observations)
     gridded = count(isnothing, y.wis)
-    print(io, "Observations($(length(y.tracers)) tracers; $gridded gridded, ",
-        "$(length(y.tracers) - gridded) at locations; $(length(vec(y))) values)")
+    print(io, "Observations($(length(y.values)) tracers; $gridded gridded, ",
+        "$(length(y.values) - gridded) at locations; $(length(vec(y))) values)")
 end

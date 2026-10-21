@@ -1,5 +1,5 @@
 """
-    foreachtracer(f, names)
+    function foreachtracer(f, names)
 
 The result of `f` for each tracer (or source) in `names`, as a `NamedTuple`
 keyed by name.
@@ -7,21 +7,15 @@ keyed by name.
 foreachtracer(f, names) = NamedTuple{names}(map(f, names))
 
 """
-    Inversion(y; b₀, q₀=(;), r=(;), m₀, controls)
+    function Inversion(y; b₀, q₀=(;), r=(;), m₀, controls)
 
 Inverse problem for adjustments `u` to first-guess boundary conditions `b₀`,
 sources `q₀`, and mass fractions `m₀` that fit observations `y`, with cost
-`J = nᵀ Wⁱ n + uvecᵀ Q⁻ uvec`.
+`J = Jdata + Jb + Js + Jq + Jm` (see `costterms`).
 
 # Arguments
 - `y::Observations`: observations and their weighting matrix `Wⁱ`
 - `b₀::NamedTuple`: first-guess surface `BoundaryCondition` for each tracer
-- `q₀::NamedTuple`: first-guess interior `Source`s, linear scale
-- `r::NamedTuple`: stoichiometric ratios, e.g. `(NO₃ = (qPO₄ = -15.5,),)`.
-  Signs follow `A = watermassmatrix(m, γ)`, whose interior diagonal is +1
-  (−1 in TMI files), so they are opposite to `r` in
-  `steadyinversion(Alu, b, γ; q, r)` with a TMI file's `Alu`:
-  `r = (PO₄ = (qPO₄ = -1.0,),)` gives phosphate from `qPO₄`.
 - `m₀::NamedTuple`: first-guess `MassFraction`s
 - `controls::NamedTuple`: adjusted quantities only, e.g.
   `(b = (θ = (σ=…, L=…, lb=…, ub=…),), q = (qPO₄ = (σ=…, lb=…, ub=…, logscale=true),), m = (σ=…, lb=…, ub=…))`.
@@ -31,10 +25,13 @@ sources `q₀`, and mass fractions `m₀` that fit observations `y`, with cost
   first guess. A source with `logscale=true` is adjusted multiplicatively,
   `q = q₀ eᵘ`, so its `σ` is in log units (`σ = log(50)` is a one-σ factor of
   50), while its `lb` and `ub` remain limits on `q` itself.
-
+# Optional Arguments
+- `q₀::NamedTuple`: first-guess interior `Source`s, linear scale
+- `r::NamedTuple`: stoichiometric ratios of each tracer to the sources, signed as
+  `r` in `steadyinversion`, e.g. `(PO₄ = (qPO₄ = 1.0,), NO₃ = (qPO₄ = 15.5,))`
 # Output
 - `Inversion`: first guesses, preallocated controls `u`, blocks `ranges` of
-  `uvec`, and `σ`, `lb`, `ub`, `Q⁻` for `uvec`
+  `uvec`, and `σ`, `lb`, `ub`, and the weights `smoothness` of the prior smoothness cost
 """
 function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
     r::NamedTuple=(;), m₀::NamedTuple, controls::NamedTuple)
@@ -55,7 +52,7 @@ function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
     blocks = [[(b₀[k], bcontrols[k]) for k in keys(bcontrols)];
         [(q₀[k], qcontrols[k]) for k in keys(qcontrols)];
         isnothing(mcontrols) ? [] : [(m₀, mcontrols)]]
-    nb, nq, nm = map(length ∘ vec, values(u))
+    nb, nq, nm = map(uₖ -> length(vec(uₖ)), values(u))
     ranges = (b = 1:nb, q = nb .+ (1:nq), m = nb + nq .+ (1:nm))
 
     ∇² = any(settings -> haskey(settings, :L), bcontrols) ? surfacelaplacianmatrix(γ) : nothing
@@ -72,51 +69,49 @@ function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
         append!(σ, σₖ)
         append!(lb, adjustmentbound(bygridpoint(get(settings, :lb, logscale ? 0.0 : -Inf))))
         append!(ub, adjustmentbound(bygridpoint(get(settings, :ub, Inf))))
-        # smoothness of a boundary adjustment with length scale L: ∇²ᵀ Diagonal(L⁴/σ²) ∇²
-        Q⁻ₖ = haskey(settings, :L) ?
+        # prior smoothness cost of a boundary adjustment with length scale L: ∇²ᵀ Diagonal(L⁴/σ²) ∇²
+        smoothₖ = haskey(settings, :L) ?
             transpose(∇²) * spdiagm(0 => bygridpoint(settings.L) .^ 4 ./ σₖ .^ 2) * ∇² :
             spzeros(length(x), length(x))
-        push!(smooth, (Q⁻ₖ + transpose(Q⁻ₖ)) / 2)
+        push!(smooth, (smoothₖ + transpose(smoothₖ)) / 2)
     end
-    Q⁻ = spdiagm(0 => σ .^ -2) + blockdiag(smooth...)
-    return Inversion(y, b₀, q₀, r, m₀, u, ranges, σ, lb, ub, Q⁻)
+    return Inversion(y, b₀, q₀, r, m₀, u, ranges, σ, lb, ub, blockdiag(smooth...))
 end
 
 function Base.show(io::IO, inversion::Inversion)
     print(io, "Inversion($(length(inversion.σ)) controls, ",
-        "$(length(inversion.y.tracers)) observed tracers)")
+        "$(length(inversion.y.values)) observed tracers)")
 end
 
 """
-    steadyinversion(Alu, b, q, r, γ)
+    function steadytracers(Alu, b, q, r, γ)
 
 Steady-state tracers for every boundary condition in `b`, one tracer per
-boundary condition (`main`'s `steadyinversion(Alu, b::NamedTuple, γ; q, r)`
-instead combines several boundaries of one tracer). The interior source of each
-tracer is the sum of the sources in `q` scaled by its stoichiometric ratios in
-`r`.
+boundary condition (`steadyinversion(Alu, b::NamedTuple, γ; q, r)` instead
+combines several boundaries of one tracer). The interior source of each tracer
+is the sum of the sources in `q` scaled by its stoichiometric ratios in `r`.
 
 # Arguments
-- `Alu`: LU factorization of the water-mass matrix
+- `Alu`: LU factorization of `A = watermassmatrix(m, γ)`
 - `b::NamedTuple`: surface boundary conditions
 - `q::NamedTuple`: interior sources
-- `r::NamedTuple`: stoichiometric ratios, e.g. `(NO₃ = (qPO₄ = -15.5,),)`; a
-  tracer missing from `r` has no interior source
+- `r::NamedTuple`: stoichiometric ratios, signed as `r` in `steadyinversion`,
+  e.g. `(NO₃ = (qPO₄ = 15.5,),)`; a tracer missing from `r` has no interior source
 - `γ::Grid`: TMI grid
-
 # Output
 - `c::NamedTuple`: steady-state `Field`s keyed like `b`
 """
-function steadyinversion(Alu, b::NamedTuple, q::NamedTuple, r::NamedTuple, γ::Grid)
+function steadytracers(Alu, b::NamedTuple, q::NamedTuple, r::NamedTuple, γ::Grid)
     return foreachtracer(keys(b)) do k
         rₖ = get(r, k, nothing)
         qₖ = isnothing(rₖ) ? nothing : reduce(+, map(j -> rₖ[j] * q[j], keys(rₖ)))
-        steadyinversion(Alu, b[k], γ; q=qₖ)
+        # r = -1: watermassmatrix(m, γ) has +1 on the interior diagonal, TMI files -1
+        steadyinversion(Alu, b[k], γ; q=qₖ, r=-1.0)
     end
 end
 
 """
-    adjustfirstguess!(u, inversion, uvec)
+    function adjustfirstguess!(u, inversion, uvec)
 
 The first-guess boundary conditions, sources, and mass fractions adjusted by
 the control vector, which is written into the preallocated controls `u`.
@@ -125,7 +120,6 @@ the control vector, which is written into the preallocated controls `u`.
 - `u`: preallocated controls, a copy of `inversion.u`
 - `inversion::Inversion`: first guesses and blocks of `uvec`
 - `uvec`: control vector
-
 # Output
 - `(b, q, m)`: adjusted boundary conditions, sources, and mass fractions
 """
@@ -144,10 +138,10 @@ function adjustfirstguess!(u, inversion::Inversion, uvec::AbstractVector)
 end
 
 """
-    steadyinversion(uvec, inversion, u, F)
+    function forwardmodel(uvec, inversion, u, F)
 
-Steady-state tracers for the adjusted boundary conditions, sources, and mass
-fractions of a control vector.
+The forward model for a control vector: the first guesses adjusted by `uvec`,
+their water-mass matrix, and the steady-state tracers.
 
 # Arguments
 - `uvec`: control vector
@@ -155,40 +149,15 @@ fractions of a control vector.
 - `u`: preallocated controls, a copy of `inversion.u`
 - `F`: UMFPACK factorization of a water-mass matrix on the same grid, refactored
   in place by `lu!`, which keeps its ordering
-
 # Output
-- `c::NamedTuple`: steady-state `Field`s keyed like `inversion.b₀`
+- `(; b, q, m, A, c)`: adjusted boundary conditions, sources, and mass
+  fractions, water-mass matrix `A`, and steady-state tracers `c` keyed like
+  `inversion.b₀`
 """
-function steadyinversion(uvec::AbstractVector, inversion::Inversion, u, F)
+function forwardmodel(uvec::AbstractVector, inversion::Inversion, u, F)
     γ = inversion.y.γ
     b, q, m = adjustfirstguess!(u, inversion, uvec)
-    return steadyinversion(lu!(F, watermassmatrix(m, γ)), b, q, inversion.r, γ)
+    A = watermassmatrix(m, γ)
+    c = steadytracers(lu!(F, A), b, q, inversion.r, γ)
+    return (; b, q, m, A, c)
 end
-
-"""
-    costfunction(uvec, inversion, u, F)
-    costterms(c, uvec, inversion)
-
-Cost function `J = Jdata + Jcontrol`, the weighted squared model-data misfit
-`Jdata = nᵀ Wⁱ n` for `n = ỹ - y` plus the control penalty
-`Jcontrol = uvecᵀ Q⁻ uvec`.
-
-# Arguments
-- `uvec`: control vector
-- `inversion::Inversion`: observations, first guesses, and weighting matrices
-- `u`: preallocated controls, a copy of `inversion.u`; Enzyme differentiates
-  through it
-- `F`: UMFPACK factorization refactored in place, see `steadyinversion`
-- `c::NamedTuple`: steady-state tracers for `uvec`
-
-# Output
-- `J`: cost function (`costfunction`)
-- `(Jdata, Jcontrol)`: its two terms (`costterms`)
-"""
-function costterms(c::NamedTuple, uvec::AbstractVector, inversion::Inversion)
-    y = inversion.y
-    n = observe(c, y) - vec(y)
-    return (Jdata = dot(n, y.Wⁱ, n), Jcontrol = dot(uvec, inversion.Q⁻, uvec))
-end
-costfunction(uvec::AbstractVector, inversion::Inversion, u, F) =
-    sum(costterms(steadyinversion(uvec, inversion, u, F), uvec, inversion))

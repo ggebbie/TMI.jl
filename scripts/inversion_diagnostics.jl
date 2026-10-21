@@ -26,12 +26,6 @@ final_iteration = NCDataset(ds -> Int(ds.attrib["iteration"]), files.final)
 plotfile(name) = joinpath(plotdir, "$(experiment)_$name.png")
 readtracer(file, name) = readfield(file, name, γ; name=Symbol(name))
 
-# observed fields are NaN where a tracer is not observed, which readfield rejects
-function readobserved(name)
-    tracer, units, longname = TMI._read3d(files.observations, name)
-    return Field(tracer, γ, Symbol(name), longname, units)
-end
-
 """
     zonalmean(c)
 
@@ -65,28 +59,44 @@ function comparisonrow!(fig, ax, x, y, states, difference, titles, units, xlabel
     fig.colorbar(maps[4]; ax=ax[3], label="$units difference")
 end
 
-# observed tracers: gridded values, or values and locations at sparse points
+# observed tracers: values at the interior cells (gridded tracers), or values
+# and their locations
 observations = NCDataset(files.observations) do ds
-    names = filter(name -> haskey(ds[name].attrib, "support"), keys(ds))
+    names = filter(name -> haskey(ds.dim, "$(name)_observation"), keys(ds))
     map(names) do name
-        if ds[name].attrib["support"] == "gridded"
-            values = ds[name][:, :, :][γ.interior]
-            σ = ds["σ$name"][:, :, :][γ.interior]
-            locations = nothing
-        else
-            values = ds["$(name)_sample"][:]
-            σ = ds["σ$(name)_sample"][:]
-            locations = collect(zip(ds["$(name)_longitude"][:], ds["$(name)_latitude"][:],
-                ds["$(name)_depth"][:]))
-        end
-        (; name, values, σ, locations)
+        locations = haskey(ds, "$(name)_longitude") ? collect(zip(ds["$(name)_longitude"][:],
+            ds["$(name)_latitude"][:], ds["$(name)_depth"][:])) : nothing
+        (; name, values=ds[name][:], σ=ds["σ$name"][:], locations,
+            longname=ds[name].attrib["longname"], units=ds[name].attrib["units"])
     end
+end
+
+"""
+    observedfield(observation)
+
+Observations on the TMI grid: at the interior cells for a gridded tracer, or the
+mean of the values nearest to each grid cell, with NaN elsewhere.
+"""
+function observedfield(observation)
+    tracer = fill(NaN, size(γ.wet))
+    if isnothing(observation.locations)
+        tracer[γ.interior] .= observation.values
+    else
+        total, count = zeros(size(γ.wet)), zeros(Int, size(γ.wet))
+        for (value, loc) in zip(observation.values, observation.locations)
+            cell = TMI.nearestneighbor(loc, γ)
+            total[cell] += value
+            count[cell] += 1
+        end
+        tracer[count .> 0] .= total[count .> 0] ./ count[count .> 0]
+    end
+    return Field(tracer, γ, Symbol(observation.name), observation.longname, observation.units)
 end
 
 # observed, first-guess, and final tracers at the surface and zonally averaged
 surface = argmin(abs.(γ.depth))
 for observation in observations
-    fields = (readobserved(observation.name), readtracer(files.initial, observation.name),
+    fields = (observedfield(observation), readtracer(files.initial, observation.name),
         readtracer(files.final, observation.name))
     label = fields[2].longname
     titles = ("Observations", "Iteration 0", "Iteration $final_iteration", "Final − iteration 0")

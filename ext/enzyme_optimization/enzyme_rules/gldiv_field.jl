@@ -1,6 +1,6 @@
 """
-    augmented_primal(config, \\, return_activity, Alu, d)
-    reverse(config, \\, return_activity, tape, Alu, d)
+    function augmented_primal(config, \\, return_activity, Alu, d)
+    function reverse(config, \\, return_activity, tape, Alu, d)
 
 Solve `A c = d` for a `Field` `d` with TMI's `\\`, and propagate the cotangents
 of `d` and of the water-mass matrix, `Ā = -d̄ cᵀ`, which goes into the
@@ -11,7 +11,6 @@ factorization's shadow on the sparsity pattern of `A`.
 - `Alu`: duplicated UMFPACK factorization of `A`
 - `d`: right-hand side `Field`
 - `tape`: solution `c` and its cotangent
-
 # Output
 - `result`: augmented solve or reverse placeholders
 """
@@ -20,7 +19,7 @@ function augmented_primal(
     ::Const{typeof(\)},
     ::Type{<:Duplicated},
     Alu::Duplicated{<:SparseArrays.UMFPACK.UmfpackLU},
-    d::Annotation{<:Field},
+    d::Union{Const{<:Field},Duplicated{<:Field}},
 )
     c = Alu.val \ d.val
     gc = Enzyme.make_zero(c)

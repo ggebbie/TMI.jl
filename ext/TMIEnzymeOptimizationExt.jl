@@ -10,16 +10,17 @@ function __init__()
 end
 
 using Enzyme: Annotation
-using TMI: MassFraction, Source, step_cartesian
-import TMI: Inversion, Observations, gradient_check, observe, runinversion, steadyinversion
+using TMI: step_cartesian
+import TMI: Inversion, Observations, gradient_check, observe, runinversion
 import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth, augmented_primal, needs_primal, needs_shadow, reverse
 
 include("enzyme_optimization/weighting_matrices.jl")
 include("enzyme_optimization/observations.jl")
 include("enzyme_optimization/inversion.jl")
+include("enzyme_optimization/costfunctions.jl")
 include("enzyme_optimization/constraints.jl")
-include("enzyme_optimization/output.jl")
 include("enzyme_optimization/optimization.jl")
+include("enzyme_optimization/output.jl")
 
 include("enzyme_optimization/enzyme_rules/gunvec_inplace.jl")
 include("enzyme_optimization/enzyme_rules/gwatermassmatrix.jl")

@@ -17,23 +17,22 @@ TMIversion = "modern_90x45x33_G14_v2"
 A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 # observations: TMI tracers with uniform uncertainty
-c = (θ = readfield(TMIfile, "θ", γ),
+observed = (θ = readfield(TMIfile, "θ", γ),
     S = readfield(TMIfile, "Sp", γ),
     δ¹⁸O = readfield(TMIfile, "δ¹⁸Ow", γ),
     PO₄ = readfield(TMIfile, "PO₄", γ),
     NO₃ = readfield(TMIfile, "NO₃", γ),
     O₂ = readfield(TMIfile, "O₂", γ))
 σ = (θ = 0.1, S = 0.01, δ¹⁸O = 0.2, PO₄ = 0.05, NO₃ = 1.0, O₂ = 5.0)
-y = Observations(c, σ, γ)
+y = Observations(observed, σ, γ)
 
 # first guess: observed surface values, TMI phosphate source, isotropic mass fractions
-b₀ = map(getsurfaceboundary, c)
+b₀ = map(getsurfaceboundary, observed)
 q₀ = (qPO₄ = readsource(TMIfile, "qPO₄", γ),)
 m₀ = massfractions_isotropic(γ)
 
-# stoichiometric ratios for A = watermassmatrix(m, γ), whose interior diagonal
-# is +1: signs are opposite to ex0, which uses the A of the TMI file
-r = (PO₄ = (qPO₄ = -1.0,), NO₃ = (qPO₄ = -15.5,), O₂ = (qPO₄ = 170.0,))
+# stoichiometric ratios to the phosphate source, as in ex0
+r = (PO₄ = (qPO₄ = 1.0,), NO₃ = (qPO₄ = 15.5,), O₂ = (qPO₄ = -170.0,))
 
 # adjust only the mass fractions, within [0, 1]
 controls = (m = (σ = 1.0, lb = 0.0, ub = 1.0),)

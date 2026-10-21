@@ -3,13 +3,10 @@ using LinearAlgebra: Diagonal, diag, issymmetric, lu
 # internal functions of the extension
 const TMIEnzymeOptimization = Base.get_extension(TMI, :TMIEnzymeOptimizationExt)
 
-"""
-    inversioninputs(n=5)
-
-Small n×n×n test problem with an adjusted tracer `active` and a fixed tracer
-`fixed`, each with its own interior source.
-"""
-function inversioninputs(n=5)
+@testset "Enzyme inversion" begin
+    # 5×5×5 test problem with an adjusted tracer `active` and a fixed tracer `fixed`,
+    # each with its own interior source
+    n = 5
     coordinates = collect(range(-1.0, 1.0; length=n))
     interior = falses(n, n, n)
     interior[2:end-1, 2:end-1, 2:end-1] .= true
@@ -21,31 +18,30 @@ function inversioninputs(n=5)
     b₀ = map(getsurfaceboundary, fields)
     q₀ = (active_source=onesource(γ, :active_source, "active", "unitless"),
         fixed_source=2onesource(γ, :fixed_source, "fixed", "unitless"))
-    r = (active=(active_source=1.0,), fixed=(fixed_source=1.0,))
+    r = (active=(active_source=-1.0,), fixed=(fixed_source=-1.0,))
     m₀ = massfractions_isotropic(γ)
     foreach(m -> replace!(m.fraction, NaN => 0.0), m₀)
     σm = unvec(m₀, collect(range(0.2, 0.8; length=length(vec(m₀)))))
-    c = steadyinversion(lu(watermassmatrix(m₀, γ)), b₀, q₀, r, γ)
-    y = Observations(map(cₖ -> 0.95cₖ, c), 0.5, γ)
+    c = TMIEnzymeOptimization.steadytracers(lu(watermassmatrix(m₀, γ)), b₀, q₀, r, γ)
+    observed = map(cₖ -> 0.95cₖ, c)
+    y = Observations(observed, 0.5, γ)
     controls = (b=(active=(σ=0.5,),),
         q=(active_source=(σ=1.0, lb=0.25, ub=4.0, logscale=true),),
         m=(σ=σm, lb=0.0, ub=1.0))
     inversion = Inversion(y; b₀, q₀, r, m₀, controls)
+    # `active` gridded and `fixed` at three locations
     locs = [(γ.lon[i], γ.lat[i], γ.depth[i]) for i in (2, 2, 4)]
-    return (; γ, b₀, q₀, r, m₀, σm, c, y, controls, inversion, locs)
-end
-
-@testset "Enzyme inversion" begin
-    (; γ, b₀, q₀, r, m₀, σm, c, y, controls, inversion, locs) = inversioninputs()
+    point_values = observe(c.fixed, locs, γ)
+    mixed = Observations((active=observed.active, fixed=point_values), 0.5, γ; locs=(fixed=locs,))
     ninterior = sum(γ.interior)
 
     @testset "Observations" begin
-        @test vec(y) == vcat(y.tracers.active.tracer[γ.interior], y.tracers.fixed.tracer[γ.interior])
+        @test y.values.active == observed.active.tracer[γ.interior]
+        @test vec(y) == vcat(y.values.active, y.values.fixed)
         @test diag(y.Wⁱ) ≈ fill(0.5^-2, 2ninterior)
-        point_values = observe(c.fixed, locs, γ)
-        mixed = Observations((active=y.tracers.active, fixed=point_values), (active=0.5, fixed=fill(0.5, 3)), γ;
+        pertracer = Observations((active=observed.active, fixed=point_values), (active=0.5, fixed=fill(0.5, 3)), γ;
             locs=(fixed=locs,))
-        @test length(vec(mixed)) == ninterior + 3
+        @test length(vec(pertracer)) == ninterior + 3
         σ = Field(fill(2.0, size(γ.wet)), γ, :σ, "uncertainty", "unitless")
         L = Field(fill(1_000.0, size(γ.wet)), γ, :L, "scale", "km")
         correlated = Observations((active=c.active,), σ, γ; L)
@@ -81,18 +77,20 @@ end
 
     @testset "Cost" begin
         uvec = 0.01 .* inversion.σ
-        cache = TMIEnzymeOptimization.EnzymeCostGradientCache(inversion)
-        terms = TMIEnzymeOptimization.costterms(
-            TMIEnzymeOptimization.steadyinversion(uvec, inversion, cache.u, cache.F), uvec, inversion)
-        @test terms.Jcontrol ≈ sum(abs2, uvec ./ inversion.σ)
+        workspace = TMIEnzymeOptimization.InversionWorkspace(inversion)
+        # `modeled`, not `c`: assigning `c` here would overwrite the first-guess tracers used below
+        modeled = TMIEnzymeOptimization.forwardmodel(uvec, inversion, workspace.u, workspace.F).c
+        terms = TMIEnzymeOptimization.costterms(modeled, uvec, inversion)
+        @test terms.Jb + terms.Jq + terms.Jm ≈ sum(abs2, uvec ./ inversion.σ)
+        @test terms.Js == 0
         # cost alone, as for Ipopt's trial points, against the primal of the Enzyme pass
-        J = TMIEnzymeOptimization.cost!(cache, uvec)
-        @test J ≈ terms.Jdata + terms.Jcontrol
-        TMIEnzymeOptimization.costgradient!(cache, uvec)
-        @test cache.J ≈ J
+        J = TMIEnzymeOptimization.costfunction(uvec, inversion, workspace.u, workspace.F)
+        @test J == sum(terms)
+        @test TMIEnzymeOptimization.costgradient!(similar(uvec), workspace, uvec) == J
         smooth = Inversion(y; b₀, q₀, r, m₀, controls=(b=(active=(σ=0.5, L=1_000.0),),))
-        @test smooth.Q⁻ ≈ smooth.Q⁻'
-        @test all(diag(smooth.Q⁻) .≥ smooth.σ .^ -2)
+        @test smooth.smoothness ≈ smooth.smoothness'
+        # a uniform boundary adjustment has no smoothness cost
+        @test smooth.smoothness * ones(length(smooth.σ)) ≈ zeros(length(smooth.σ)) atol=1e-12
     end
 
     # gradient_check errors when Enzyme and finite differences disagree
@@ -101,20 +99,22 @@ end
         @test checkgradient(inversion)
         # the gradient where F already holds A, so lu! is skipped, against one that refactors F
         uvec = 0.01 .* inversion.σ
-        skipped, refactored = (TMIEnzymeOptimization.EnzymeCostGradientCache(inversion) for _ in 1:2)
-        TMIEnzymeOptimization.cost!(skipped, uvec)
-        TMIEnzymeOptimization.costgradient!(skipped, uvec)
-        TMIEnzymeOptimization.costgradient!(refactored, uvec)
-        @test skipped.guvec == refactored.guvec
-        mixed = Observations((active=y.tracers.active, fixed=observe(c.fixed, locs, γ)), 0.5, γ;
-            locs=(fixed=locs,))
-        @test checkgradient(Inversion(mixed; b₀, q₀, r, m₀, controls))
-        @test checkgradient(Inversion(y; b₀, q₀, r, m₀, controls=(b=controls.b, q=controls.q)))
-        @test checkgradient(Inversion(y; b₀, q₀, r, m₀, controls=(m=controls.m,)))
-        # two adjusted boundary conditions and two adjusted sources with fixed m;
-        # Enzyme failed to compile this on Julia 1.13 before `unvec!` stopped looping over NamedTuples
-        @test checkgradient(Inversion(y; b₀, q₀, r, m₀, controls=(b=(active=(σ=0.5,), fixed=(σ=0.5,)),
-            q=(active_source=controls.q.active_source, fixed_source=(σ=1.0,)))))
+        skipped, refactored = (TMIEnzymeOptimization.InversionWorkspace(inversion) for _ in 1:2)
+        g_skipped, g_refactored = similar(uvec), similar(uvec)
+        TMIEnzymeOptimization.costfunction(uvec, inversion, skipped.u, skipped.F)
+        TMIEnzymeOptimization.costgradient!(g_skipped, skipped, uvec)
+        TMIEnzymeOptimization.costgradient!(g_refactored, refactored, uvec)
+        @test g_skipped == g_refactored
+        # every combination of fixed and adjusted b, q, and m leaves the first guesses unchanged.
+        # Two boundary conditions and two sources are adjusted together, which Enzyme on
+        # Julia 1.13 failed to compile before `unvec!` stopped looping over NamedTuples.
+        adjustable = (b=(active=(σ=0.5,), fixed=(σ=0.5,)),
+            q=(active_source=controls.q.active_source, fixed_source=(σ=1.0,)), m=controls.m)
+        for adjusted in ((:b,), (:q,), (:m,), (:b, :q), (:b, :m), (:q, :m), (:b, :q, :m))
+            firstguesses = (vec(m₀), vec(q₀))
+            @test checkgradient(Inversion(mixed; b₀, q₀, r, m₀, controls=NamedTuple{adjusted}(adjustable)))
+            @test (vec(m₀), vec(q₀)) == firstguesses
+        end
     end
 
     @testset "Mass conservation" begin
@@ -135,8 +135,6 @@ end
     end
 
     @testset "runinversion" begin
-        mixed = Observations((active=y.tracers.active, fixed=observe(c.fixed, locs, γ)), 0.5, γ;
-            locs=(fixed=locs,))
         mixed_inversion = Inversion(mixed; b₀, q₀, r, m₀, controls)
         mktempdir() do directory
             checkpoint_directory = joinpath(directory, "checkpoints")
@@ -145,14 +143,15 @@ end
                 name="test", iterations=2, checkpoint_interval=2,
                 checkpoint_directory, data_directory, number_of_gradient_checks=0)
             NCDataset(joinpath(checkpoint_directory, "test_observations.nc")) do ds
-                @test ds["fixed_sample"][:] ≈ observe(c.fixed, locs, γ)
-                @test ds["fixed"].attrib["support"] == "sparse"
-                @test ds["active"].attrib["support"] == "gridded"
+                @test ds["fixed"][:] ≈ point_values
+                @test ds["active"][:] ≈ observed.active.tracer[γ.interior]
+                @test haskey(ds, "fixed_longitude") && !haskey(ds, "active_longitude")
             end
             NCDataset(joinpath(checkpoint_directory, "test_iteration_000000.nc")) do ds
                 @test ds.attrib["iteration"] == 0
-                cache = TMIEnzymeOptimization.EnzymeCostGradientCache(mixed_inversion)
-                @test ds.attrib["J"] ≈ TMIEnzymeOptimization.cost!(cache, zero(mixed_inversion.σ))
+                workspace = TMIEnzymeOptimization.InversionWorkspace(mixed_inversion)
+                @test ds.attrib["J"] ≈ TMIEnzymeOptimization.costfunction(zero(mixed_inversion.σ), mixed_inversion,
+                    workspace.u, workspace.F)
                 @test ds.attrib["J"] ≈ ds.attrib["Jdata"] + ds.attrib["Jcontrol"]
                 @test haskey(ds, "active_source")
             end

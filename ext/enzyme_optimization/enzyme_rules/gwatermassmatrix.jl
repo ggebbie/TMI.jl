@@ -1,13 +1,12 @@
 """
-    augmented_primal(config, watermassmatrix, return_activity, m, γ)
-    reverse(config, watermassmatrix, return_activity, gA, m, γ)
+    function augmented_primal(config, watermassmatrix, return_activity, m, γ)
+    function reverse(config, watermassmatrix, return_activity, gA, m, γ)
 
 Build the active water-mass matrix and reverse its cotangent to fractions.
 
 # Arguments
 - `config`, `m`, `γ`: reverse configuration, duplicated fractions, and grid
 - `gA`: sparse water-mass-matrix cotangent
-
 # Output
 - `result`: augmented matrix result or reverse placeholders
 """
@@ -18,11 +17,9 @@ function augmented_primal(
     m::Union{Const,Duplicated},
     γ::Annotation{<:Grid},
 )
-    needs_matrix = needs_primal(config) || needs_shadow(config)
-    A = needs_matrix ? func.val(m.val, γ.val) : nothing
-    primal = needs_primal(config) ? A : nothing
-    gA = needs_shadow(config) ? Enzyme.make_zero(A) : nothing
-    return AugmentedReturn(primal, gA, gA)
+    A = func.val(m.val, γ.val)
+    gA = Enzyme.make_zero(A)
+    return AugmentedReturn(needs_primal(config) ? A : nothing, needs_shadow(config) ? gA : nothing, gA)
 end
 function reverse(
     ::RevConfigWidth{1},
@@ -38,6 +35,8 @@ function reverse(
     R = grid.R
     # fractions outer: taking an element of `m` in the inner loop allocates on Julia 1.13
     for (mₖ, gmₖ) in zip(m.val, m.dval)
+        # with runtime activity, a fixed fraction arrives as its own shadow: zero derivative
+        gmₖ.fraction === mₖ.fraction && continue
         for cell in cartesianindex(wet(mₖ))
             neighbor, _ = step_cartesian(cell, mₖ.position, grid)
             gmₖ.fraction[cell] -= gA[R[cell], R[neighbor]]
