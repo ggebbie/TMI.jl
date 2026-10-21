@@ -28,7 +28,8 @@ using Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth, needs_primal, needs_s
     function foreachtracer(f, names)
 
 The result of `f` for each tracer (or source) in `names`, as a `NamedTuple`
-keyed by name. Used throughout the extension.
+keyed by name. Used where only the names are at hand; where a NamedTuple with
+the right keys exists, Base `map` over it does the same.
 
 # Arguments
 - `f`: function of a name
@@ -77,7 +78,10 @@ function runinversion(inversion::Inversion, optimizer::IpoptOptimizer; name::Abs
     # Ipopt sees the controls divided by their σ, z = uvec ./ σ. It asks for the
     # cost alone at its trial points, most of which it rejects, and for the
     # gradient only at the points it accepts.
-    J(z, _=nothing) = (uvec .= σ .* z; costfunction(uvec, inversion, workspace.u, workspace.F))
+    function J(z, _=nothing)
+        uvec .= σ .* z
+        return costfunction(uvec, inversion, workspace.u, workspace.F)
+    end
     function gJ!(gz, z, _=nothing)
         uvec .= σ .* z
         costgradient!(gz, workspace, uvec)
@@ -89,22 +93,26 @@ function runinversion(inversion::Inversion, optimizer::IpoptOptimizer; name::Abs
     # Optimization.jl requires an AD type; the gradient comes from gJ! and the Jacobian from cons_j
     f = OptimizationFunction(J, AutoEnzyme(); grad=gJ!, cons, cons_j, cons_jac_prototype)
     problem = OptimizationProblem(f, z₀; lb=inversion.lb ./ σ, ub=inversion.ub ./ σ, lcons, ucons)
-    number_of_gradient_checks > 0 && gradient_check(inversion; n=number_of_gradient_checks, workspace)
+    if number_of_gradient_checks > 0
+        gradient_check(inversion; n=number_of_gradient_checks, workspace)
+    end
 
     # write the observations and the first guess, then every checkpoint_interval-th iteration
     checkpoint(k) = joinpath(checkpoint_directory, "$(name)_iteration_$(lpad(k, 6, '0')).nc")
     writeobservations(joinpath(checkpoint_directory, "$(name)_observations.nc"), inversion)
-    writecheckpoint(checkpoint(0), workspace, σ .* z₀; iteration=0)
-    callback = (state, _) -> begin
-        state.iter > 0 && state.iter % checkpoint_interval == 0 &&
+    writecheckpoint(checkpoint(0), workspace, zero(σ); iteration=0)
+    function callback(state, _)
+        if state.iter > 0 && state.iter % checkpoint_interval == 0
             writecheckpoint(checkpoint(state.iter), workspace, σ .* state.u; iteration=state.iter)
-        false
+        end
+        return false
     end
-    optimizer = deepcopy(optimizer)
+    # a copy, so the caller's optimizer settings are not changed
+    ipopt = deepcopy(optimizer)
     logfile = joinpath(checkpoint_directory, "ipopt_output.txt")
-    optimizer.additional_options["output_file"] = logfile
+    ipopt.additional_options["output_file"] = logfile
     println("Starting Ipopt; writing log to $logfile")
-    solution = solve(problem, optimizer; maxiters=iterations, verbose=5, callback)
+    solution = solve(problem, ipopt; maxiters=iterations, verbose=5, callback)
     return writecheckpoint(joinpath(data_directory, "$(name)_final.nc"), workspace, σ .* solution.u;
         iteration=solution.stats.iterations)
 end
@@ -314,8 +322,8 @@ function gradient_check(inversion::Inversion; n::Integer=5, rtol=1e-4, atol=1e-7
     end
     for (block, check) in pairs(checks)
         isempty(check.indices) && continue
-        for (i, g, g_finite) in zip(check.indices, check.∇J, check.∇J_finite)
-            println("  $block control $i: Enzyme $g, finite difference $g_finite")
+        for (i, gᵢ, gᵢ_finite) in zip(check.indices, check.∇J, check.∇J_finite)
+            println("  $block control $i: Enzyme $gᵢ, finite difference $gᵢ_finite")
         end
         difference = norm(check.∇J - check.∇J_finite)
         scale = max(norm(check.∇J), norm(check.∇J_finite))
@@ -345,20 +353,28 @@ function massconservation(inversion::Inversion)
     isempty(ranges.m) && return (cons=nothing, cons_j=nothing, cons_jac_prototype=nothing,
         lcons=nothing, ucons=nothing)
     γ = inversion.y.γ
+    ncells = sum(γ.interior)
+    # interior cell of each mass fraction, in vec(m₀) order
     R = linearindex(γ.interior)
     rows = reduce(vcat, [R[wet(m)] for m in inversion.m₀])
-    P = sparse(rows, 1:length(rows), 1.0, sum(γ.interior), length(rows))
-    Pm₀ = P * vec(inversion.m₀)
-    jacobian = sparse(rows, ranges.m, inversion.σ[ranges.m], sum(γ.interior),
-        length(inversion.σ))
-    function cons(Σm, z, _)
+    # Σ m₀ in each interior cell
+    Σm₀ = zeros(ncells)
+    for (row, m) in zip(rows, vec(inversion.m₀))
+        Σm₀[row] += m
+    end
+    # m = m₀ + σ z in the mass-fraction block, so Σ m = Σ m₀ + jacobian z
+    jacobian = sparse(rows, ranges.m, inversion.σ[ranges.m], ncells, length(inversion.σ))
+    function cons!(Σm, z, _)
         mul!(Σm, jacobian, z)
-        Σm .+= Pm₀
+        Σm .+= Σm₀
         return nothing
     end
-    cons_j = (out, _, _) -> (copyto!(nonzeros(out), nonzeros(jacobian)); nothing)
-    return (cons=cons, cons_j=cons_j, cons_jac_prototype=jacobian,
-        lcons=ones(size(jacobian, 1)), ucons=ones(size(jacobian, 1)))
+    # the Jacobian is constant; Optimization.jl still asks for it through a function
+    function cons_j!(out, _, _)
+        copyto!(nonzeros(out), nonzeros(jacobian))
+        return nothing
+    end
+    return (cons=cons!, cons_j=cons_j!, cons_jac_prototype=jacobian, lcons=ones(ncells), ucons=ones(ncells))
 end
 
 """
@@ -385,10 +401,11 @@ function writeobservations(file, inversion::Inversion)
             longname, units = inversion.b₀[k].longname, inversion.b₀[k].units
             variables = [(String(k), y.values[k], longname, units),
                 ("σ$k", y.σ[k], "1σ uncertainty in $longname", units)]
-            isnothing(locs) || append!(variables, [
-                ("$(k)_longitude", first.(locs), "longitude", "°E"),
-                ("$(k)_latitude", getindex.(locs, 2), "latitude", "°N"),
-                ("$(k)_depth", last.(locs), "depth", "m")])
+            if !isnothing(locs)
+                append!(variables, [("$(k)_longitude", first.(locs), "longitude", "°E"),
+                    ("$(k)_latitude", getindex.(locs, 2), "latitude", "°N"),
+                    ("$(k)_depth", last.(locs), "depth", "m")])
+            end
             observation = "$(k)_observation"
             defDim(ds, observation, length(y.values[k]))
             for (vname, data, vlongname, vunits) in variables
@@ -423,16 +440,24 @@ function writecheckpoint(file, workspace::InversionWorkspace, uvec; iteration::I
     (; inversion, u, F) = workspace
     γ = inversion.y.γ
     (; q, A, c) = forwardmodel(uvec, inversion, u, F)
-    terms = costterms(c, uvec, inversion)
     mkpath(dirname(file))
     rm(file; force=true)
-    foreach(k -> writefield(file, Field(c[k].tracer, γ, k, c[k].longname, c[k].units)), keys(c))
-    foreach(qₖ -> TMI.writesource(file, qₖ), q)
+    # each tracer under its key: getsurfaceboundary drops the observed field's name.
+    # Written before costterms, whose observe replaces NaN by 0 in located tracers.
+    for k in keys(c)
+        writefield(file, Field(c[k].tracer, γ, k, c[k].longname, c[k].units))
+    end
+    for qₖ in q
+        TMI.writesource(file, qₖ)
+    end
     TMI.watermassmatrix2nc("", A; filenetcdf=file)
+    terms = costterms(c, uvec, inversion)
     NCDataset(file, "a") do ds
         ds.attrib["iteration"] = iteration
         ds.attrib["J"] = sum(terms)
-        foreach(name -> ds.attrib[String(name)] = terms[name], keys(terms))
+        for name in keys(terms)
+            ds.attrib[String(name)] = terms[name]
+        end
         ds.attrib["Jcontrol"] = terms.Jb + terms.Js + terms.Jq + terms.Jm
     end
     println("Saved iteration $iteration to $file")

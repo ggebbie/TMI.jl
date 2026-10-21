@@ -41,33 +41,43 @@ given once for all tracers or as a `NamedTuple` keyed like `observed`.
 """
 function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, L=nothing, Wⁱ=nothing)
     names = keys(observed)
-    # each setting for each tracer: one value for all tracers, or a NamedTuple by
-    # tracer (`nothing` for tracers missing from it)
-    σ, locs, L, Wⁱ = map((σ, locs, L, Wⁱ)) do a
+    # each setting by tracer: one value for all tracers, or a NamedTuple by tracer
+    # (`nothing` for tracers missing from it)
+    σbytracer, locsbytracer, Lbytracer, Wⁱbytracer = map((σ, locs, L, Wⁱ)) do a
         foreachtracer(k -> a isa NamedTuple ? get(a, k, nothing) : a, names)
     end
-    wis = map(x -> isnothing(x) ? nothing : [TMI.interpindex(loc, γ) for loc in x], locs)
-    # a setting of tracer k at each of its n observation points: a Field at the
-    # interior cells or interpolated to `locs`, a vector as given, a number repeated
-    function atpoints(x, k, n=0)
-        x isa Number && return fill(float(x), n)
-        x isa Field || return x
-        return isnothing(wis[k]) ? x.tracer[γ.interior] : observe(x, wis[k], γ)
+    # each tracer's observation points: its locations, with their interpolation
+    # weights, or the interior cells if it is gridded
+    wis = map(x -> isnothing(x) ? nothing : [TMI.interpindex(loc, γ) for loc in x], locsbytracer)
+    npoints = map(w -> isnothing(w) ? sum(γ.interior) : length(w), wis)
+    # a setting of one tracer at each of its n observation points: a Field at the
+    # interior cells or interpolated to its locations, a vector as given, a number repeated
+    function atpoints(x, wisₖ, n)
+        if x isa Number
+            return fill(float(x), n)
+        elseif x isa Field
+            return isnothing(wisₖ) ? x.tracer[γ.interior] : observe(x, wisₖ, γ)
+        else
+            return x
+        end
     end
-    pointvalues = foreachtracer(k -> atpoints(observed[k], k), names)
-    pointσ = foreachtracer(k -> atpoints(σ[k], k, length(pointvalues[k])), names)
-    Wⁱ = map(names) do k
-        if !isnothing(Wⁱ[k])
-            sparse(Wⁱ[k])
-        elseif !isnothing(L[k])
-            isnothing(wis[k]) || throw(ArgumentError("L applies to gridded observations, " *
-                "and $k is observed at locs: give L by tracer, e.g. L = (θ = 1000.0,), or supply Wⁱ"))
-            gaussianprecision(pointσ[k], atpoints(L[k], k, length(pointvalues[k])), γ)
+    pointvalues = map(atpoints, observed, wis, npoints)
+    pointσ = map(atpoints, σbytracer, wis, npoints)
+    Wⁱblocks = map(names) do k
+        if !isnothing(Wⁱbytracer[k])
+            sparse(Wⁱbytracer[k])
+        elseif !isnothing(Lbytracer[k])
+            if !isnothing(wis[k])
+                throw(ArgumentError("L applies to gridded observations, and $k is observed " *
+                    "at locs: give L by tracer, e.g. L = (θ = 1000.0,), or supply Wⁱ"))
+            end
+            gaussianprecision(pointσ[k], atpoints(Lbytracer[k], wis[k], npoints[k]), γ)
         else
             spdiagm(0 => pointσ[k] .^ -2)
         end
     end
-    return Observations(pointvalues, pointσ, locs, wis, reduce(vcat, pointvalues), γ, blockdiag(Wⁱ...))
+    return Observations(pointvalues, pointσ, locsbytracer, wis, reduce(vcat, pointvalues), γ,
+        blockdiag(Wⁱblocks...))
 end
 
 Base.vec(y::Observations) = y.yvec

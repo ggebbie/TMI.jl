@@ -51,7 +51,9 @@ function EnzymeRules.reverse(
     destination::Annotation, x::Annotation,
 )
     destination isa Const && return (nothing, nothing)
-    x isa Const || (_shadow(x) .+= vec(_shadow(destination)))
+    if !(x isa Const)
+        _shadow(x) .+= vec(_shadow(destination))
+    end
     # `unvec!` overwrites the wet values, so their cotangent is consumed. Zero only
     # those entries: with runtime activity, inactive shadow fields can alias primal
     # grid arrays, so `remake_zero!` on the whole struct is unsafe.
@@ -207,7 +209,9 @@ function EnzymeRules.reverse(
     c, gc = tape
     wet = d.val.γ.wet
     gd = Alu.val' \ gc.tracer[wet]
-    d isa Duplicated && (d.dval.tracer[wet] .+= gd)
+    if d isa Duplicated
+        d.dval.tracer[wet] .+= gd
+    end
     # Ā = -d̄ cᵀ on the sparsity pattern of A; UMFPACK stores 0-based indices
     F, gF, cwet = Alu.val, Alu.dval, c.tracer[wet]
     for column in 1:F.n, k in (F.colptr[column] + 1):F.colptr[column + 1]

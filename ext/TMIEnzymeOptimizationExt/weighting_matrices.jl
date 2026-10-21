@@ -65,18 +65,19 @@ cells for one σ and L; this is its sparse inverse for all interior cells, with
 # Output
 - `Wⁱ`: symmetric sparse inverse covariance matrix
 """
-function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3}) where R
-    T = float(promote_type(eltype(σ), eltype(L), R))
-    σ, L = T.(σ), T.(L)
+function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid)
     cells = cartesianindex(γ.interior)
     horizontal = (CartesianIndex(-1, 0, 0), CartesianIndex(1, 0, 0),
         CartesianIndex(0, -1, 0), CartesianIndex(0, 1, 0))
+    # each cell's horizontal neighbors that come earlier in the cell order
     rows, columns, _ = findnz(tril(adjacencymatrix(γ, γ.interior, horizontal), -1))
     neighbors = [Int[] for _ in cells]
-    foreach((i, j) -> push!(neighbors[i], j), rows, columns)
+    for (i, j) in zip(rows, columns)
+        push!(neighbors[i], j)
+    end
 
     function correlation(i, j)
-        i == j && return one(T)
+        i == j && return 1.0
         ci, cj = cells[i], cells[j]
         d = euclideandistance(γ.lat[ci[2]], γ.lon[ci[1]], γ.depth[ci[3]],
             γ.lat[cj[2]], γ.lon[cj[1]], γ.depth[cj[3]])
@@ -84,12 +85,12 @@ function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3})
         return (2L[i] * L[j] / L²)^(3 / 2) * exp(-2d^2 / L²)
     end
 
-    B_rows, B_columns, B_values = Int[], Int[], T[]
-    conditional_variances = ones(T, length(cells))
+    B_rows, B_columns, B_values = Int[], Int[], Float64[]
+    conditional_variances = ones(length(cells))
     for i in eachindex(cells)
         push!(B_rows, i)
         push!(B_columns, i)
-        push!(B_values, one(T))
+        push!(B_values, 1.0)
         isempty(neighbors[i]) && continue
         RNN = [correlation(j, k) for j in neighbors[i], k in neighbors[i]]
         rNi = [correlation(j, i) for j in neighbors[i]]
@@ -102,6 +103,7 @@ function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3})
     B = sparse(B_rows, B_columns, B_values, length(cells), length(cells))
     Dσ⁻¹ = spdiagm(0 => inv.(σ))
     Wⁱ = Dσ⁻¹ * transpose(B) * spdiagm(0 => inv.(conditional_variances)) * B * Dσ⁻¹
+    # symmetric in exact arithmetic; averaging with its transpose removes round-off
     return (Wⁱ + transpose(Wⁱ)) / 2
 end
 

@@ -37,11 +37,12 @@ function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
 
     # zero adjustments u for the controlled boundary conditions and sources; u.m
     # holds the adjusted mass fractions themselves, which watermassmatrix takes
-    u = (b = foreachtracer(k -> zerosurfaceboundary(γ, b₀[k].name, b₀[k].longname, b₀[k].units),
-            keys(bcontrols)),
-        q = foreachtracer(k -> zerosource(γ, q₀[k].name, q₀[k].longname, q₀[k].units;
-            logscale=get(qcontrols[k], :logscale, false)), keys(qcontrols)),
-        m = isnothing(mcontrols) ? (;) : unvec(m₀, vec(m₀)))
+    # (TMI has no arithmetic on MassFraction, so they are adjusted as a vector)
+    ub₀ = map(b -> zerosurfaceboundary(γ, b.name, b.longname, b.units), b₀[keys(bcontrols)])
+    uq₀ = map(q₀[keys(qcontrols)], qcontrols) do q, settings
+        zerosource(γ, q.name, q.longname, q.units; logscale=get(settings, :logscale, false))
+    end
+    u = (b = ub₀, q = uq₀, m = isnothing(mcontrols) ? (;) : unvec(m₀, vec(m₀)))
 
     # controlled blocks of uvec, in b, q, m order
     blocks = [[(b₀[k], bcontrols[k]) for k in keys(bcontrols)];
@@ -54,23 +55,33 @@ function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
     σ, lb, ub, smooth = Float64[], Float64[], Float64[], SparseMatrixCSC{Float64,Int}[]
     for (x₀, settings) in blocks
         x = vec(x₀)
-        # a setting at each adjusted grid point: one number everywhere, or a field like x₀
-        bygridpoint(v) = v isa Number ? fill(float(v), length(x)) : vec(v)
-        σₖ = bygridpoint(settings.σ)
         logscale = get(settings, :logscale, false)
-        # bound on the adjustment u that keeps x₀ + u (or x₀ eᵘ) within the
-        # physical limit v: v - x₀, or log v - log x₀
-        adjustmentbound(v) = logscale ? log.(v) - log.(x) : v - x
-        # physical limits, by default 0 for a log-scale source and unbounded otherwise
-        lower = get(settings, :lb, logscale ? 0.0 : -Inf)
-        upper = get(settings, :ub, Inf)
+        # each setting at every adjusted point: one number for all of them, or a
+        # field shaped like the first guess. Physical limits default to 0 for a
+        # log-scale source and to unbounded otherwise.
+        pointwise(v) = v isa Number ? fill(float(v), length(x)) : vec(v)
+        σₖ = pointwise(settings.σ)
+        lower = pointwise(get(settings, :lb, logscale ? 0.0 : -Inf))
+        upper = pointwise(get(settings, :ub, Inf))
+        Lₖ = haskey(settings, :L) ? pointwise(settings.L) : nothing
+
+        # limits on the adjustment u that keep x₀ + u, or x₀ eᵘ, within the physical limits
         append!(σ, σₖ)
-        append!(lb, adjustmentbound(bygridpoint(lower)))
-        append!(ub, adjustmentbound(bygridpoint(upper)))
+        if logscale
+            append!(lb, log.(lower) - log.(x))
+            append!(ub, log.(upper) - log.(x))
+        else
+            append!(lb, lower - x)
+            append!(ub, upper - x)
+        end
+
         # prior smoothness cost of a boundary adjustment with length scale L: ∇²ᵀ Diagonal(L⁴/σ²) ∇²
-        smoothₖ = haskey(settings, :L) ?
-            transpose(∇²) * spdiagm(0 => bygridpoint(settings.L) .^ 4 ./ σₖ .^ 2) * ∇² :
-            spzeros(length(x), length(x))
+        if isnothing(Lₖ)
+            smoothₖ = spzeros(length(x), length(x))
+        else
+            smoothₖ = transpose(∇²) * spdiagm(0 => Lₖ .^ 4 ./ σₖ .^ 2) * ∇²
+        end
+        # symmetric in exact arithmetic; averaging with its transpose removes round-off
         push!(smooth, (smoothₖ + transpose(smoothₖ)) / 2)
     end
     return Inversion(y, b₀, q₀, r, m₀, u, ranges, σ, lb, ub, blockdiag(smooth...))
@@ -102,9 +113,9 @@ function adjustfirstguess!(u, inversion::Inversion, uvec::AbstractVector)
     unvec!(u.b, uvec[ranges.b])
     unvec!(u.q, uvec[ranges.q])
     b = adjustboundarycondition(inversion.b₀, u.b)
-    q = foreachtracer(keys(inversion.q₀)) do k
-        haskey(u.q, k) ? adjustsource(inversion.q₀[k], u.q[k]) : inversion.q₀[k]
-    end
+    # TMI's adjustsource on a NamedTuple needs an adjustment for every source, so
+    # only the adjusted sources go through it and the fixed ones are kept as given
+    q = merge(inversion.q₀, map(adjustsource, inversion.q₀[keys(u.q)], u.q))
     isempty(ranges.m) && return b, q, inversion.m₀
     # u.m holds the adjusted mass fractions, not an adjustment: watermassmatrix
     # takes the fractions, and writing them into u.m allocates no new MassFractions
