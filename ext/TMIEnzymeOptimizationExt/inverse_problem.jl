@@ -61,9 +61,12 @@ function Inversion(y::Observations; b₀::NamedTuple, q₀::NamedTuple=(;),
         # bound on the adjustment u that keeps x₀ + u (or x₀ eᵘ) within the
         # physical limit v: v - x₀, or log v - log x₀
         adjustmentbound(v) = logscale ? log.(v) - log.(x) : v - x
+        # physical limits, by default 0 for a log-scale source and unbounded otherwise
+        lower = get(settings, :lb, logscale ? 0.0 : -Inf)
+        upper = get(settings, :ub, Inf)
         append!(σ, σₖ)
-        append!(lb, adjustmentbound(bygridpoint(get(settings, :lb, logscale ? 0.0 : -Inf))))
-        append!(ub, adjustmentbound(bygridpoint(get(settings, :ub, Inf))))
+        append!(lb, adjustmentbound(bygridpoint(lower)))
+        append!(ub, adjustmentbound(bygridpoint(upper)))
         # prior smoothness cost of a boundary adjustment with length scale L: ∇²ᵀ Diagonal(L⁴/σ²) ∇²
         smoothₖ = haskey(settings, :L) ?
             transpose(∇²) * spdiagm(0 => bygridpoint(settings.L) .^ 4 ./ σₖ .^ 2) * ∇² :
@@ -82,7 +85,9 @@ end
     function adjustfirstguess!(u, inversion, uvec)
 
 The first-guess boundary conditions, sources, and mass fractions adjusted by
-the control vector, which is written into the preallocated controls `u`.
+the control vector, which is written into the preallocated controls `u`. Kept
+apart from `forwardmodel`: written inside it, Enzyme's type analysis fails
+(`IllegalTypeAnalysisException`) for inversions with fixed tracers or sources.
 
 # Arguments
 - `u`: preallocated controls, a copy of `inversion.u`: the adjustments `u.b` and

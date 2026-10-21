@@ -87,7 +87,9 @@ function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid{R,3})
     B_rows, B_columns, B_values = Int[], Int[], T[]
     conditional_variances = ones(T, length(cells))
     for i in eachindex(cells)
-        push!(B_rows, i); push!(B_columns, i); push!(B_values, one(T))
+        push!(B_rows, i)
+        push!(B_columns, i)
+        push!(B_values, one(T))
         isempty(neighbors[i]) && continue
         RNN = [correlation(j, k) for j in neighbors[i], k in neighbors[i]]
         rNi = [correlation(j, i) for j in neighbors[i]]

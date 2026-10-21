@@ -3,6 +3,9 @@ Enzyme rules: the adjoints (TMI's `g` functions) of the four steps of the forwar
 model that Enzyme is not left to differentiate itself. Nobody calls these
 directly; they matter only when one of these four functions changes. Enzyme
 differentiates everything else in the cost function, including `observe`.
+Each rule is a pair of methods that Enzyme calls in place of differentiating the
+function: `augmented_primal` runs the function and keeps what the backward pass
+needs, and `reverse` passes the cotangents back to the inputs.
 In the order the forward model calls them:
 - `unvec!` writes `uvec` into the controls `u`. Its rule passes their cotangents
   back to `uvec`, and zeros only the wet values, because with runtime activity
@@ -17,11 +20,12 @@ In the order the forward model calls them:
 =#
 
 """
-    function augmented_primal(config, unvec!, return_activity, destination, x)
-    function reverse(config, unvec!, return_activity, tape, destination, x)
+    function EnzymeRules.augmented_primal(config, unvec!, return_activity, destination, x)
+    function EnzymeRules.reverse(config, unvec!, return_activity, tape, destination, x)
     function _shadow(annotation)
 
-Reconstruct controls and flatten their cotangents into optimizer order.
+Reconstruct controls and flatten their cotangents into optimizer order:
+`ūvec += vec(ū)`, then `ū = 0` at the wet points.
 
 # Arguments
 - `config`, `destination`, `x`: configuration, control, and optimizer vector
@@ -29,7 +33,7 @@ Reconstruct controls and flatten their cotangents into optimizer order.
 # Output
 - `result`: augmented result, reverse placeholders, or annotation shadow
 """
-function augmented_primal(
+function EnzymeRules.augmented_primal(
     ::RevConfigWidth{1},
     func::Const{typeof(unvec!)},
     ::Type{<:Const},
@@ -42,7 +46,7 @@ end
 _shadow(annotation::Duplicated) = annotation.dval
 _shadow(annotation::MixedDuplicated) = annotation.dval[]
 
-function reverse(
+function EnzymeRules.reverse(
     ::RevConfigWidth{1}, ::Const{typeof(unvec!)}, ::Type{<:Const}, ::Any,
     destination::Annotation, x::Annotation,
 )
@@ -56,10 +60,11 @@ function reverse(
 end
 
 """
-    function augmented_primal(config, watermassmatrix, return_activity, m, γ)
-    function reverse(config, watermassmatrix, return_activity, gA, m, γ)
+    function EnzymeRules.augmented_primal(config, watermassmatrix, return_activity, m, γ)
+    function EnzymeRules.reverse(config, watermassmatrix, return_activity, gA, m, γ)
 
-Build the active water-mass matrix and reverse its cotangent to fractions.
+Build the active water-mass matrix and reverse its cotangent to fractions:
+`m̄ = -Ā` at each fraction's entry of `A`, which holds `-m` off the diagonal.
 
 # Arguments
 - `config`, `m`, `γ`: reverse configuration, duplicated fractions, and grid
@@ -67,7 +72,7 @@ Build the active water-mass matrix and reverse its cotangent to fractions.
 # Output
 - `result`: augmented matrix result or reverse placeholders
 """
-function augmented_primal(
+function EnzymeRules.augmented_primal(
     config::RevConfigWidth{1},
     func::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
@@ -78,7 +83,7 @@ function augmented_primal(
     gA = Enzyme.make_zero(A)
     return AugmentedReturn(needs_primal(config) ? A : nothing, needs_shadow(config) ? gA : nothing, gA)
 end
-function reverse(
+function EnzymeRules.reverse(
     ::RevConfigWidth{1},
     ::Const{typeof(watermassmatrix)},
     ::Type{<:Duplicated},
@@ -104,13 +109,14 @@ end
 
 """
     function Enzyme.make_zero(Alu)
-    function augmented_primal(config, lu!, return_activity, F, A)
-    function reverse(config, lu!, return_activity, _, F, A)
+    function EnzymeRules.augmented_primal(config, lu!, return_activity, F, A)
+    function EnzymeRules.reverse(config, lu!, return_activity, _, F, A)
 
 Create and propagate the sparse cotangent shadow for the UMFPACK refactorization
 `lu!(F, A)`, which reuses the symbolic analysis (and ordering) of `F`. When `F`
 already holds the values of `A`, as when Ipopt asks for the gradient at the
-point whose cost it just evaluated, the refactorization is skipped.
+point whose cost it just evaluated, the refactorization is skipped. The reverse
+pass is `Ā += F̄`, since `lu!` overwrites `F`.
 
 # Arguments
 - `Alu`, `F`: UMFPACK factorization and its duplicated shadow
@@ -135,19 +141,22 @@ function Enzyme.make_zero(Alu::SparseArrays.UMFPACK.UmfpackLU{Tv, Ti}) where {Tv
         ReentrantLock(),
     )
 end
-function augmented_primal(
+function EnzymeRules.augmented_primal(
     config::RevConfigWidth{1},
     ::Const{typeof(lu!)},
     ::Type{<:Union{Const,Duplicated,Enzyme.DuplicatedNoNeed}},
     F::Duplicated{<:SparseArrays.UMFPACK.UmfpackLU},
     A::Duplicated{<:SparseMatrixCSC},
 )
-    nonzeros(A.val) == F.val.nzval || lu!(F.val, A.val)
+    # skip the refactorization when F already holds A
+    if nonzeros(A.val) != F.val.nzval
+        lu!(F.val, A.val)
+    end
     primal = needs_primal(config) ? F.val : nothing
     shadow = needs_shadow(config) ? F.dval : nothing
     return AugmentedReturn(primal, shadow, nothing)
 end
-function reverse(
+function EnzymeRules.reverse(
     ::RevConfigWidth{1},
     ::Const{typeof(lu!)},
     ::Type{<:Union{Const,Duplicated,Enzyme.DuplicatedNoNeed}},
@@ -162,12 +171,12 @@ function reverse(
 end
 
 """
-    function augmented_primal(config, \\, return_activity, Alu, d)
-    function reverse(config, \\, return_activity, tape, Alu, d)
+    function EnzymeRules.augmented_primal(config, \\, return_activity, Alu, d)
+    function EnzymeRules.reverse(config, \\, return_activity, tape, Alu, d)
 
-Solve `A c = d` for a `Field` `d` with TMI's `\\`, and propagate the cotangents
-of `d` and of the water-mass matrix, `Ā = -d̄ cᵀ`, which goes into the
-factorization's shadow on the sparsity pattern of `A`.
+Solve `A c = d` for a `Field` `d` with TMI's `\\`, and propagate the cotangents:
+`λ = A⁻ᵀ c̄`, `d̄ += λ`, and `Ā -= λ cᵀ` on the sparsity pattern of `A`, which goes
+into the factorization's shadow.
 
 # Arguments
 - `config`: reverse configuration
@@ -177,7 +186,7 @@ factorization's shadow on the sparsity pattern of `A`.
 # Output
 - `result`: augmented solve or reverse placeholders
 """
-function augmented_primal(
+function EnzymeRules.augmented_primal(
     config::RevConfigWidth{1},
     ::Const{typeof(\)},
     ::Type{<:Duplicated},
@@ -190,7 +199,7 @@ function augmented_primal(
         (c, gc))
 end
 
-function reverse(
+function EnzymeRules.reverse(
     ::RevConfigWidth{1}, ::Const{typeof(\)}, ::Type{<:Duplicated}, tape,
     Alu::Duplicated{<:SparseArrays.UMFPACK.UmfpackLU},
     d::Union{Const{<:Field},Duplicated{<:Field}},

@@ -1,22 +1,11 @@
 #=
-Inversions of TMI tracers for surface boundary conditions, interior sources, and
-mass fractions, with gradients from Enzyme and optimization by Ipopt. Loaded by
-`using Enzyme, Optimization, OptimizationIpopt` together with TMI.
-
-A run, as in scripts/full_inversion.jl:
-1. `Observations(observed, σ, γ; ...)` in observations.jl: the observed values,
-   their σ, and the weighting matrix Wⁱ (built in weighting_matrices.jl).
-2. `Inversion(y; b₀, q₀, r, m₀, controls)` in inverse_problem.jl: the first
-   guesses, and the σ, limits, and smoothness prior of the adjusted controls.
-3. `runinversion(inversion, optimizer; ...)` in this file: Ipopt minimizes
-   `costfunction`, which runs the forward model (adjust the first guesses, build
-   the water-mass matrix, solve for the steady-state tracers) and adds the data
-   cost and prior costs (`costterms`). Gradients come from `costgradient!`.
-
-Enzyme differentiates all of this itself, except four functions whose rules are
-in enzyme_rules.jl. The `Observations` and `Inversion` structs and the
-`runinversion` stub are defined in src/inversion.jl, since an extension cannot
-export names.
+Inversions for surface boundary conditions, interior sources, and mass fractions,
+with Enzyme gradients and Ipopt. A run, as in scripts/full_inversion.jl:
+1. `Observations` (observations.jl, with Wⁱ from weighting_matrices.jl)
+2. `Inversion` (inverse_problem.jl)
+3. `runinversion` (this file): minimizes `costfunction` = `forwardmodel` + `costterms`,
+   with gradients from `costgradient!`; Enzyme rules are in enzyme_rules.jl
+The structs and the `runinversion` stub are in src/inversion.jl.
 =#
 module TMIEnzymeOptimizationExt
 
@@ -32,7 +21,8 @@ end
 using Enzyme: Annotation
 using TMI: step_cartesian
 import TMI: Inversion, Observations, gradient_check, observe, runinversion
-import Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth, augmented_primal, needs_primal, needs_shadow, reverse
+using Enzyme: EnzymeRules
+using Enzyme.EnzymeRules: AugmentedReturn, RevConfigWidth, needs_primal, needs_shadow
 
 """
     function foreachtracer(f, names)
@@ -88,7 +78,12 @@ function runinversion(inversion::Inversion, optimizer::IpoptOptimizer; name::Abs
     # cost alone at its trial points, most of which it rejects, and for the
     # gradient only at the points it accepts.
     J(z, _=nothing) = (uvec .= σ .* z; costfunction(uvec, inversion, workspace.u, workspace.F))
-    gJ!(gz, z, _=nothing) = (uvec .= σ .* z; costgradient!(gz, workspace, uvec); gz .*= σ; nothing)
+    function gJ!(gz, z, _=nothing)
+        uvec .= σ .* z
+        costgradient!(gz, workspace, uvec)
+        gz .*= σ
+        return nothing
+    end
     z₀ = zero(σ)
     (; cons, cons_j, cons_jac_prototype, lcons, ucons) = massconservation(inversion)
     # Optimization.jl requires an AD type; the gradient comes from gJ! and the Jacobian from cons_j
@@ -125,7 +120,8 @@ end
 """
     struct InversionWorkspace
 
-Storage that the cost function and its Enzyme gradient reuse at every control vector
+Storage that the cost function and its Enzyme gradient reuse at every control
+vector; `InversionWorkspace(inversion)` starts it at the first guess
 
 - `inversion::Inversion`: inverse problem
 - `u`: controls, a copy of `inversion.u` that `adjustfirstguess!` overwrites
@@ -142,16 +138,6 @@ struct InversionWorkspace{I,U,L}
     dF::L
 end
 
-"""
-    function InversionWorkspace(inversion)
-
-Workspace with zero shadows and the factorization of the first-guess water-mass matrix.
-
-# Arguments
-- `inversion::Inversion`: inverse problem
-# Output
-- `InversionWorkspace`
-"""
 function InversionWorkspace(inversion::Inversion)
     u = deepcopy(inversion.u)
     F = lu(watermassmatrix(inversion.m₀, inversion.y.γ); control=METIS_CONTROL)
@@ -220,7 +206,7 @@ their water-mass matrix, and the steady-state tracers.
 # Arguments
 - `uvec`: control vector
 - `inversion::Inversion`: first guesses
-- `u`: preallocated controls, a copy of `inversion.u`
+- `u`: preallocated controls, a copy of `inversion.u`, overwritten (see `adjustfirstguess!`)
 - `F`: UMFPACK factorization of a water-mass matrix on the same grid, refactored
   in place by `lu!`, which keeps its ordering
 # Output
@@ -365,7 +351,11 @@ function massconservation(inversion::Inversion)
     Pm₀ = P * vec(inversion.m₀)
     jacobian = sparse(rows, ranges.m, inversion.σ[ranges.m], sum(γ.interior),
         length(inversion.σ))
-    cons = (Σm, z, _) -> (mul!(Σm, jacobian, z); Σm .+= Pm₀; nothing)
+    function cons(Σm, z, _)
+        mul!(Σm, jacobian, z)
+        Σm .+= Pm₀
+        return nothing
+    end
     cons_j = (out, _, _) -> (copyto!(nonzeros(out), nonzeros(jacobian)); nothing)
     return (cons=cons, cons_j=cons_j, cons_jac_prototype=jacobian,
         lcons=ones(size(jacobian, 1)), ucons=ones(size(jacobian, 1)))
