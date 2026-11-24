@@ -19,21 +19,18 @@ A, Alu, γ, TMIfile, L, B = config(TMIversion);
 
 WOCEdir = normpath(TMI.pkgdir("..", "regridding_WOCE_for_TMI", "data"))
 WOCEfile = joinpath(WOCEdir, "TMI_gridded_WOCE_4x4_Variables_33_levels.nc")
-WOCEerrorfile = joinpath(WOCEdir, "TMI_gridded_WOCE_Errors_4x4_Variables_33_levels.nc")
+WOCEerrorfile = joinpath(WOCEdir, "TMI_gridded_WOCE_Errors_level_mean_4x4_Variables_33_levels.nc")
 
 # WOCE variable and TMI name of each tracer
 WOCEnames = (θ = "potential_temperature", S = "salinity", δ¹⁸O = "d18o",
     PO₄ = "phosphate", NO₃ = "nitrate", O₂ = "oxygen")
 TMInames = (θ = :θ, S = :Sₚ, δ¹⁸O = :δ¹⁸Ow, PO₄ = :PO₄, NO₃ = :NO₃, O₂ = :O₂)
 
-# observations, their standard deviations, and the horizontal decorrelation
-# length [km] of their errors
+# observations and their standard deviations, one per tracer and depth level
 observed = map((variable, name) -> readfield(WOCEfile, variable, γ; name), WOCEnames, TMInames)
 σ = map((variable, name) -> readfield(WOCEerrorfile, variable, γ; name = Symbol("σ", name)),
     WOCEnames, TMInames)
-Ly = readfield(WOCEerrorfile, "decorrelation_length", γ;
-    name = :L, longname = "decorrelation length", units = "km")
-y = Observations(observed, σ, γ; L = Ly)
+y = Observations(observed, σ, γ)
 
 # first guess: observed surface values, a uniform phosphate source, isotropic mass fractions
 b₀ = map(getsurfaceboundary, observed)

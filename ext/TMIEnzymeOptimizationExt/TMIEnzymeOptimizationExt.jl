@@ -1,8 +1,8 @@
 #=
 Inversions for surface boundary conditions, interior sources, and mass fractions,
 with Enzyme gradients and Ipopt. A run, as in scripts/full_inversion.jl:
-1. `Observations` (observations.jl, with Wⁱ from weighting_matrices.jl)
-2. `Inversion` (inverse_problem.jl)
+1. `Observations` (observations.jl)
+2. `Inversion` (inverse_problem.jl, with the smoothness Laplacian from weighting_matrices.jl)
 3. `runinversion` (this file): minimizes `costfunction` = `forwardmodel` + `costterms`,
    with gradients from `costgradient!`; Enzyme rules are in enzyme_rules.jl
 The structs and the `runinversion` stub are in src/inversion.jl.

@@ -1,26 +1,5 @@
-# Weighting matrices of the cost function: the inverse covariance Wⁱ of correlated
-# gridded observations (`gaussianprecision`), and the Laplacian of the prior
-# smoothness cost of boundary adjustments (`surfacelaplacianmatrix`).
-
-"""
-    function euclideandistance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6371.0)
-
-Straight-line distance between two points below the sea surface, accounting
-for their depths below a sphere of radius `R`.
-
-# Arguments
-- `latᵢ`, `lonᵢ`, `depthᵢ`: latitude [°N], longitude [°E], and depth [m] of the first point
-- `latⱼ`, `lonⱼ`, `depthⱼ`: latitude [°N], longitude [°E], and depth [m] of the second point
-- `R`: radius of the sphere [km]
-# Output
-- `d`: distance [km]
-"""
-function euclideandistance(latᵢ, lonᵢ, depthᵢ, latⱼ, lonⱼ, depthⱼ; R=6_371.0)
-    ϕᵢ, λᵢ, ϕⱼ, λⱼ = deg2rad.((latᵢ, lonᵢ, latⱼ, lonⱼ))
-    rᵢ, rⱼ = R - depthᵢ / 1_000, R - depthⱼ / 1_000
-    xyz(r, ϕ, λ) = (r * cos(ϕ) * cos(λ), r * cos(ϕ) * sin(λ), r * sin(ϕ))
-    return sqrt(sum(abs2, xyz(rⱼ, ϕⱼ, λⱼ) .- xyz(rᵢ, ϕᵢ, λᵢ)))
-end
+# Weighting matrix of the prior smoothness cost of boundary adjustments: the
+# Laplacian on the wet surface cells (`surfacelaplacianmatrix`).
 
 """
     function adjacencymatrix(γ, mask, offsets)
@@ -47,64 +26,6 @@ function adjacencymatrix(γ::Grid{T,N}, mask::BitArray{N},
         push!(columns, R[neighbor])
     end
     return sparse(rows, columns, ones(length(rows)), length(cells), length(cells))
-end
-
-"""
-    function gaussianprecision(σ, L, γ)
-
-Sparse inverse covariance of gridded interior observations with a Gaussian
-horizontal correlation, built by a Vecchia approximation on horizontal neighbors.
-TMI's `gaussiandistancematrix(γ, σ, L)` is the dense covariance of the surface
-cells for one σ and L; this is its sparse inverse for all interior cells, with
-σ and L varying by cell, where a dense matrix would be too large.
-
-# Arguments
-- `σ`: standard deviation at each interior cell
-- `L`: decorrelation length scale [km] at each interior cell
-- `γ`: TMI grid
-# Output
-- `Wⁱ`: symmetric sparse inverse covariance matrix
-"""
-function gaussianprecision(σ::AbstractVector, L::AbstractVector, γ::Grid)
-    cells = cartesianindex(γ.interior)
-    horizontal = (CartesianIndex(-1, 0, 0), CartesianIndex(1, 0, 0),
-        CartesianIndex(0, -1, 0), CartesianIndex(0, 1, 0))
-    # each cell's horizontal neighbors that come earlier in the cell order
-    rows, columns, _ = findnz(tril(adjacencymatrix(γ, γ.interior, horizontal), -1))
-    neighbors = [Int[] for _ in cells]
-    for (i, j) in zip(rows, columns)
-        push!(neighbors[i], j)
-    end
-
-    function correlation(i, j)
-        i == j && return 1.0
-        ci, cj = cells[i], cells[j]
-        d = euclideandistance(γ.lat[ci[2]], γ.lon[ci[1]], γ.depth[ci[3]],
-            γ.lat[cj[2]], γ.lon[cj[1]], γ.depth[cj[3]])
-        L² = L[i]^2 + L[j]^2
-        return (2L[i] * L[j] / L²)^(3 / 2) * exp(-2d^2 / L²)
-    end
-
-    B_rows, B_columns, B_values = Int[], Int[], Float64[]
-    conditional_variances = ones(length(cells))
-    for i in eachindex(cells)
-        push!(B_rows, i)
-        push!(B_columns, i)
-        push!(B_values, 1.0)
-        isempty(neighbors[i]) && continue
-        RNN = [correlation(j, k) for j in neighbors[i], k in neighbors[i]]
-        rNi = [correlation(j, i) for j in neighbors[i]]
-        coefficients = cholesky(Hermitian(RNN)) \ rNi
-        conditional_variances[i] = 1 - dot(rNi, coefficients)
-        append!(B_rows, fill(i, length(coefficients)))
-        append!(B_columns, neighbors[i])
-        append!(B_values, -coefficients)
-    end
-    B = sparse(B_rows, B_columns, B_values, length(cells), length(cells))
-    Dσ⁻¹ = spdiagm(0 => inv.(σ))
-    Wⁱ = Dσ⁻¹ * transpose(B) * spdiagm(0 => inv.(conditional_variances)) * B * Dσ⁻¹
-    # symmetric in exact arithmetic; averaging with its transpose removes round-off
-    return (Wⁱ + transpose(Wⁱ)) / 2
 end
 
 """

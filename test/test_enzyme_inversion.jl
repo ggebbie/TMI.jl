@@ -1,5 +1,5 @@
 using Enzyme, NCDatasets, Optimization, OptimizationIpopt, SparseArrays, Test, TMI
-using LinearAlgebra: Diagonal, diag, issymmetric, lu
+using LinearAlgebra: Diagonal, diag, lu
 # internal functions of the extension
 const TMIEnzymeOptimization = Base.get_extension(TMI, :TMIEnzymeOptimizationExt)
 
@@ -42,14 +42,8 @@ const TMIEnzymeOptimization = Base.get_extension(TMI, :TMIEnzymeOptimizationExt)
         pertracer = Observations((active=observed.active, fixed=point_values), (active=0.5, fixed=fill(0.5, 3)), γ;
             locs=(fixed=locs,))
         @test length(vec(pertracer)) == ninterior + 3
-        σ = Field(fill(2.0, size(γ.wet)), γ, :σ, "uncertainty", "unitless")
-        L = Field(fill(1_000.0, size(γ.wet)), γ, :L, "scale", "km")
-        correlated = Observations((active=c.active,), σ, γ; L)
-        @test correlated.Wⁱ isa SparseMatrixCSC
-        @test issymmetric(correlated.Wⁱ)
         given = Observations((active=point_values,), 0.5, γ; locs=locs, Wⁱ=Diagonal(fill(4.0, 3)))
         @test given.Wⁱ ≈ Diagonal(fill(4.0, 3))
-        @test_throws ArgumentError Observations((active=point_values,), 0.5, γ; locs=locs, L=1_000.0)
     end
 
     @testset "Inversion" begin

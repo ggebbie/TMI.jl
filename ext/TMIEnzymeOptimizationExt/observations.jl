@@ -19,9 +19,9 @@ observe(c::NamedTuple, y::Observations) = reduce(vcat, map(keys(y.values)) do k
 end)
 
 """
-    function Observations(observed, σ, γ; locs=nothing, L=nothing, Wⁱ=nothing)
+    function Observations(observed, σ, γ; locs=nothing, Wⁱ=nothing)
 
-Tracer observations and their error statistics. `σ`, `locs`, `L`, and `Wⁱ` are
+Tracer observations and their error statistics. `σ`, `locs`, and `Wⁱ` are
 given once for all tracers or as a `NamedTuple` keyed like `observed`.
 
 # Arguments
@@ -31,19 +31,18 @@ given once for all tracers or as a `NamedTuple` keyed like `observed`.
 - `γ::Grid`: TMI grid
 # Optional Arguments
 - `locs`: `nothing` for gridded tracers, or a vector of (lon, lat, depth)
-- `L`: decorrelation length scale [km] of gridded errors, a number or `Field`
-- `Wⁱ`: inverse observational error covariance, overrides `σ` and `L`
+- `Wⁱ`: inverse observational error covariance, `Diagonal(σ⁻²)` unless given
 # Output
 - `Observations`: for each tracer, its observed `values` and their `σ` at the
   observation points (the interior cells of a gridded tracer); `locs`,
   interpolation weights `wis`, all observed values `yvec` (also `vec(y)`), `γ`,
   and block-diagonal `Wⁱ`
 """
-function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, L=nothing, Wⁱ=nothing)
+function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, Wⁱ=nothing)
     names = keys(observed)
     # each setting by tracer: one value for all tracers, or a NamedTuple by tracer
     # (`nothing` for tracers missing from it)
-    σbytracer, locsbytracer, Lbytracer, Wⁱbytracer = map((σ, locs, L, Wⁱ)) do a
+    σbytracer, locsbytracer, Wⁱbytracer = map((σ, locs, Wⁱ)) do a
         foreachtracer(k -> a isa NamedTuple ? get(a, k, nothing) : a, names)
     end
     # each tracer's observation points: its locations, with their interpolation
@@ -64,17 +63,7 @@ function Observations(observed::NamedTuple, σ, γ::Grid; locs=nothing, L=nothin
     pointvalues = map(atpoints, observed, wis, npoints)
     pointσ = map(atpoints, σbytracer, wis, npoints)
     Wⁱblocks = map(names) do k
-        if !isnothing(Wⁱbytracer[k])
-            sparse(Wⁱbytracer[k])
-        elseif !isnothing(Lbytracer[k])
-            if !isnothing(wis[k])
-                throw(ArgumentError("L applies to gridded observations, and $k is observed " *
-                    "at locs: give L by tracer, e.g. L = (θ = 1000.0,), or supply Wⁱ"))
-            end
-            gaussianprecision(pointσ[k], atpoints(Lbytracer[k], wis[k], npoints[k]), γ)
-        else
-            spdiagm(0 => pointσ[k] .^ -2)
-        end
+        isnothing(Wⁱbytracer[k]) ? spdiagm(0 => pointσ[k] .^ -2) : sparse(Wⁱbytracer[k])
     end
     return Observations(pointvalues, pointσ, locsbytracer, wis, reduce(vcat, pointvalues), γ,
         blockdiag(Wⁱblocks...))
