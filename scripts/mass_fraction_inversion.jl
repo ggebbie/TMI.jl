@@ -34,8 +34,8 @@ m₀ = massfractions_isotropic(γ)
 # stoichiometric ratios to the phosphate source, as in ex0
 r = (PO₄ = (qPO₄ = 1.0,), NO₃ = (qPO₄ = 15.5,), O₂ = (qPO₄ = -170.0,))
 
-# adjust only the mass fractions, within [0, 1]
-controls = (m = (σ = 1.0, lb = 0.0, ub = 1.0),)
+# adjust only the mass fractions, within [1e-4, 1]
+controls = (m = (σ = 1.0, lb = 1.0e-4, ub = 1.0),)
 inversion = Inversion(y; b₀, q₀, r, m₀, controls)
 
 optimizer = IpoptOptimizer(

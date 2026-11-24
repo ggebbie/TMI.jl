@@ -51,7 +51,7 @@ ub = (θ = 35.0, S = 45.0, δ¹⁸O = 10.0, PO₄ = 10.0, NO₃ = 45.0, O₂ = 5
 σb = map(getsurfaceboundary, σ)
 controls = (b = map((σₖ, lbₖ, ubₖ) -> (σ = σₖ, L = 1_000.0, lb = lbₖ, ub = ubₖ), σb, lb, ub),
     q = (qPO₄ = (σ = log(50.0), lb = 6.0e-6, ub = 1.5e-2, logscale = true),),
-    m = (σ = 1.0, lb = 0.0, ub = 1.0))
+    m = (σ = 1.0, lb = 1.0e-4, ub = 1.0))
 inversion = Inversion(y; b₀, q₀, r, m₀, controls)
 
 optimizer = IpoptOptimizer(
