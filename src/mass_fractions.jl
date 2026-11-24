@@ -64,6 +64,13 @@ end
 
 
 Base.vec(m::MassFraction) = m.fraction[m.γ.wet]
+
+"""
+    wet(m::MassFraction)
+
+Return the mask of grid cells where the mass fraction `m` is defined.
+"""
+wet(m::MassFraction) = m.γ.wet
 Base.length(m::MassFraction) = sum(m.γ.wet)
 Base.maximum(m::MassFraction) = maximum(m.fraction[m.γ.wet])
 Base.minimum(m::MassFraction) = minimum(m.fraction[m.γ.wet])
@@ -107,7 +114,7 @@ function `step_cartesian(I, Δ, γ)`
 - `Istep::CartesianIndex`: new location
 - `inbounds::Bool`: inside the domain bounds?
 """
-function step_cartesian(I::CartesianIndex{N},
+@noinline function step_cartesian(I::CartesianIndex{N},
     Δ::CartesianIndex{N},
     γ::Grid{R,N}) where {R,N}
 
@@ -126,34 +133,24 @@ function step_cartesian(I::CartesianIndex{N},
     if iszero(Ihi) && iszero(Ilo)
         return Istep, true
     else
-        # allocate masks
-        ngrid =
-            Tuple([length(γ.axes[d]) for d in 1:N])
-
-        #ngrid = (length(γ.lon),
-        #    length(γ.lat),
-        #    length(γ.depth))
-
-        wrapstep = zeros(Int,length(γ.wrap))
-        for idim in eachindex(γ.wrap)
-            # check upper bound
+        # NTuple{N} keeps the wrap step type-stable (no runtime-length tuples)
+        ngrid = map(length, γ.axes)
+        wrapstep = ntuple(Val(N)) do idim
             if Ihi[idim]>0 && γ.wrap[idim]
-                wrapstep[idim] = -ngrid[idim] # wr
-            end
-
-            # check lower bound
-            if Ilo[idim]>0 && γ.wrap[idim]
-                wrapstep[idim] = ngrid[idim] # wr
+                -ngrid[idim] # wrap from upper bound
+            elseif Ilo[idim]>0 && γ.wrap[idim]
+                ngrid[idim] # wrap from lower bound
+            else
+                0
             end
         end
 
-        # take another step to wrap around
-        Istep += CartesianIndex(Tuple(wrapstep))
-        
-        Ihi = max(Ilast,Istep)-Ilast
-        Ilo = Ifirst - min(Ifirst,Istep)
-        inbounds = iszero(Ihi) && iszero(Ilo)
-        return Istep, inbounds
+        # take another step to wrap around; new names, because reassigning
+        # Ihi and Ilo, which the closure above captures, would box them
+        Iwrap = Istep + CartesianIndex(wrapstep)
+        Jhi = max(Ilast,Iwrap)-Ilast
+        Jlo = Ifirst - min(Ifirst,Iwrap)
+        return Iwrap, iszero(Jhi) && iszero(Jlo)
     end
 end
 
@@ -409,9 +406,9 @@ function watermassmatrix(m::Union{NamedTuple,Vector}, γ::Grid)
     #A = spdiagm(nfield,nfield,ones(nfield))
 
     counter = nfield
-    for I in Iint
-        for m1 in m
-        #for I in Iint
+    # fractions outer: taking an element of `m` in the inner loop allocates on Julia 1.13
+    for m1 in m
+        for I in Iint
             nrow = R[I]
             if m1.γ.wet[I]
                 Istep, _ = step_cartesian(I, m1.position, γ)

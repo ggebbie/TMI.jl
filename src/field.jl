@@ -87,7 +87,7 @@ function section(c::Field{T},lon)::Array{T,2} where T <: Real
 end
 
 """
-    function readfield(file,tracername,γ)
+    function readfield(file,tracername,γ; name, longname, units)
     Read a tracer field from NetCDF but return it 
     as a Field.
 
@@ -97,6 +97,9 @@ end
 - `file`: TMI NetCDF file name
 - `tracername`: name of tracer
 - `γ::Grid`, TMI grid specification
+- `name`: name of the Field; default `tracerdict()[tracername]`
+- `longname`, `units`: used where the file has no such attribute; default TMI's
+  attributes for `name`, if any
 # Output
 - `c`::Field
 
@@ -106,13 +109,19 @@ end
 
     read MATLAB field and transfer zyx format to xyz
 """
-function readfield(file,tracername,γ::Grid{A,N}) where {A,N} 
+function readfield(file, tracername, γ::Grid{A,N}; name=nothing,
+    longname=nothing, units=nothing) where {A,N}
 
     # The mode "r" stands for read-only. The mode "r" is the default mode and the parameter can be omitted.
-    tracer, units, longname = _read3d(file,tracername)
-    T = eltype(tracer)
+    fieldname = isnothing(name) ? tracerdict()[tracername] : Symbol(name)
+    attributes = get(fieldsatts(), String(fieldname), nothing)
+    if !isnothing(attributes)
+        isnothing(longname) && (longname = attributes["longname"])
+        isnothing(units) && (units = attributes["units"])
+    end
+    tracer, units, longname = _read3d(file, tracername; units, longname)
     checkgrid!(tracer,γ.wet)
-    c = Field(tracer,γ,tracerdict()[tracername],longname,units)
+    c = Field(tracer, γ, fieldname, longname, units)
     return c
 end
 function readfield(matfile,mattracername,γ::Grid,Izyx) 

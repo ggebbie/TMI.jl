@@ -433,9 +433,8 @@ tracerdict() =
          "σδ¹³C" => :σδ¹³C,
          "F₀" => :F₀)
 
-function watermassmatrix2nc(TMIversion,A)
+function watermassmatrix2nc(TMIversion,A; filenetcdf=pkgdatadir("TMI_"*TMIversion*".nc"))
 
-    filenetcdf = pkgdatadir("TMI_"*TMIversion*".nc")
     i, j, m = findnz(A)
     nelements = length(i)
 

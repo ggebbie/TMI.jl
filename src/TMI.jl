@@ -34,6 +34,7 @@ export config, download_file,
     costfunction_gridded_obs, costfunction_gridded_obs!,
     costfunction_point_obs, costfunction_point_obs!,
     costfunction_gridded_model, costfunction_gridded_model!,
+    Observations, Inversion, runinversion,
     trackpathways, meanage,
     regeneratedphosphate, preformedphosphate,
     regeneratednitrate, preformednitrate,
@@ -100,6 +101,7 @@ include(pkgsrcdir("config.jl"))
 include(pkgsrcdir("boundary_condition.jl"))
 include(pkgsrcdir("regions.jl"))
 include(pkgsrcdir("mass_fractions.jl"))
+include(pkgsrcdir("inversion.jl"))
 include(pkgsrcdir("deprecated.jl"))
 
 """ 
@@ -1162,9 +1164,10 @@ Return a new object with the same passive fields as `x` and a new uninitialized
 function Base.similar(x::T) where {T<:Union{BoundaryCondition, Source, Field}}
     return replace_tracer(x, similar(x.tracer))
 end
+Base.similar(m::MassFraction) = MassFraction(similar(m.fraction), m.γ, m.name, m.longname, m.units, m.position)
 
 function Base.similar(
-    x::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field}}}},
+    x::NamedTuple{names,<:Tuple{Vararg{Union{BoundaryCondition, Source, Field, MassFraction}}}},
 ) where {names}
     return map(similar, x)
 end
@@ -1446,16 +1449,11 @@ end
 """
 vec(u::Field) = u.tracer[u.γ.wet]
 vec(u::Source) = u.tracer[u.γ.interior]
+vec(::NamedTuple{(),Tuple{}}) = Float64[]
 function vec(u::NamedTuple) 
-
-    T = eltype(values(u)[1].tracer)
-    #T = eltype(u)
-    uvec = Vector{T}(undef,0)
-    for v in u
-        #append!(uvec,v.tracer[v.wet])
-        append!(uvec,vec(v))
-    end
-    return uvec
+    # map over the tuple instead of looping over it, as in `unvec!`: on Julia 1.13
+    # the loop is slower when Enzyme differentiates through it
+    return vcat(map(vec, values(u))...)
 end
 
 """
@@ -1466,7 +1464,7 @@ end
     Needs to update u because attributes of 
     u need to be known at runtime.
 """
-function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition},uvec::Vector) #where T <: Real
+function unvec(u₀::Union{NamedTuple,Field,BoundaryCondition,Source,MassFraction},uvec::Vector) #where T <: Real
     u = similar(u₀)
     unvec!(u,uvec)
     return u
@@ -1485,14 +1483,17 @@ function unvec!(u::Union{BoundaryCondition{T},Field{T},Source{T}},uvec::Vector{T
         u.tracer[vv] = uvec[ii]
     end
 end
+function unvec!(m::MassFraction,uvec::Vector)
+    m.fraction[wet(m)] .= uvec
+    return nothing
+end
 function unvec!(u::NamedTuple,uvec::Vector) #where {N, T <: Real}
-    nlo = 1
-    nhi = 0
-    for v in u
-        nhi += sum(wet(v))
-        unvec!(v,uvec[nlo:nhi])
-        nlo = nhi + 1
-    end
+    # map over the tuple instead of looping over it: Enzyme on Julia 1.13
+    # cannot compile a loop over a NamedTuple of controls
+    n = map(v -> sum(wet(v)), values(u))
+    nhi = cumsum(n)
+    map((v, nv, hi) -> unvec!(v, uvec[hi-nv+1:hi]), values(u), n, nhi)
+    return nothing
 end
 
 """ 
@@ -1599,7 +1600,9 @@ function observe(c::Field{T},wis::Vector{Tuple{Interpolations.WeightedAdjIndex{2
         # look at total weight, < 1 if there are land points
     # later make sure total weight = 1 for proper average
     sumwis = Vector{Float64}(undef,length(wis))
-    list = vcat(1:length(γ.lon),1)
+    # size(γ.wet,1), not length(γ.lon): the same number, but Enzyme's type
+    # analysis fails on the latter when observe is differentiated.
+    list = vcat(1:size(γ.wet,1),1)
     wetwrap = view(γ.wet,list,:,:)
     [sumwis[i] = Interpolations.InterpGetindex(wetwrap)[wis[i]...] for i in eachindex(wis)]
 
@@ -2154,31 +2157,28 @@ wet(a::BoundaryCondition) = a.wet
 wet(a::Field) = a.γ.wet
 wet(a::Source) = a.γ.interior
 
-function _read3d(file,tracername)
-    ds = Dataset(file,"r")
-    v = ds[tracername]
+function _read3d(file, tracername; units=nothing, longname=nothing)
+    ds = Dataset(file, "r")
+    try
+        v = ds[tracername]
 
-    # eliminate Union{Missing} types
-    T = eltype(v[1,1,1])
-    c = convert(Array{T,3},v[:,:,:])
-    
-    # load an attribute
-    if "units" in keys(v.attrib)
-        units = v.attrib["units"]
-    else
-        error("TMI._read3d: units not found")
-    end
+        # NetCDF fill values are exposed as `missing`. TMI fields use NaN on
+        # dry cells so that their arrays retain a concrete floating type.
+        T = float(Base.nonmissingtype(eltype(v)))
+        c = convert(Array{T,3}, coalesce.(v[:, :, :], T(NaN)))
 
-    if "longname" in keys(v.attrib)
-        longname = v.attrib["longname"]
-    elseif "long_name" in keys(v.attrib)
-        longname = v.attrib["long_name"]
-    else
-        error("TMI._read3d: longname not found")
+        "units" in keys(v.attrib) && (units = v.attrib["units"])
+
+        if "longname" in keys(v.attrib)
+            longname = v.attrib["longname"]
+        elseif "long_name" in keys(v.attrib)
+            longname = v.attrib["long_name"]
+        end
+
+        return c, units, longname
+    finally
+        close(ds)
     end
-        
-    close(ds)
-    return c, units, longname
 end
 
 end
